@@ -9,6 +9,10 @@
 //!
 //! Rendering (the caret form of `spec/diagnostics/README.md` §5) is P2's job.
 
+mod render;
+
+pub use render::{SourceFile, SourceMap, render};
+
 use crate::model::{ContentSlot, LogicalKey, Reference, Relation, RevisionId, Segment};
 use std::fmt;
 
@@ -294,6 +298,94 @@ pub mod codes {
     }
 
     codes! {
+        /// Unexpected token.
+        P001 = "AKR-P001";
+        /// Byte order mark.
+        P002 = "AKR-P002";
+        /// Carriage return.
+        P003 = "AKR-P003";
+        /// Missing final newline.
+        P004 = "AKR-P004";
+        /// Missing header.
+        P005 = "AKR-P005";
+        /// Unsupported grammar major version.
+        P006 = "AKR-P006";
+        /// Unknown grammar minor version.
+        P007 = "AKR-P007";
+        /// Missing project declaration.
+        P008 = "AKR-P008";
+        /// Empty source file.
+        P009 = "AKR-P009";
+        /// Newline in a quoted string.
+        P011 = "AKR-P011";
+        /// Unknown escape sequence.
+        P012 = "AKR-P012";
+        /// Unterminated string.
+        P013 = "AKR-P013";
+        /// Unterminated prose block.
+        P014 = "AKR-P014";
+        /// Tab in prose indentation.
+        P015 = "AKR-P015";
+        /// Prose content on the opening line.
+        P016 = "AKR-P016";
+        /// Prose closing delimiter shares a line.
+        P017 = "AKR-P017";
+        /// Prose block contains a triple quote.
+        P018 = "AKR-P018";
+        /// Abbreviated commit hash.
+        P021 = "AKR-P021";
+        /// Invalid date.
+        P022 = "AKR-P022";
+        /// Timestamp is not UTC.
+        P023 = "AKR-P023";
+        /// Leading zero in an integer.
+        P024 = "AKR-P024";
+        /// Invalid revision number.
+        P025 = "AKR-P025";
+        /// Uppercase in a commit hash.
+        P026 = "AKR-P026";
+        /// Duplicate slot.
+        P031 = "AKR-P031";
+        /// Duplicate block head.
+        P032 = "AKR-P032";
+        /// Block head where none is permitted.
+        P033 = "AKR-P033";
+        /// Missing block head.
+        P034 = "AKR-P034";
+        /// Malformed identifier.
+        P041 = "AKR-P041";
+        /// Malformed key.
+        P042 = "AKR-P042";
+        /// Malformed reference.
+        P043 = "AKR-P043";
+        /// Unbalanced brace.
+        P044 = "AKR-P044";
+        /// Unbalanced bracket.
+        P045 = "AKR-P045";
+        /// Content after a closing brace.
+        P046 = "AKR-P046";
+        /// File is not canonically formatted.
+        F001 = "AKR-F001";
+        /// Slot order is not canonical.
+        F002 = "AKR-F002";
+        /// Records are not sorted.
+        F003 = "AKR-F003";
+        /// Array wrapping is not canonical.
+        F004 = "AKR-F004";
+        /// Indentation is not canonical.
+        F005 = "AKR-F005";
+        /// Trailing whitespace.
+        F006 = "AKR-F006";
+        /// Blank line inside a record body.
+        F007 = "AKR-F007";
+        /// Trailing comma.
+        F008 = "AKR-F008";
+        /// Empty array.
+        F009 = "AKR-F009";
+        /// Prose indentation is not canonical.
+        F010 = "AKR-F010";
+        /// Unsorted array elements.
+        F011 = "AKR-F011";
         /// Missing required slot.
         T001 = "AKR-T001";
         /// Unknown slot for this kind.
@@ -302,14 +394,26 @@ pub mod codes {
         T005 = "AKR-T005";
         /// Missing required block.
         T006 = "AKR-T006";
+        /// Unknown kind.
+        T003 = "AKR-T003";
+        /// Unknown block.
+        T004 = "AKR-T004";
+        /// Block in the wrong place.
+        T007 = "AKR-T007";
         /// Illegal state for the kind's class.
         T011 = "AKR-T011";
+        /// Unknown enum value.
+        T012 = "AKR-T012";
+        /// Wrong value type.
+        T013 = "AKR-T013";
         /// Observation missing `observed_at`.
         T021 = "AKR-T021";
         /// Evidence missing a required slot.
         T022 = "AKR-T022";
         /// Resolved question missing a resolution.
         T031 = "AKR-T031";
+        /// Malformed scope term.
+        T032 = "AKR-T032";
         /// `topic` on a non-normative kind.
         T034 = "AKR-T034";
         /// Unresolved reference.

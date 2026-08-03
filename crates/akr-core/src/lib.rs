@@ -9,6 +9,7 @@
 //! # Layout
 //!
 //! - [`model`] — kinds, classes, lifecycle states, relations, records, references, scope.
+//! - [`syntax`] — lexer, parser, CST, canonical formatter, and lowering to the model.
 //! - [`validate`] — `V-001`..`V-024` as named functions over a [`model::Ledger`].
 //! - [`diagnostics`] — codes, severity, subjects, and the span-ready diagnostic type.
 //!
@@ -20,4 +21,5 @@
 
 pub mod diagnostics;
 pub mod model;
+pub mod syntax;
 pub mod validate;
