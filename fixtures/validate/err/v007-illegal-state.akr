@@ -1,0 +1,11 @@
+akr 0.1
+project fixtures
+
+record fx.policy.wrong-state/1 : policy {
+    title "A completed policy"
+    state completed
+    scope [ all ]
+    rule """
+        `completed` belongs to the planning lifecycle, not the normative one.
+        """
+}

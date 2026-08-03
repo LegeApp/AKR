@@ -1,0 +1,122 @@
+akr 0.1
+project save-your-skin
+
+record sys.milestone.m1-walking-skeleton/1 : milestone {
+    title "M1 — walking skeleton"
+    state completed
+    intent """
+        The viewer and the simulator both boot, the viewer draws one frame from
+        simulator state, and no engine type appears in a viewer signature.
+        """
+    target 2026-03-31
+    acceptance {
+        check viewer-boundary-clean {
+            statement """
+                The boundary lint reports no engine types in viewer signatures.
+                """
+            method command
+            command "cargo run -p tools -- boundary-lint --crate lege"
+            verified_by [ @lege.evidence.boundary-lint-pass ]
+        }
+    }
+    author "dkoepke"
+    created_at 2026-01-14
+}
+
+record sys.milestone.m2-deterministic-sim/1 : milestone {
+    title "M2 — deterministic simulator"
+    state completed
+    intent """
+        The simulator is reproducible from a seed across the supported platforms, and
+        the determinism suite runs in CI on every commit.
+        """
+    target 2026-06-30
+    acceptance {
+        check determinism-suite-green {
+            statement """
+                The determinism suite passes across a 512-seed sweep.
+                """
+            method command
+            command "cargo test -p sim --test determinism -- --seed-sweep 512"
+            verified_by [ @sim.evidence.determinism-suite-pass ]
+        }
+    }
+    after [ @sys.milestone.m1-walking-skeleton ]
+    depends_on [ @sys.req.deterministic-sim ]
+    author "dkoepke"
+    created_at 2026-01-14
+}
+
+record sys.milestone.m3-playable-day/1 : milestone {
+    title "M3 — playable day"
+    state active
+    intent """
+        A player can start, play and finish one in-game day without a crash, a
+        soft-lock, or a placeholder asset.
+        """
+    target 2026-09-30
+    acceptance {
+        check full-day-demo {
+            statement """
+                A recorded session shows one complete in-game day, start to finish,
+                with no crash and no soft-lock.
+                """
+            method observation
+            verified_by [ @sys.evidence.playable-day-demo ]
+        }
+        check no-placeholder-assets {
+            statement """
+                The asset audit reports zero placeholder assets on the day-loop path.
+                """
+            method command
+            command "cargo run -p tools -- audit-assets --path content/day-loop"
+        }
+    }
+    after [ @sys.milestone.m2-deterministic-sim ]
+    depends_on [ @sys.term.playable-day ]
+    author "dkoepke"
+    created_at 2026-01-14
+}
+
+record sys.milestone.m4-content-tools/1 : milestone {
+    title "M4 — content tools"
+    state ready
+    intent """
+        A content author can build a new in-game day without an engineer: place
+        scenes, wire triggers, and preview lighting from the editor.
+        """
+    target 2026-12-15
+    acceptance {
+        check content-day-without-engineer {
+            statement """
+                A content author builds a complete day and plays it, with no engineer
+                involved and no code change.
+                """
+            method manual
+        }
+    }
+    after [ @sys.milestone.m3-playable-day ]
+    author "dkoepke"
+    created_at 2026-01-14
+}
+
+record sys.milestone.m5-ship-demo/1 : milestone {
+    title "M5 — ship demo"
+    state proposed
+    intent """
+        A demo build a stranger can download, launch, and play through one day with no
+        instructions.
+        """
+    acceptance {
+        check stranger-can-play {
+            statement """
+                Three playtesters who have not seen the game finish a day without
+                assistance.
+                """
+            method manual
+        }
+    }
+    after [ @sys.milestone.m4-content-tools ]
+    author "dkoepke"
+    created_at 2026-01-14
+}

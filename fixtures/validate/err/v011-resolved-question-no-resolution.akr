@@ -1,0 +1,10 @@
+akr 0.1
+project fixtures
+
+record fx.question.unanswered/1 : question {
+    title "Resolved, but no answer recorded"
+    state resolved
+    question """
+        A resolved question needs both a resolution slot and a live resolves edge.
+        """
+}

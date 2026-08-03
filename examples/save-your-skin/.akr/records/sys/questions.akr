@@ -1,0 +1,15 @@
+akr 0.1
+project save-your-skin
+
+record sys.question.archive-legacy-docs/1 : question {
+    title "When do we archive the legacy roadmap?"
+    state deferred
+    question """
+        The legacy ROADMAP.md still carries claims nobody has dispositioned. Do we
+        archive it as soon as the import work item completes, or keep it until M4 in
+        case the import missed something?
+        """
+    depends_on [ @sys.work.legacy-roadmap-import ]
+    author "dkoepke"
+    created_at 2026-05-30
+}

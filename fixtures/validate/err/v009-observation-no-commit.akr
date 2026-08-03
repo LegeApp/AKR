@@ -1,0 +1,11 @@
+akr 0.1
+project fixtures
+
+record fx.obs.no-commit/1 : observation {
+    title "An observation with no commit"
+    state verified
+    statement """
+        An observation without a commit is a rumour, and can never go stale.
+        """
+    method command
+}

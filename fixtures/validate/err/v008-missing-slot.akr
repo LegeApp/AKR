@@ -1,0 +1,8 @@
+akr 0.1
+project fixtures
+
+record fx.term.no-definition/1 : term {
+    title "A term with no definition"
+    state active
+    scope [ all ]
+}

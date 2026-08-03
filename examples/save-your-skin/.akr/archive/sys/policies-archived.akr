@@ -1,0 +1,21 @@
+akr 0.1
+project save-your-skin
+
+# Archived: every record in this file is terminal. Archived records still resolve, so
+# historical references never break, but they are excluded from ordinary context
+# assembly and from every generated view except DECISION-HISTORY.md (D-018).
+record sys.policy.weekly-demo/1 : policy {
+    title "Weekly demo build every Friday"
+    state withdrawn
+    scope [ all ]
+    topic demo-cadence
+    rule """
+        A playable build is cut every Friday and posted for the team to play over the
+        weekend.
+        """
+    rationale """
+        Intended to keep the day loop honest by making someone play it weekly.
+        """
+    author "dkoepke"
+    created_at 2026-01-14
+}

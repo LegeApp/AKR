@@ -1,0 +1,20 @@
+akr 0.1
+project fixtures
+
+record fx.a.b.c.d.e.f.g/1 : term {
+    title "Eight segments, the maximum"
+    state active
+    scope [ all ]
+    definition """
+        Two segments is the minimum and eight is the maximum.
+        """
+}
+
+record fx.two/1 : term {
+    title "Two segments, the minimum"
+    state active
+    scope [ all ]
+    definition """
+        A namespace and one segment.
+        """
+}

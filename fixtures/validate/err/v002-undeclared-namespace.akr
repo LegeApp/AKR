@@ -1,0 +1,11 @@
+akr 0.1
+project fixtures
+
+record nope.term.stranger/1 : term {
+    title "Undeclared namespace"
+    state active
+    scope [ all ]
+    definition """
+        `nope` is not declared in project.akr, so this key belongs to nothing.
+        """
+}

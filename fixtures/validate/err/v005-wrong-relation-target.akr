@@ -1,0 +1,21 @@
+akr 0.1
+project fixtures
+
+record fx.obs.something/1 : observation {
+    title "An observation"
+    state verified
+    statement """
+        Something true of the code.
+        """
+    observed_at git:3f0a1c9d5b7e2648a0d4f1b8c36e9752ad014b6f
+    method command
+}
+
+record fx.work.mistargeted/1 : work {
+    title "implements does not range over observations"
+    state active
+    intent """
+        `implements` ranges over requirement, policy, constraint and decision.
+        """
+    implements [ @fx.obs.something ]
+}

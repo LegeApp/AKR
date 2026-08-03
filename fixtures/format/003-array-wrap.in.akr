@@ -1,0 +1,15 @@
+akr 0.1
+project fixtures
+
+record fx.policy.wrapping/1 : policy {
+    title "Array wrapping"
+    state active
+    scope [ ref @fx.track.everything, path "engine/render/**", path "engine/sim/**", path "tools/audit/**" ]
+    rule """
+        The scope array above is over 96 columns and must wrap; the exceptions array
+        below is under and must not.
+        """
+    exceptions [
+        @fx.track.everything
+    ]
+}

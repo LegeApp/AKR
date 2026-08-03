@@ -1,0 +1,24 @@
+akr 0.1
+project save-your-skin
+
+record sys.decision.view-generation/1 : decision {
+    title "Views are generated and committed"
+    state active
+    scope [ path "docs/generated/**" ]
+    topic view-generation
+    decision """
+        `akr build` writes the six generated views into docs/generated, and those files
+        are committed. CI runs `akr check --views-current` and fails on any difference.
+        """
+    context """
+        The alternative was generating views on demand and gitignoring them, which
+        would leave anyone reading the repository on the web with nothing.
+        """
+    consequences """
+        Regenerated views conflict on merge. The conflict is always resolved by
+        rebuilding, never by hand-merging, and that procedure belongs in AGENTS.md.
+        """
+    implements [ @sys.policy.no-hand-edited-views ]
+    author "dkoepke"
+    created_at 2026-02-04
+}

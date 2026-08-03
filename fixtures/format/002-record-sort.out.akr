@@ -1,0 +1,30 @@
+akr 0.1
+project fixtures
+
+record fx.term.alpha/1 : term {
+    title "Alpha, revision 1"
+    state superseded
+    scope [ all ]
+    definition """
+        First revision.
+        """
+}
+
+record fx.term.alpha/2 : term {
+    title "Alpha, revision 2"
+    state active
+    scope [ all ]
+    definition """
+        Second revision.
+        """
+    supersedes [ @fx.term.alpha/1 ]
+}
+
+record fx.term.zulu/1 : term {
+    title "Zulu"
+    state active
+    scope [ all ]
+    definition """
+        Last by key.
+        """
+}

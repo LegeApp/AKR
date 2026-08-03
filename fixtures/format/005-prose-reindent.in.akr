@@ -1,0 +1,14 @@
+akr 0.1
+project fixtures
+
+record fx.term.prose-indent/1 : term {
+title "Prose re-indentation"
+state active
+scope [ all ]
+definition """
+   Content is re-emitted one level deeper than its slot, and the closing delimiter
+   sits at the content indentation.
+
+       Relative indentation inside the block is preserved.
+   """
+}

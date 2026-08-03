@@ -1,0 +1,12 @@
+akr 0.1
+project fixtures
+
+record fx.decision.unmotivated/1 : decision {
+    title "An active decision that cites nothing"
+    state active
+    scope [ all ]
+    decision """
+        A decision resting on nothing is a preference. The rule exists to make you
+        notice which one you have.
+        """
+}

@@ -1,0 +1,45 @@
+akr 0.1
+project save-your-skin
+
+record sys.track.lighting/1 : track {
+    title "Lighting"
+    state active
+    scope [ path "content/**/light/**", path "lege/src/light/**" ]
+    intent """
+        Standing lighting work that no milestone contains: one pass per milestone,
+        plus fixes as scenes land. Lighting is the one track where the simulator is
+        permitted to lag the engine.
+        """
+    cadence "one pass per milestone"
+    author "dkoepke"
+    created_at 2026-01-14
+}
+
+record sys.track.perf-watch/1 : track {
+    title "Performance watch"
+    state active
+    scope [ path "lege/**", path "sim/**" ]
+    intent """
+        Keep the frame budget honest across milestones: measure p99 frame time on the
+        target hardware at the end of every milestone and record the result as
+        evidence.
+        """
+    cadence "once per milestone, plus on demand"
+    depends_on [ @sys.constraint.frame-budget-16ms ]
+    author "dkoepke"
+    created_at 2026-01-14
+}
+
+record sys.track.tooling-hygiene/1 : track {
+    title "Tooling hygiene"
+    state active
+    scope [ path "docs/generated/**", path "tools/**" ]
+    intent """
+        Keep the build and the generated views honest: no hand edits, no stale views
+        in a commit, and no lint that everyone has learned to ignore.
+        """
+    cadence "continuous"
+    depends_on [ @sys.policy.no-hand-edited-views ]
+    author "dkoepke"
+    created_at 2026-01-14
+}

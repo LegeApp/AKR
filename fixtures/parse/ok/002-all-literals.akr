@@ -1,0 +1,17 @@
+akr 0.1
+project fixtures
+
+record fx.obs.literals/1 : observation {
+    title "Every scalar literal form"
+    state verified
+    scope [ all, ref @fx.track.everything, path "src/**/*.rs" ]
+    statement """
+        Exercises date, timestamp, commit, glob, boolean and enum literals.
+        """
+    observed_at git:3f0a1c9d5b7e2648a0d4f1b8c36e9752ad014b6f
+    method instrumented
+    watches [ "src/**", "tests/?.rs", "assets/[a-z0-9]/**" ]
+    review_after 2026-12-31
+    acknowledged true
+    created_at 2026-08-03
+}

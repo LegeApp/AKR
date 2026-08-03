@@ -1,0 +1,21 @@
+akr 0.1
+project fixtures
+
+record fx.work.canonical/1 : work {
+    title "Already canonical"
+    state active
+    intent """
+        Formatting this file is a no-op. `format(format(s)) == format(s)`, byte for
+        byte, and the formatter does not rewrite a file that already matches.
+        """
+    acceptance {
+        check idempotent {
+            statement """
+                akr fmt on this file produces no change.
+                """
+            method command
+            command "akr fmt --check fixtures/format/007-idempotent.in.akr"
+        }
+    }
+    part_of [ @fx.milestone.formatting ]
+}

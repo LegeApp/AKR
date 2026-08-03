@@ -1,0 +1,20 @@
+akr 0.1
+project fixtures
+
+record fx.work.alpha/1 : work {
+    title "Alpha depends on beta"
+    state active
+    intent """
+        Two work items that justify each other and nothing else.
+        """
+    depends_on [ @fx.work.beta ]
+}
+
+record fx.work.beta/1 : work {
+    title "Beta depends on alpha"
+    state active
+    intent """
+        The other half of the cycle.
+        """
+    depends_on [ @fx.work.alpha ]
+}

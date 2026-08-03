@@ -1,0 +1,36 @@
+akr 0.1
+project fixtures
+
+record fx.milestone.m1/1 : milestone {
+    title "M1, after M2"
+    state proposed
+    intent """
+        A plan that cannot be executed in any order.
+        """
+    acceptance {
+        check something {
+            statement """
+                Anything.
+                """
+            method manual
+        }
+    }
+    after [ @fx.milestone.m2 ]
+}
+
+record fx.milestone.m2/1 : milestone {
+    title "M2, after M1"
+    state proposed
+    intent """
+        The other half of the cycle.
+        """
+    acceptance {
+        check something {
+            statement """
+                Anything.
+                """
+            method manual
+        }
+    }
+    after [ @fx.milestone.m1 ]
+}

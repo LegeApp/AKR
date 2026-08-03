@@ -1,0 +1,12 @@
+akr 0.1
+project fixtures
+
+record fx.policy.sealed/1 : policy {
+    title "A sealed record, edited in place"
+    state active
+    scope [ all ]
+    rule """
+        This text was changed after the revision was sealed. The change belongs in a
+        new revision.
+        """
+}

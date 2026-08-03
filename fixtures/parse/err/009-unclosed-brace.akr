@@ -1,0 +1,10 @@
+akr 0.1
+project fixtures
+
+record fx.term.unclosed/1 : term {
+    title "Unclosed brace"
+    state active
+    scope [ all ]
+    definition """
+        The record never closes.
+        """

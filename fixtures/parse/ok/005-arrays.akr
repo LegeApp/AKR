@@ -1,0 +1,18 @@
+akr 0.1
+project fixtures
+
+record fx.policy.arrays/1 : policy {
+    title "Array forms"
+    state active
+    scope [
+        ref @fx.track.everything,
+        path "engine/render/**",
+        path "engine/sim/**",
+        path "tools/audit/**"
+    ]
+    rule """
+        An array fits on one line under 96 columns and wraps one element per line
+        above it.
+        """
+    exceptions [ @fx.track.everything ]
+}

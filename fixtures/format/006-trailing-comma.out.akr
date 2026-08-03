@@ -1,0 +1,13 @@
+akr 0.1
+project fixtures
+
+record fx.term.commas/1 : term {
+    title "Trailing commas and empty arrays"
+    state active
+    scope [ all ]
+    definition """
+        A trailing comma is accepted on input and removed on output; an empty array
+        means the same as omitting the slot and is removed.
+        """
+    aliases [ "one", "two" ]
+}

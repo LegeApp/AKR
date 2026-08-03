@@ -1,0 +1,21 @@
+akr-lock 0.1
+project fixtures
+
+build {
+    tool "akr 0.1.0"
+    grammar "0.1"
+    vocabulary "0.1"
+    commit git:3f0a1c9d5b7e2648a0d4f1b8c36e9752ad014b6f
+    source_graph "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    built_at 2026-08-03T09:14:00Z
+}
+
+source "records.akr" {
+    hash "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    records 1
+}
+
+seal @fx.policy.sealed/1 {
+    state active
+    hash "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+}

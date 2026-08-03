@@ -1,0 +1,47 @@
+akr 0.1
+project fixtures
+
+record fx.work.blocks/1 : work {
+    title "Every block form"
+    state active
+    intent """
+        Exercises claim, acceptance, check, disposition and source blocks.
+        """
+    claim first-claim {
+        text """
+            An addressable claim.
+            """
+        supported_by [ @fx.evidence.something ]
+    }
+    retired_claims [ old-claim ]
+    acceptance {
+        check one {
+            statement """
+                A check with a command and evidence.
+                """
+            method command
+            command "cargo test"
+            verified_by [ @fx.evidence.something ]
+        }
+        check two {
+            statement """
+                A check with no evidence yet.
+                """
+            method manual
+        }
+    }
+    disposition @fx.work.dropped {
+        outcome intentionally_dropped
+        note """
+            Not part of this milestone.
+            """
+    }
+    supersedes [ @fx.work.blocks-old/1 ]
+    source {
+        kind legacy
+        path "docs/legacy/PLAN.md"
+        excerpt """
+            Do the thing.
+            """
+    }
+}

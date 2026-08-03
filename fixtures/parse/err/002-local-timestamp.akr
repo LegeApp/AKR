@@ -1,0 +1,13 @@
+akr 0.1
+project fixtures
+
+record fx.obs.local-time/1 : observation {
+    title "Timestamp with an offset"
+    state verified
+    scope [ all ]
+    statement """
+        Timestamps are UTC and end in Z.
+        """
+    observed_at git:3f0a1c9d5b7e2648a0d4f1b8c36e9752ad014b6f
+    review_after 2026-08-03T14:00:00+01:00
+}

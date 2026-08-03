@@ -1,0 +1,27 @@
+akr-lock 0.1
+project fixtures
+
+build {
+    tool "akr 0.1.0"
+    grammar "0.1"
+    vocabulary "0.1"
+    commit git:e806b3f54a2d7091c5e13b8a26f490dc7b135e64
+    source_graph "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+    built_at 2026-08-03T09:14:00Z
+}
+
+source ".akr/records/fx/terms.akr" {
+    hash "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    records 2
+}
+
+resolution @fx.work.blocks/1 {
+    slot supported_by
+    to @fx.evidence.something/1
+    hash "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+}
+
+seal @fx.term.minimal/1 {
+    state active
+    hash "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+}

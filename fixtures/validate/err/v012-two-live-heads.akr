@@ -1,0 +1,21 @@
+akr 0.1
+project fixtures
+
+record fx.policy.two-heads/1 : policy {
+    title "Revision 1, still active"
+    state active
+    scope [ all ]
+    rule """
+        The first rule.
+        """
+}
+
+record fx.policy.two-heads/2 : policy {
+    title "Revision 2, also active"
+    state active
+    scope [ all ]
+    rule """
+        The second rule. Nobody superseded the first.
+        """
+    supersedes [ @fx.policy.two-heads/1 ]
+}

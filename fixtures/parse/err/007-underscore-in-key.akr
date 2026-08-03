@@ -1,0 +1,11 @@
+akr 0.1
+project fixtures
+
+record fx.term.bad_key/1 : term {
+    title "Underscore in a key segment"
+    state active
+    scope [ all ]
+    definition """
+        Key segments carry hyphens; slot names carry underscores (D-005).
+        """
+}

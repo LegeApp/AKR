@@ -1,0 +1,11 @@
+akr 0.1
+project fixtures
+
+record fx.term.padded/01 : term {
+    title "Padded revision number"
+    state active
+    scope [ all ]
+    definition """
+        Revisions are positive integers with no leading zeros.
+        """
+}

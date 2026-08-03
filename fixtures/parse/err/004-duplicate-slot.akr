@@ -1,0 +1,14 @@
+akr 0.1
+project fixtures
+
+record fx.term.duplicate/1 : term {
+    title "Duplicate slot"
+    state active
+    scope [ all ]
+    definition """
+        First definition.
+        """
+    definition """
+        Second definition. Slots are unique (D-012).
+        """
+}

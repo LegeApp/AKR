@@ -1,0 +1,22 @@
+akr 0.1
+project fixtures
+
+record fx.req.something/1 : requirement {
+    title "A requirement"
+    state active
+    scope [ path "src/**" ]
+    statement """
+        The smallest ledger that passes every rule: one requirement, one decision
+        that cites it, and one piece of evidence.
+        """
+}
+
+record fx.decision.do-it/1 : decision {
+    title "A decision that cites its requirement"
+    state active
+    scope [ path "src/**" ]
+    decision """
+        We will do the thing the requirement asks for.
+        """
+    implements [ @fx.req.something ]
+}
