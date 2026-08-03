@@ -1,0 +1,11 @@
+akr 0.1
+project fixtures
+
+record fx.term.tab-prose/1 : term {
+    title "Tab in prose indentation"
+    state active
+    scope [ all ]
+    definition """
+	This line is indented with a tab, which makes the common prefix ambiguous.
+        """
+}

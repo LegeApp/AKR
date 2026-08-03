@@ -1,0 +1,36 @@
+akr 0.1
+project fixtures
+
+record fx.work.plan/1 : work {
+    title "Plan, revision 1"
+    state superseded
+    intent """
+        The first decomposition.
+        """
+}
+
+record fx.work.plan/2 : work {
+    title "Plan, revision 2"
+    state active
+    intent """
+        The second decomposition, which disposes of the child it dropped.
+        """
+    disposition @fx.work.dropped-child {
+        outcome intentionally_dropped
+        note """
+            Out of scope for this milestone.
+            """
+    }
+    supersedes [ @fx.work.plan/1 ]
+}
+
+record fx.work.dropped-child/1 : work {
+    title "A dispositioned child"
+    state ready
+    intent """
+        Still `ready`; the disposition records the decision, and abandoning it is a
+        separate write. The part_of reference to a superseded revision is legal
+        precisely because the disposition exists.
+        """
+    part_of [ @fx.work.plan/1 ]
+}

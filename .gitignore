@@ -1,0 +1,23 @@
+# AKR index cache — a rebuildable artifact, never canonical (see D-019).
+.akr/cache/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Agent scratch layer — disposable, non-canonical (see docs/01-architecture.md).
+.agent/scratch/
+
+# Rust build output (implementation phases P1+).
+/target/
+**/*.rs.bk
+
+# Editor / OS noise
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+
+# Design-tooling byproducts
+__pycache__/
+*.pyc

@@ -1,0 +1,14 @@
+akr 0.1
+project fixtures
+
+record fx.work.sorting/1 : work {
+    title "Relation slots and array elements sort"
+    state active
+    intent """
+        Relation slots sort alphabetically by relation name; refs within an array sort
+        by key, then revision, then anchor.
+        """
+    part_of [ @fx.milestone.formatting ]
+    depends_on [ @fx.decision.zulu, @fx.decision.alpha/2, @fx.decision.alpha/1 ]
+    implements [ @fx.req.something ]
+}

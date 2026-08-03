@@ -1,0 +1,19 @@
+akr 0.1
+project fixtures
+
+record fx.decision.ordering/1 : decision {
+    title "Canonical slot order"
+    state active
+    scope [ all ]
+    topic ordering
+    decision """
+        Slot order is enforced, not suggested.
+        """
+    context """
+        The input here is in an order a person might plausibly type.
+        """
+    implements [ @fx.req.something ]
+    supersedes [ @fx.decision.ordering-old/1 ]
+    author "dkoepke"
+    created_at 2026-08-03
+}

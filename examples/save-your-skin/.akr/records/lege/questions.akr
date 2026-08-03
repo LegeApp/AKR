@@ -1,0 +1,18 @@
+akr 0.1
+project save-your-skin
+
+record lege.question.text-rendering-owner/1 : question {
+    title "Which side owns text layout?"
+    state resolved
+    question """
+        Text layout needs both font metrics, which the viewer has, and string state,
+        which the simulator has. Which side owns the layout pass?
+        """
+    resolution """
+        The viewer owns text layout. The simulator emits strings and anchor points in
+        the frame snapshot and no glyph data, which keeps layout on the side that has
+        the metrics and keeps the boundary one-directional.
+        """
+    author "dkoepke"
+    created_at 2026-04-20
+}

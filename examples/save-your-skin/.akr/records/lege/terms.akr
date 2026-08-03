@@ -1,0 +1,16 @@
+akr 0.1
+project save-your-skin
+
+record lege.term.renderer-boundary/1 : term {
+    title "Renderer boundary"
+    state active
+    scope [ path "lege/**" ]
+    definition """
+        The line between the viewer and the simulator. The viewer may read a frame
+        snapshot across it; it may not call across it, and no engine type may appear
+        in a viewer signature.
+        """
+    aliases [ "the boundary", "viewer boundary" ]
+    author "dkoepke"
+    created_at 2026-02-10
+}

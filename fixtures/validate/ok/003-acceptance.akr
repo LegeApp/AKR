@@ -1,0 +1,31 @@
+akr 0.1
+project fixtures
+
+record fx.evidence.audit-clean/1 : evidence {
+    title "Asset audit reports no placeholders"
+    state verified
+    result pass
+    method command
+    observed_at git:e806b3f54a2d7091c5e13b8a26f490dc7b135e64
+    command "cargo run -p tools -- audit-assets"
+    artifact "artifacts/audit.txt"
+}
+
+record fx.milestone.done/1 : milestone {
+    title "A milestone that is genuinely complete"
+    state completed
+    intent """
+        Every acceptance check is satisfied by evidence whose commit descends from
+        the milestone's last content change.
+        """
+    acceptance {
+        check assets-clean {
+            statement """
+                The asset audit reports zero placeholder assets.
+                """
+            method command
+            command "cargo run -p tools -- audit-assets"
+            verified_by [ @fx.evidence.audit-clean ]
+        }
+    }
+}

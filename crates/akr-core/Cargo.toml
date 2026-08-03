@@ -1,0 +1,18 @@
+[package]
+name = "akr-core"
+description = "AKR semantic model, lifecycle and relation tables, and validation rules."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+# P1 has no runtime dependencies. The model must compile with no parser and no
+# serialisation library (docs/13 P1 exit criterion 4).
+[dependencies]
+
+[dev-dependencies]
+serde_json = "1"

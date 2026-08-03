@@ -1,0 +1,18 @@
+akr 0.1
+project save-your-skin
+
+record lege.evidence.boundary-lint-pass/1 : evidence {
+    title "Boundary lint reports no engine imports"
+    state verified
+    result pass
+    method command
+    observed_at git:b2e58f1406c7a9d3e41b60258fa3d7c6195e0b48
+    command "cargo run -p tools -- boundary-lint --crate lege"
+    artifact "artifacts/2026-05-20-boundary-lint.txt"
+    summary """
+        Zero engine types in public viewer signatures. The eleven previously reported
+        by the viewer-imports-engine observation are gone.
+        """
+    author "dkoepke"
+    created_at 2026-05-20
+}

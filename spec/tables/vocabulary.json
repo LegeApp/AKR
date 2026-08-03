@@ -1,0 +1,505 @@
+{
+  "$comment": "AKR frozen vocabulary spine. Machine-readable form of decisions D-001, D-002, D-004, D-005, D-010, D-012, D-013, D-016 and D-017 in docs/DECISIONS.md. Human-readable tables in docs/02-data-model.md are checked against this file by tools/check-design.py. This file is authoritative for names; the prose documents are authoritative for meaning.",
+  "vocabulary_version": "0.1",
+  "grammar_version": "0.1",
+
+  "value_types": {
+    "string": "Single-line quoted string (D-007).",
+    "prose": "Triple-quoted, raw, dedented prose block (D-007).",
+    "identifier": "Key-segment form: [a-z][a-z0-9]*(-[a-z0-9]+)* (D-005).",
+    "enum": "Bare identifier drawn from a fixed set.",
+    "date": "Bare calendar date, 2026-08-03 (D-008).",
+    "timestamp": "UTC timestamp with mandatory Z (D-008).",
+    "commit": "git: followed by exactly 40 lowercase hex digits (D-008).",
+    "integer": "Signed decimal integer, no floats (D-008).",
+    "boolean": "true or false.",
+    "glob": "Quoted repo-root-relative path glob (D-008).",
+    "ref": "Reference in one of the four forms of D-009.",
+    "scope_term": "all | ref <ref> | path <glob> (D-010).",
+    "block": "Named brace block, at most once per record.",
+    "block[]": "Named brace block, repeatable.",
+    "T[]": "Array of T, written [ a, b ] (D-012)."
+  },
+
+  "classes": {
+    "normative": {
+      "kinds": ["term", "requirement", "policy", "constraint", "decision"],
+      "means": "States what ought to be true; binds future work.",
+      "scope_required": true,
+      "topic_allowed": true,
+      "lifecycle": "normative"
+    },
+    "empirical": {
+      "kinds": ["observation", "evidence", "assessment"],
+      "means": "States what was found to be true, at a stated point in history.",
+      "scope_required": false,
+      "topic_allowed": false,
+      "lifecycle": "empirical"
+    },
+    "planning": {
+      "kinds": ["milestone", "work", "track"],
+      "means": "States what is intended, in what order, and when it is done.",
+      "scope_required": false,
+      "topic_allowed": false,
+      "lifecycle": "planning"
+    },
+    "inquiry": {
+      "kinds": ["question"],
+      "means": "States what is not yet known.",
+      "scope_required": false,
+      "topic_allowed": false,
+      "lifecycle": "inquiry"
+    }
+  },
+
+  "lifecycles": {
+    "normative": {
+      "states": ["proposed", "active", "rejected", "superseded", "withdrawn"],
+      "initial": ["proposed", "active"],
+      "live": ["proposed", "active"],
+      "terminal": ["rejected", "superseded", "withdrawn"],
+      "transitions": [
+        {"from": "proposed", "to": "active", "trigger": "accept"},
+        {"from": "proposed", "to": "rejected", "trigger": "reject"},
+        {"from": "proposed", "to": "withdrawn", "trigger": "withdraw"},
+        {"from": "proposed", "to": "superseded", "trigger": "supersede"},
+        {"from": "active", "to": "superseded", "trigger": "supersede"},
+        {"from": "active", "to": "withdrawn", "trigger": "withdraw"}
+      ]
+    },
+    "empirical": {
+      "states": ["verified", "disproven", "superseded", "withdrawn"],
+      "initial": ["verified"],
+      "live": ["verified"],
+      "terminal": ["disproven", "superseded", "withdrawn"],
+      "transitions": [
+        {"from": "verified", "to": "disproven", "trigger": "disprove"},
+        {"from": "verified", "to": "superseded", "trigger": "supersede"},
+        {"from": "verified", "to": "withdrawn", "trigger": "withdraw"}
+      ],
+      "note": "needs-review is not a state; staleness is derived (D-003)."
+    },
+    "planning": {
+      "states": ["proposed", "ready", "active", "blocked", "completed", "abandoned", "superseded"],
+      "initial": ["proposed"],
+      "live": ["proposed", "ready", "active", "blocked"],
+      "terminal": ["completed", "abandoned", "superseded"],
+      "transitions": [
+        {"from": "proposed", "to": "ready", "trigger": "ready"},
+        {"from": "proposed", "to": "abandoned", "trigger": "abandon"},
+        {"from": "proposed", "to": "superseded", "trigger": "supersede"},
+        {"from": "ready", "to": "active", "trigger": "start"},
+        {"from": "ready", "to": "blocked", "trigger": "block"},
+        {"from": "ready", "to": "abandoned", "trigger": "abandon"},
+        {"from": "ready", "to": "superseded", "trigger": "supersede"},
+        {"from": "active", "to": "blocked", "trigger": "block"},
+        {"from": "active", "to": "completed", "trigger": "complete"},
+        {"from": "active", "to": "abandoned", "trigger": "abandon"},
+        {"from": "active", "to": "superseded", "trigger": "supersede"},
+        {"from": "blocked", "to": "active", "trigger": "unblock"},
+        {"from": "blocked", "to": "abandoned", "trigger": "abandon"},
+        {"from": "blocked", "to": "superseded", "trigger": "supersede"}
+      ]
+    },
+    "inquiry": {
+      "states": ["open", "deferred", "resolved", "closed-without-resolution", "superseded"],
+      "initial": ["open"],
+      "live": ["open", "deferred"],
+      "terminal": ["resolved", "closed-without-resolution", "superseded"],
+      "transitions": [
+        {"from": "open", "to": "deferred", "trigger": "defer"},
+        {"from": "open", "to": "resolved", "trigger": "resolve"},
+        {"from": "open", "to": "closed-without-resolution", "trigger": "close"},
+        {"from": "open", "to": "superseded", "trigger": "supersede"},
+        {"from": "deferred", "to": "open", "trigger": "reopen"},
+        {"from": "deferred", "to": "resolved", "trigger": "resolve"},
+        {"from": "deferred", "to": "closed-without-resolution", "trigger": "close"},
+        {"from": "deferred", "to": "superseded", "trigger": "supersede"}
+      ]
+    }
+  },
+
+  "common_slots": [
+    {"name": "title", "type": "string", "required": true, "applies_to": "all",
+     "doc": "One-line human label; the heading used in every generated view."},
+    {"name": "state", "type": "enum", "required": true, "applies_to": "all",
+     "doc": "Lifecycle state, drawn from the kind's class lifecycle."},
+    {"name": "scope", "type": "scope_term[]", "required": "normative-only", "applies_to": "all",
+     "doc": "What this record governs or was observed about (D-010)."},
+    {"name": "topic", "type": "identifier", "required": false, "applies_to": "normative",
+     "doc": "Opt-in exclusivity handle; two live normative records with the same topic and overlapping scope conflict (D-004b)."},
+    {"name": "retired_claims", "type": "identifier[]", "required": false, "applies_to": "all",
+     "doc": "Claim anchors present in the previous revision and dropped by this one (D-011)."},
+    {"name": "acknowledged", "type": "boolean", "required": false, "applies_to": "all",
+     "doc": "Marks a declared contradiction as knowingly tolerated (D-023)."},
+    {"name": "author", "type": "string", "required": false, "applies_to": "all",
+     "doc": "Who authored this revision. Free text; not an identity system."},
+    {"name": "created_at", "type": "date", "required": false, "applies_to": "all",
+     "doc": "Authoring date of this revision."}
+  ],
+
+  "canonical_slot_order": [
+    "title",
+    "state",
+    "scope",
+    "topic",
+    "<kind content slots, in kinds[].content_slots order>",
+    "<claim blocks, sorted by anchor>",
+    "retired_claims",
+    "acceptance",
+    "<disposition blocks, sorted by ref>",
+    "<relation slots, alphabetical; refs sorted by key, revision, anchor>",
+    "acknowledged",
+    "author",
+    "created_at",
+    "<source blocks, sorted by kind then path/url>"
+  ],
+
+  "kinds": {
+    "term": {
+      "class": "normative",
+      "purpose": "Fixes the project's meaning for a word that would otherwise drift.",
+      "content_slots": [
+        {"name": "definition", "type": "prose", "required": true},
+        {"name": "aliases", "type": "string[]", "required": false}
+      ]
+    },
+    "requirement": {
+      "class": "normative",
+      "purpose": "States something the delivered system must do or must be.",
+      "content_slots": [
+        {"name": "statement", "type": "prose", "required": true},
+        {"name": "rationale", "type": "prose", "required": false}
+      ]
+    },
+    "policy": {
+      "class": "normative",
+      "purpose": "States a standing rule about how the project works, not about what it delivers.",
+      "content_slots": [
+        {"name": "rule", "type": "prose", "required": true},
+        {"name": "rationale", "type": "prose", "required": false},
+        {"name": "exceptions", "type": "ref[]", "required": false,
+         "range": ["milestone", "track", "work", "constraint"]}
+      ]
+    },
+    "constraint": {
+      "class": "normative",
+      "purpose": "States a limit the project must respect but did not choose.",
+      "content_slots": [
+        {"name": "statement", "type": "prose", "required": true},
+        {"name": "measure", "type": "string", "required": false},
+        {"name": "rationale", "type": "prose", "required": false}
+      ]
+    },
+    "decision": {
+      "class": "normative",
+      "purpose": "Records a choice made between alternatives, and what follows from it.",
+      "content_slots": [
+        {"name": "decision", "type": "prose", "required": true},
+        {"name": "context", "type": "prose", "required": false},
+        {"name": "consequences", "type": "prose", "required": false}
+      ]
+    },
+    "observation": {
+      "class": "empirical",
+      "purpose": "Records what was found to be true of the system at a specific commit.",
+      "content_slots": [
+        {"name": "statement", "type": "prose", "required": true},
+        {"name": "observed_at", "type": "commit", "required": true},
+        {"name": "method", "type": "enum", "required": false,
+         "values": ["manual", "command", "instrumented"]},
+        {"name": "watches", "type": "glob[]", "required": false},
+        {"name": "review_after", "type": "date", "required": false}
+      ]
+    },
+    "evidence": {
+      "class": "empirical",
+      "purpose": "Records the outcome of a check that was actually run.",
+      "content_slots": [
+        {"name": "result", "type": "enum", "required": true,
+         "values": ["pass", "fail", "inconclusive"]},
+        {"name": "method", "type": "enum", "required": true,
+         "values": ["manual", "command", "observation"]},
+        {"name": "observed_at", "type": "commit", "required": true},
+        {"name": "command", "type": "string", "required": false},
+        {"name": "artifact", "type": "string", "required": false},
+        {"name": "summary", "type": "prose", "required": false}
+      ],
+      "note": "Evidence never declares what it verifies; verified_by runs from the verified thing to the evidence (D-016)."
+    },
+    "assessment": {
+      "class": "empirical",
+      "purpose": "Records a judgement drawn from observations, distinct from the observations themselves.",
+      "content_slots": [
+        {"name": "statement", "type": "prose", "required": true},
+        {"name": "confidence", "type": "enum", "required": false,
+         "values": ["low", "medium", "high"]},
+        {"name": "as_of", "type": "commit", "required": false}
+      ]
+    },
+    "milestone": {
+      "class": "planning",
+      "purpose": "A named point at which a defined set of acceptance checks passes.",
+      "content_slots": [
+        {"name": "intent", "type": "prose", "required": true},
+        {"name": "target", "type": "date", "required": false}
+      ],
+      "required_blocks": ["acceptance"]
+    },
+    "work": {
+      "class": "planning",
+      "purpose": "A unit of intended change. A work record designated plan_of_record is a plan (D-001).",
+      "content_slots": [
+        {"name": "intent", "type": "prose", "required": true},
+        {"name": "target", "type": "date", "required": false}
+      ],
+      "optional_blocks": ["acceptance", "disposition"]
+    },
+    "track": {
+      "class": "planning",
+      "purpose": "Standing, non-terminating work that milestones do not contain.",
+      "content_slots": [
+        {"name": "intent", "type": "prose", "required": true},
+        {"name": "cadence", "type": "string", "required": false}
+      ]
+    },
+    "question": {
+      "class": "inquiry",
+      "purpose": "An open matter that blocks or endangers a decision or a plan.",
+      "content_slots": [
+        {"name": "question", "type": "prose", "required": true},
+        {"name": "resolution", "type": "prose", "required": false,
+         "required_when": {"state": ["resolved"]}}
+      ]
+    }
+  },
+
+  "blocks": {
+    "claim": {
+      "head": "identifier",
+      "repeatable": true,
+      "applies_to": "all kinds",
+      "slots": [
+        {"name": "text", "type": "prose", "required": true},
+        {"name": "supported_by", "type": "ref[]", "required": false}
+      ],
+      "doc": "An individually addressable assertion within a record; referenced as @key/2#anchor (D-011)."
+    },
+    "acceptance": {
+      "head": null,
+      "repeatable": false,
+      "applies_to": ["milestone", "work"],
+      "contains": ["check"],
+      "doc": "What 'done' means for this planning record (D-016)."
+    },
+    "check": {
+      "head": "identifier",
+      "repeatable": true,
+      "applies_to": ["acceptance"],
+      "slots": [
+        {"name": "statement", "type": "prose", "required": true},
+        {"name": "method", "type": "enum", "required": true,
+         "values": ["manual", "command", "observation"]},
+        {"name": "command", "type": "string", "required": false},
+        {"name": "verified_by", "type": "ref[]", "required": false, "range": ["evidence"]}
+      ],
+      "doc": "Satisfied when a referenced evidence record has result pass and an observed_at commit descended from the work item's last content change (D-016)."
+    },
+    "source": {
+      "head": null,
+      "repeatable": true,
+      "applies_to": "all kinds",
+      "slots": [
+        {"name": "kind", "type": "enum", "required": true,
+         "values": ["legacy", "external", "internal"]},
+        {"name": "path", "type": "string", "required": false},
+        {"name": "url", "type": "string", "required": false},
+        {"name": "excerpt", "type": "prose", "required": false}
+      ],
+      "doc": "Where this record's content came from. Migration provenance uses kind legacy (D-022)."
+    },
+    "disposition": {
+      "head": "ref",
+      "repeatable": true,
+      "applies_to": ["work", "milestone", "track"],
+      "slots": [
+        {"name": "outcome", "type": "enum", "required": true,
+         "values": ["carried_forward", "completed_elsewhere", "intentionally_dropped", "still_required_separately"]},
+        {"name": "into", "type": "ref", "required": "outcome-dependent"},
+        {"name": "note", "type": "prose", "required": false}
+      ],
+      "doc": "Required on a superseding planning record for every unfinished part_of child of the record it supersedes (D-017). into is required for carried_forward and completed_elsewhere, optional for still_required_separately, forbidden for intentionally_dropped."
+    }
+  },
+
+  "relations": {
+    "supported_by": {
+      "domain": ["term", "requirement", "policy", "constraint", "decision", "assessment", "milestone", "work", "track", "question"],
+      "range": ["observation", "evidence", "assessment"],
+      "cardinality": "many",
+      "acyclic": true,
+      "propagates_staleness": true,
+      "consequence": "The source's standing rests on the target; a stale target flags the source at_risk.",
+      "enforced_by": "V-005"
+    },
+    "depends_on": {
+      "domain": ["term", "requirement", "policy", "constraint", "decision", "observation", "assessment", "milestone", "work", "track", "question"],
+      "range": ["term", "requirement", "policy", "constraint", "decision", "observation", "evidence", "assessment", "milestone", "work", "track"],
+      "cardinality": "many",
+      "acyclic": true,
+      "propagates_staleness": true,
+      "consequence": "A live source may not depend on a terminal target (V-019).",
+      "enforced_by": "V-015"
+    },
+    "supersedes": {
+      "domain": "any",
+      "range": "same kind as domain",
+      "cardinality": "many",
+      "acyclic": true,
+      "propagates_staleness": false,
+      "consequence": "Puts the target into superseded state; requires disposition of unfinished children for planning kinds (V-017).",
+      "enforced_by": "V-014"
+    },
+    "contradicts": {
+      "domain": "any",
+      "range": "any",
+      "cardinality": "many",
+      "symmetric": true,
+      "acyclic": false,
+      "propagates_staleness": false,
+      "consequence": "Must be dispositioned; always surfaced in context, never suppressed by ranking (D-023).",
+      "enforced_by": "V-023"
+    },
+    "implements": {
+      "domain": ["work", "decision"],
+      "range": ["requirement", "policy", "constraint", "decision"],
+      "cardinality": "many",
+      "acyclic": true,
+      "propagates_staleness": false,
+      "consequence": "Ties intended change to the normative record that motivates it.",
+      "enforced_by": "V-015"
+    },
+    "resolves": {
+      "domain": ["decision", "observation", "evidence", "work"],
+      "range": ["question"],
+      "cardinality": "many",
+      "acyclic": true,
+      "propagates_staleness": false,
+      "consequence": "A question in resolved state must be the target of at least one live resolves edge.",
+      "enforced_by": "V-011"
+    },
+    "derived_from": {
+      "domain": "any",
+      "range": "any",
+      "cardinality": "many",
+      "acyclic": true,
+      "propagates_staleness": true,
+      "consequence": "Records provenance between records; carries staleness.",
+      "enforced_by": "V-015"
+    },
+    "part_of": {
+      "domain": ["work", "milestone", "requirement", "question"],
+      "range": ["milestone", "track", "work"],
+      "cardinality": "one",
+      "acyclic": true,
+      "propagates_staleness": false,
+      "consequence": "Defines the child set used by disposition (V-017) and by ref-scope overlap (D-010).",
+      "enforced_by": "V-015"
+    },
+    "after": {
+      "domain": ["milestone", "work"],
+      "range": ["milestone", "work"],
+      "cardinality": "many",
+      "acyclic": true,
+      "propagates_staleness": false,
+      "consequence": "Defines milestone order; the graph must be acyclic (V-016).",
+      "enforced_by": "V-016"
+    },
+    "blocks": {
+      "domain": ["question", "work", "observation", "constraint"],
+      "range": ["milestone", "work", "decision"],
+      "cardinality": "many",
+      "acyclic": true,
+      "propagates_staleness": false,
+      "consequence": "A live blocker forces the target planning record into blocked state and is surfaced in context.",
+      "enforced_by": "V-015"
+    },
+    "verified_by": {
+      "domain": ["milestone", "work", "requirement", "assessment", "observation", "check"],
+      "range": ["evidence"],
+      "cardinality": "many",
+      "acyclic": true,
+      "propagates_staleness": true,
+      "consequence": "Satisfies acceptance checks under the descendant-commit rule (D-016). Runs one way only.",
+      "enforced_by": "V-020"
+    },
+    "plan_of_record": {
+      "domain": ["work"],
+      "range": ["milestone", "track"],
+      "cardinality": "one",
+      "acyclic": true,
+      "propagates_staleness": false,
+      "consequence": "Designates the authoritative plan for the target; at most one live plan per target (V-018).",
+      "enforced_by": "V-018"
+    }
+  },
+
+  "scope_terms": [
+    {"form": "all", "doc": "Project-wide. Overlaps everything."},
+    {"form": "ref <ref>", "range": ["milestone", "track", "constraint"],
+     "doc": "Organisational scope. Two ref terms overlap if equal or connected by part_of."},
+    {"form": "path <glob>",
+     "doc": "Code scope. Two path terms overlap if their literal prefixes are prefix-comparable, ** matching any run of segments."}
+  ],
+
+  "rules": {
+    "V-001": {"title": "Every reference resolves to a declared key and existing revision", "stage": "link", "code": "AKR-L001", "doc": "docs/05-validation-rules.md"},
+    "V-002": {"title": "A key's namespace must be declared in project.akr", "stage": "link", "code": "AKR-L004", "doc": "docs/05-validation-rules.md"},
+    "V-003": {"title": "All revisions of one key live in one file", "stage": "link", "code": "AKR-L006", "doc": "docs/05-validation-rules.md"},
+    "V-004": {"title": "Claim and check anchors exist; retired anchors are reported distinctly", "stage": "link", "code": "AKR-L012", "doc": "docs/05-validation-rules.md"},
+    "V-005": {"title": "Relation and slot targets are kind-correct", "stage": "link", "code": "AKR-L031", "doc": "docs/05-validation-rules.md"},
+    "V-006": {"title": "References to terminal records only via historical relations", "stage": "link", "code": "AKR-L021", "doc": "docs/05-validation-rules.md"},
+    "V-007": {"title": "The kind and state combination is legal for the kind's class", "stage": "type", "code": "AKR-T011", "doc": "docs/05-validation-rules.md"},
+    "V-008": {"title": "Required slots present; unknown slots rejected", "stage": "type", "code": "AKR-T001", "doc": "docs/05-validation-rules.md"},
+    "V-009": {"title": "An observation carries observed_at", "stage": "type", "code": "AKR-T021", "doc": "docs/05-validation-rules.md"},
+    "V-010": {"title": "Evidence carries result, method and observed_at", "stage": "type", "code": "AKR-T022", "doc": "docs/05-validation-rules.md"},
+    "V-011": {"title": "A resolved question carries a resolution and a live resolves edge", "stage": "type", "code": "AKR-T031", "doc": "docs/05-validation-rules.md"},
+    "V-012": {"title": "At most one live revision per key", "stage": "resolve", "code": "AKR-R001", "doc": "docs/05-validation-rules.md"},
+    "V-013": {"title": "No two live normative records share a topic with overlapping scope", "stage": "resolve", "code": "AKR-R002", "doc": "docs/05-validation-rules.md"},
+    "V-014": {"title": "The supersession graph is acyclic", "stage": "resolve", "code": "AKR-R011", "doc": "docs/05-validation-rules.md"},
+    "V-015": {"title": "depends_on, derived_from, part_of, implements and blocks graphs are acyclic", "stage": "resolve", "code": "AKR-R012", "doc": "docs/05-validation-rules.md"},
+    "V-016": {"title": "The after graph is acyclic", "stage": "resolve", "code": "AKR-R013", "doc": "docs/05-validation-rules.md"},
+    "V-017": {"title": "A superseding planning record disposes of every unfinished child", "stage": "resolve", "code": "AKR-R014", "doc": "docs/05-validation-rules.md"},
+    "V-018": {"title": "At most one live plan_of_record per milestone or track", "stage": "resolve", "code": "AKR-R018", "doc": "docs/05-validation-rules.md"},
+    "V-019": {"title": "A live record does not depend on a terminal record", "stage": "resolve", "code": "AKR-R021", "doc": "docs/05-validation-rules.md"},
+    "V-020": {"title": "A completed milestone or work record has every acceptance check satisfied", "stage": "resolve", "code": "AKR-R022", "doc": "docs/05-validation-rules.md"},
+    "V-021": {"title": "An active decision cites a requirement, policy, constraint or evidence", "stage": "resolve", "code": "AKR-R031", "doc": "docs/05-validation-rules.md"},
+    "V-022": {"title": "A verified observation has provenance", "stage": "resolve", "code": "AKR-R032", "doc": "docs/05-validation-rules.md"},
+    "V-023": {"title": "A declared contradiction is resolved or acknowledged", "stage": "resolve", "code": "AKR-R041", "doc": "docs/05-validation-rules.md"},
+    "V-024": {"title": "A sealed revision matches its content hash in akr.lock", "stage": "resolve", "code": "AKR-R051", "doc": "docs/05-validation-rules.md"}
+  },
+
+  "rule_id_ranges": {
+    "V-001..V-099": "Language and graph rules. docs/05-validation-rules.md.",
+    "V-101..V-149": "Freshness, emission and context rules. docs/10-freshness-and-git.md, docs/11-projections.md, docs/09-context-assembly.md."
+  },
+
+  "diagnostics": {
+    "scheme": "AKR-<stage-letter><three-digit-number>",
+    "severities": ["error", "warning"],
+    "default_profile": "strict",
+    "prefixes": {
+      "P": {"stage": "parse", "registry": "spec/diagnostics/codes-lang.md"},
+      "F": {"stage": "format", "registry": "spec/diagnostics/codes-lang.md"},
+      "T": {"stage": "type-check", "registry": "spec/diagnostics/codes-lang.md"},
+      "L": {"stage": "link", "registry": "spec/diagnostics/codes-lang.md"},
+      "R": {"stage": "resolve", "registry": "spec/diagnostics/codes-lang.md"},
+      "I": {"stage": "index", "registry": "spec/diagnostics/codes-runtime.md"},
+      "E": {"stage": "emit", "registry": "spec/diagnostics/codes-runtime.md"},
+      "X": {"stage": "context", "registry": "spec/diagnostics/codes-runtime.md"},
+      "G": {"stage": "git-freshness", "registry": "spec/diagnostics/codes-runtime.md"},
+      "C": {"stage": "cli-config", "registry": "spec/diagnostics/codes-runtime.md"},
+      "M": {"stage": "migration", "registry": "spec/diagnostics/codes-runtime.md"}
+    }
+  }
+}

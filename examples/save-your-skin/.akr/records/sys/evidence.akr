@@ -1,0 +1,18 @@
+akr 0.1
+project save-your-skin
+
+record sys.evidence.playable-day-demo/1 : evidence {
+    title "Recorded full-day session"
+    state verified
+    result pass
+    method observation
+    observed_at git:e806b3f54a2d7091c5e13b8a26f490dc7b135e64
+    artifact "artifacts/2026-07-11-day-loop.mp4"
+    summary """
+        One complete in-game day, 41 minutes, start to finish. No crash, no soft-lock.
+        Two placeholder textures visible in the barn interior, which is why the asset
+        audit check is separate.
+        """
+    author "dkoepke"
+    created_at 2026-07-11
+}

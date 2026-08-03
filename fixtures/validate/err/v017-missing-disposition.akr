@@ -1,0 +1,29 @@
+akr 0.1
+project fixtures
+
+record fx.work.plan/1 : work {
+    title "Plan, revision 1"
+    state superseded
+    intent """
+        The first decomposition.
+        """
+}
+
+record fx.work.plan/2 : work {
+    title "Plan, revision 2"
+    state active
+    intent """
+        The second decomposition. It says nothing about the child below, which is
+        still `ready` and still points at revision 1.
+        """
+    supersedes [ @fx.work.plan/1 ]
+}
+
+record fx.work.orphan/1 : work {
+    title "An unfinished child of the superseded plan"
+    state ready
+    intent """
+        Work that would silently vanish across the replan.
+        """
+    part_of [ @fx.work.plan/1 ]
+}

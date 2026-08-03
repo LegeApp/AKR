@@ -1,0 +1,23 @@
+akr 0.1
+project fixtures
+
+record fx.evidence.suite-green/1 : evidence {
+    title "The suite passes"
+    state verified
+    result pass
+    method command
+    observed_at git:3f0a1c9d5b7e2648a0d4f1b8c36e9752ad014b6f
+    command "cargo test"
+}
+
+record fx.obs.drift/1 : observation {
+    title "But long runs drift"
+    state verified
+    statement """
+        Both records are live and the contradiction is neither resolved nor
+        acknowledged.
+        """
+    observed_at git:7c41d0ba92e6f37518a3cd406b5e2f91d8074a63
+    method instrumented
+    contradicts [ @fx.evidence.suite-green/1 ]
+}

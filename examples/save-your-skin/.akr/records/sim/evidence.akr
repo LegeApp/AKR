@@ -1,0 +1,19 @@
+akr 0.1
+project save-your-skin
+
+record sim.evidence.determinism-suite-pass/1 : evidence {
+    title "Determinism suite green across a 512-seed sweep"
+    state verified
+    result pass
+    method command
+    observed_at git:5d9c2a70e31f8b46c07d5924ab6e3f1074c9d285
+    command "cargo test -p sim --test determinism -- --seed-sweep 512"
+    artifact "artifacts/2026-06-30-determinism.log"
+    summary """
+        512 seeds, 10 000 ticks each, byte-identical state at every tick boundary. The
+        suite runs 10 000 ticks, which is under two in-game days; the drift observed
+        over a week is outside what this sweep covers.
+        """
+    author "dkoepke"
+    created_at 2026-06-30
+}

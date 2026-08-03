@@ -1,0 +1,23 @@
+akr 0.1
+project fixtures
+
+record fx.question.unanswered/1 : question {
+    title "Resolved, but no answer recorded"
+    state resolved
+    question """
+        A resolved question needs both a resolution slot and a live resolves edge. This
+        fixture supplies the edge and omits the slot, so exactly one fault remains. The
+        other half of V-011 is covered by the unit tests in tests/v_rules.rs, where a
+        question with neither is built from the model builders.
+        """
+}
+
+record fx.work.answering/1 : work {
+    title "The work that answered it"
+    state active
+    intent """
+        Something resolved the question, so only the missing `resolution` slot is at
+        fault.
+        """
+    resolves [ @fx.question.unanswered ]
+}

@@ -1,0 +1,11 @@
+akr 0.1
+project fixtures
+
+record fx/1 : term {
+    title "One segment is too few"
+    state active
+    scope [ all ]
+    definition """
+        A key has two to eight segments (D-005).
+        """
+}

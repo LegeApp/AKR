@@ -1,0 +1,37 @@
+akr 0.1
+project fixtures
+
+record fx.milestone.target/1 : milestone {
+    title "A milestone with two plans"
+    state active
+    intent """
+        At most one live plan of record per target.
+        """
+    acceptance {
+        check something {
+            statement """
+                Anything.
+                """
+            method manual
+        }
+    }
+}
+
+record fx.work.plan-a/1 : work {
+    title "Plan A"
+    state active
+    intent """
+        The incumbent plan.
+        """
+    plan_of_record [ @fx.milestone.target ]
+}
+
+record fx.work.plan-b/1 : work {
+    title "Plan B"
+    state proposed
+    intent """
+        A second plan. `proposed` is a live state, so this trips the rule, which is
+        intended: model an alternative as a revision, not a second plan.
+        """
+    plan_of_record [ @fx.milestone.target ]
+}

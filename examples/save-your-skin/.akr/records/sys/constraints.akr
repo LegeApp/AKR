@@ -1,0 +1,29 @@
+akr 0.1
+project save-your-skin
+
+record sys.constraint.frame-budget-16ms/1 : constraint {
+    title "16 ms frame budget"
+    state active
+    scope [ path "lege/**", path "sim/src/step.rs" ]
+    statement """
+        The target hardware runs at 60 Hz. A frame that takes longer than 16 ms drops,
+        and dropped frames in the day loop read as a broken game rather than a slow
+        one.
+        """
+    measure "16 ms at p99, measured over a 20-minute captured session"
+    author "dkoepke"
+    created_at 2026-01-20
+}
+
+record sys.constraint.single-threaded-sim/1 : constraint {
+    title "The simulator runs on one thread"
+    state active
+    scope [ path "sim/**" ]
+    statement """
+        The simulator is single-threaded. The determinism requirement and the target
+        platform's threading model leave no room for a work-stealing scheduler in the
+        tick loop.
+        """
+    author "dkoepke"
+    created_at 2026-01-20
+}

@@ -1,0 +1,35 @@
+akr 0.1
+project save-your-skin
+
+record sys.term.playable-day/1 : term {
+    title "Playable day"
+    state active
+    scope [ all ]
+    definition """
+        One in-game day, from the morning wake state to the following morning wake
+        state, played end to end by one player without a crash, a soft-lock, or a
+        placeholder asset.
+        """
+    aliases [ "playable day", "day-loop build" ]
+    claim day-boundary {
+        text """
+            A day boundary is the morning wake state, not midnight. Sleeping is what
+            ends a day; the clock is not.
+            """
+    }
+    author "dkoepke"
+    created_at 2026-01-14
+}
+
+record sys.term.tandem-work/1 : term {
+    title "Tandem work"
+    state active
+    scope [ all ]
+    definition """
+        An engine change and its matching simulator change, landed in one commit. Work
+        is in tandem when neither half is observable in the repository without the
+        other.
+        """
+    author "dkoepke"
+    created_at 2026-01-14
+}

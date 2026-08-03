@@ -1,0 +1,4 @@
+# V-024: sealed revisions are immutable; changes need a new revision
+# AKR-R052 also fires here, because the source hash no longer matches either.
+AKR-R051 4
+AKR-R052 1

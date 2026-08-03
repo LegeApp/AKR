@@ -1,0 +1,12 @@
+akr 0.1
+project fixtures
+
+record fx.policy.bad-ref/1 : policy {
+    title "Malformed reference"
+    state active
+    scope [ all ]
+    rule """
+        A reference is @key, @key/N, @key#anchor or @key/N#anchor.
+        """
+    exceptions [ @fx.track.everything/latest ]
+}

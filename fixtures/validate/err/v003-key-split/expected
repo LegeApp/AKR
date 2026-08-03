@@ -1,0 +1,2 @@
+# V-003: every revision of a key lives in one file, so its history is one diff
+AKR-L006 4

@@ -1,0 +1,11 @@
+akr 0.1
+project fixtures
+
+record fx.obs.unsourced/1 : observation {
+    title "Verified, but no account of how"
+    state verified
+    statement """
+        The commit says when; nothing here says how.
+        """
+    observed_at git:3f0a1c9d5b7e2648a0d4f1b8c36e9752ad014b6f
+}

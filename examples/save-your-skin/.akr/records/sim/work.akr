@@ -1,0 +1,16 @@
+akr 0.1
+project save-your-skin
+
+record sim.work.rewrite-projection/1 : work {
+    title "Rewrite the projection pass"
+    state blocked
+    intent """
+        Rewrite the day-boundary projection so that pending state reconciliation is one
+        path rather than four, and bring coverage on that path up to the steady-state
+        level.
+        """
+    depends_on [ @sim.obs.projection-gaps ]
+    part_of [ @sys.milestone.m3-playable-day ]
+    author "dkoepke"
+    created_at 2026-06-18
+}

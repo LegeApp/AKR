@@ -1,0 +1,11 @@
+akr 0.1
+project fixtures
+
+record fx.term.minimal/1 : term {
+    title "The smallest legal record"
+    state active
+    scope [ all ]
+    definition """
+        Every required slot, and nothing else.
+        """
+}

@@ -1,0 +1,21 @@
+akr 0.1
+project fixtures
+
+record fx.policy.dup-anchor/1 : policy {
+    title "Two claims with one anchor"
+    state active
+    scope [ all ]
+    rule """
+        Anchors are unique within a record.
+        """
+    claim same {
+        text """
+            First.
+            """
+    }
+    claim same {
+        text """
+            Second.
+            """
+    }
+}

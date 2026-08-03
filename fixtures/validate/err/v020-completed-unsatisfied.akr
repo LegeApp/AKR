@@ -1,0 +1,19 @@
+akr 0.1
+project fixtures
+
+record fx.milestone.premature/1 : milestone {
+    title "Completed with an unsatisfied check"
+    state completed
+    intent """
+        This is what makes `completed` mean something.
+        """
+    acceptance {
+        check nothing-proves-this {
+            statement """
+                The asset audit reports zero placeholders.
+                """
+            method command
+            command "cargo run -p tools -- audit-assets"
+        }
+    }
+}

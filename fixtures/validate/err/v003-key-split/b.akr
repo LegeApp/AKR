@@ -1,0 +1,12 @@
+akr 0.1
+project fixtures
+
+record fx.policy.split/2 : policy {
+    title "Revision 2, in b.akr"
+    state active
+    scope [ all ]
+    rule """
+        The second revision, in the wrong file.
+        """
+    supersedes [ @fx.policy.split/1 ]
+}

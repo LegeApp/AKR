@@ -1,0 +1,20 @@
+akr 0.1
+project save-your-skin
+
+record lege.req.no-engine-types-in-viewer/1 : requirement {
+    title "No engine type appears in a viewer signature"
+    state active
+    scope [ path "lege/**" ]
+    statement """
+        No type defined by the simulator appears in the signature of any public viewer
+        function, struct field, or trait method.
+        """
+    rationale """
+        It is what makes the viewer testable without booting a simulator, and it is
+        the only version of the boundary that a lint can check.
+        """
+    depends_on [ @lege.term.renderer-boundary ]
+    verified_by [ @lege.evidence.boundary-lint-pass ]
+    author "dkoepke"
+    created_at 2026-02-10
+}

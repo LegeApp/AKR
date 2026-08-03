@@ -1,0 +1,41 @@
+akr 0.1
+project fixtures
+
+record fx.assessment.anchors/1 : assessment {
+    title "Anchors, revision 1"
+    state superseded
+    statement """
+        The first assessment.
+        """
+    claim gone {
+        text """
+            A claim that revision 2 retires.
+            """
+    }
+}
+
+record fx.assessment.anchors/2 : assessment {
+    title "Anchors, revision 2"
+    state verified
+    statement """
+        The second assessment.
+        """
+    claim kept {
+        text """
+            A claim that survives.
+            """
+    }
+    retired_claims [ gone ]
+    supersedes [ @fx.assessment.anchors/1 ]
+}
+
+record fx.assessment.cites-retired/1 : assessment {
+    title "Cites a retired claim through a floating reference"
+    state verified
+    statement """
+        The reference below floats to revision 2, which retired the anchor. The target
+        is an assessment rather than a policy so that `supported_by`'s range is
+        satisfied and the retired anchor is the only fault (fixtures/README.md §2).
+        """
+    supported_by [ @fx.assessment.anchors#gone ]
+}

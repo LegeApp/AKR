@@ -1,0 +1,10 @@
+akr 0.1
+project fixtures
+
+record fx.evidence.no-result/1 : evidence {
+    title "Evidence with no result"
+    state verified
+    method command
+    observed_at git:3f0a1c9d5b7e2648a0d4f1b8c36e9752ad014b6f
+    command "cargo test"
+}

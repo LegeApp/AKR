@@ -1,0 +1,39 @@
+akr 0.1
+project save-your-skin
+
+record sim.obs.projection-gaps/1 : observation {
+    title "Projection coverage is thinnest at day boundaries"
+    state verified
+    scope [ path "sim/src/project/**" ]
+    statement """
+        Across the projection suite the least-covered paths cluster at the transition
+        from one in-game day to the next: 41 percent line coverage there against 88
+        percent for steady-state paths. The uncovered branches are the ones that
+        reconcile pending state at the wake boundary.
+        """
+    observed_at git:7c41d0ba92e6f37518a3cd406b5e2f91d8074a63
+    method command
+    watches [ "sim/src/project/**" ]
+    review_after 2026-11-01
+    author "dkoepke"
+    created_at 2026-06-14
+}
+
+record sim.obs.timestep-drift/1 : observation {
+    title "Long runs drift by one tick over an in-game week"
+    state verified
+    scope [ path "sim/src/step.rs" ]
+    statement """
+        Two runs from the same seed diverge by exactly one tick of accumulated state
+        after roughly seven in-game days. The divergence is reproducible and appears
+        to originate in the accumulator, not in the projection pass.
+        """
+    observed_at git:5d9c2a70e31f8b46c07d5924ab6e3f1074c9d285
+    method instrumented
+    watches [ "sim/src/step.rs" ]
+    review_after 2026-07-15
+    contradicts [ @sim.evidence.determinism-suite-pass/1 ]
+    acknowledged true
+    author "dkoepke"
+    created_at 2026-06-30
+}

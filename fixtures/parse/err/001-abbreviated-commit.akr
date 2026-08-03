@@ -1,0 +1,12 @@
+akr 0.1
+project fixtures
+
+record fx.obs.short-hash/1 : observation {
+    title "Abbreviated commit hash"
+    state verified
+    scope [ all ]
+    statement """
+        The hash below is seven characters, not forty.
+        """
+    observed_at git:3f0a1c9
+}

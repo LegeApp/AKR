@@ -1,0 +1,114 @@
+akr 0.1
+project save-your-skin
+
+record sys.work.legacy-roadmap-import/1 : work {
+    title "Import the legacy roadmap"
+    state proposed
+    intent """
+        Extract every durable claim from the legacy ROADMAP.md, record it as a record
+        of the right kind, and disposition the ones that are not durable. The legacy
+        file is archived only when this work item completes.
+        """
+    acceptance {
+        check lighting-standing-claim {
+            statement """
+                The legacy claim that lighting trails the milestones is dispositioned:
+                recorded as the lighting track's exception, or explicitly dropped.
+                """
+            method manual
+        }
+        check m3-scope-claim {
+            statement """
+                The legacy claim about M3's scope is dispositioned against
+                sys.milestone.m3-playable-day.
+                """
+            method manual
+        }
+        check weekly-demo-claim {
+            statement """
+                The legacy weekly-demo practice is dispositioned. It is not current
+                practice and the record saying so is withdrawn, not deleted.
+                """
+            method manual
+        }
+    }
+    part_of [ @sys.track.tooling-hygiene ]
+    author "dkoepke"
+    created_at 2026-05-30
+    source {
+        kind legacy
+        path "docs/legacy/ROADMAP.md"
+        excerpt """
+            M3 — playable day. Ship the day loop; lighting can trail. Weekly demo
+            build every Friday.
+            """
+    }
+}
+
+record sys.work.m3-audio-pass/1 : work {
+    title "Ambient audio for the day loop"
+    state ready
+    intent """
+        Ambient audio beds for the four day phases, plus footstep variation on the
+        three surface types in the day-loop scenes.
+        """
+    part_of [ @sys.work.m3-plan/1 ]
+    author "dkoepke"
+    created_at 2026-04-02
+}
+
+record sys.work.m3-lighting-pass/1 : work {
+    title "Lighting pass for the day loop"
+    state ready
+    intent """
+        One lighting pass over the day-loop scenes: dawn, noon, dusk and night keys
+        for each of the six interiors.
+        """
+    part_of [ @sys.work.m3-plan/1 ]
+    author "dkoepke"
+    created_at 2026-04-02
+}
+
+record sys.work.m3-plan/1 : work {
+    title "M3 plan of record"
+    state superseded
+    intent """
+        Land the sim step rewrite first, then the renderer boundary, then lighting,
+        then ambient audio. Asset audit at the end if there is time.
+        """
+    target 2026-09-15
+    plan_of_record [ @sys.milestone.m3-playable-day ]
+    author "dkoepke"
+    created_at 2026-04-02
+}
+
+record sys.work.m3-plan/2 : work {
+    title "M3 plan of record"
+    state active
+    intent """
+        Land the renderer boundary first, since the viewer work is unblocked and the
+        sim step is not. Then the sim step rewrite, then the asset audit. Lighting
+        moves to the standing track; ambient audio is dropped from the milestone.
+        """
+    target 2026-09-15
+    disposition @sys.work.m3-audio-pass {
+        outcome intentionally_dropped
+        note """
+            Ambient audio is not part of a playable day as the term defines it. It is
+            not scheduled anywhere and that is deliberate; revisit after M4.
+            """
+    }
+    disposition @sys.work.m3-lighting-pass {
+        outcome carried_forward
+        into @sys.track.lighting
+        note """
+            Lighting is standing work that no milestone contains. Moving it to the
+            track is where it should have been from the start.
+            """
+    }
+    implements [ @sys.policy.tandem-work ]
+    plan_of_record [ @sys.milestone.m3-playable-day ]
+    supersedes [ @sys.work.m3-plan/1 ]
+    author "dkoepke"
+    created_at 2026-06-18
+}

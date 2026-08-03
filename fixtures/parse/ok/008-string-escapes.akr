@@ -1,0 +1,12 @@
+akr 0.1
+project fixtures
+
+record fx.evidence.escapes/1 : evidence {
+    title "Quoted string escapes"
+    state verified
+    result pass
+    method command
+    observed_at git:7c41d0ba92e6f37518a3cd406b5e2f91d8074a63
+    command "grep -n \"needle\" src/*.rs | head -1"
+    artifact "artifacts/tab\there/newline\nthere/backslash\\there.log"
+}

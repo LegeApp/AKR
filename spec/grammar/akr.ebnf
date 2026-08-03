@@ -1,0 +1,195 @@
+(* ==========================================================================
+   AKR 0.1 — formal grammar
+   --------------------------------------------------------------------------
+   Notation: ISO/IEC 14977 EBNF.
+       =   definition        ,   concatenation      |   alternation
+       { } zero or more      [ ] optional           ( ) grouping
+       ;   terminator        (* *) comment
+   Terminals are quoted. Where a terminal is the double-quote character it is
+   written with single quotes.
+
+   Every production is annotated with the section of docs/03-syntax.md that
+   explains it. The grammar is normative for shape; docs/02-data-model.md is
+   normative for meaning; spec/tables/vocabulary.json is normative for names.
+
+   The grammar is LL(1) after the header (docs/03 section 5). It deliberately
+   does not encode value types, slot names, kinds, or enum members: those are
+   checked at stage B against spec/tables/vocabulary.json, which produces a
+   better diagnostic than a parse error can.
+   ========================================================================== *)
+
+
+(* --- File ------------------------------------------------- docs/03 s.4 --- *)
+
+file            = [ leading_comments ] ,
+                  header ,
+                  project_decl ,
+                  { top_level_item } ;
+
+header          = ( "akr" | "akr-lock" ) , version ;   (* s.2, s.4.1 *)
+version         = integer , "." , integer ;            (* grammar version, D-021 *)
+
+project_decl    = "project" , segment ;                (* s.4.1 *)
+
+top_level_item  = record                               (* record files   *)
+                | namespace_decl                       (* project file   *)
+                | defaults_block                       (* project file   *)
+                | lock_item ;                          (* lock file      *)
+
+
+(* --- Project file ---------------------------------------- docs/03 s.4.5 -- *)
+
+namespace_decl  = "namespace" , segment , string ;
+
+defaults_block  = "defaults" , "{" , { slot } , "}" ;
+
+
+(* --- Lock file -------------------------- spec/schema/akr-lock.md s.2 ----- *)
+(* Lock files reuse this grammar entirely; only the top-level item set
+   differs. A lock block head may be a string (a file path) or a reference. *)
+
+lock_item       = name , [ block_head ] , "{" , { slot | block } , "}" ;
+
+
+(* --- Record ----------------------------------------------- docs/03 s.4.2 - *)
+
+record          = "record" , revision_id , ":" , kind , body ;
+
+revision_id     = key , "/" , revision ;               (* s.3.4, docs/04 s.1 *)
+revision        = positive_integer ;                   (* no leading zeros    *)
+kind            = segment ;                            (* one of twelve, D-001 *)
+
+body            = "{" , { body_item } , "}" ;
+body_item       = slot | block ;
+
+
+(* --- Slots and blocks ------------------------------------- docs/03 s.4.2 - *)
+(* Disambiguation is one token deep: a name followed by "{", or by a block
+   head and then "{", is a block; anything else is a slot. *)
+
+slot            = name , value ;
+
+block           = name , [ block_head ] , "{" , { body_item } , "}" ;
+block_head      = segment                              (* claim, check        *)
+                | reference                            (* disposition         *)
+                | string ;                             (* lock file entries   *)
+
+
+(* --- Values ----------------------------------------------- docs/03 s.4.3 - *)
+
+value           = scalar
+                | reference
+                | scope_term                           (* only in scope arrays *)
+                | array
+                | prose ;
+
+array           = "[" , [ array_items , [ "," ] ] , "]" ;
+array_items     = value , { "," , value } ;
+
+scalar          = string
+                | prose
+                | date
+                | timestamp
+                | commit
+                | integer
+                | boolean
+                | segment ;                            (* enum member, or name-shaped
+                                                          enum member; see s.3.8 *)
+
+
+(* --- Scope terms ------------------------------------------ docs/02 s.10.1 *)
+
+scope_term      = "all"
+                | "ref" , reference
+                | "path" , string ;
+
+
+(* --- References ------------------------------------------- docs/03 s.3.5 - *)
+(* Exactly four forms and no others (D-009). *)
+
+reference       = "@" , key , [ "/" , revision ] , [ "#" , anchor ] ;
+anchor          = segment ;
+
+
+(* --- Identifiers ------------------------------------------ docs/03 s.3.3 - *)
+(* Two shapes, lexically disjoint: segments carry hyphens and never
+   underscores; names carry underscores and never hyphens (D-005). *)
+
+key             = segment , "." , segment , { "." , segment } ;   (* 2..8 segments *)
+
+segment         = lower , { lower | digit | "-" , ( lower | digit ) } ;
+name            = lower , { lower | digit | "_" } ;
+
+lower           = "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j"
+                | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t"
+                | "u" | "v" | "w" | "x" | "y" | "z" ;
+digit           = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+hex             = digit | "a" | "b" | "c" | "d" | "e" | "f" ;
+
+
+(* --- Strings ---------------------------------------------- docs/03 s.3.6 - *)
+
+string          = '"' , { string_char | escape } , '"' ;
+string_char     = ? any Unicode scalar except '"', "\", LF, CR ? ;
+escape          = "\" , ( '"' | "\" | "n" | "t" | "r" | unicode_escape ) ;
+unicode_escape  = "u" , "{" , hex , { hex } , "}" ;    (* 1..6 hex digits *)
+
+
+(* --- Prose blocks ----------------------------------------- docs/03 s.3.7 - *)
+(* Raw: no escape processing inside. Dedent and trimming are defined in
+   docs/03 s.3.7 and are part of the value, not of the token shape. *)
+
+prose           = '"""' , newline ,
+                  { prose_line } ,
+                  indent , '"""' ;
+prose_line      = ? any run of Unicode scalars not containing '"""' ? , newline ;
+indent          = { " " } ;
+
+
+(* --- Scalar literals -------------------------------------- docs/03 s.3.8 - *)
+
+date            = digit , digit , digit , digit , "-" ,
+                  digit , digit , "-" , digit , digit ;
+
+timestamp       = date , "T" ,
+                  digit , digit , ":" , digit , digit , ":" , digit , digit ,
+                  "Z" ;                                (* UTC only, D-008 *)
+
+commit          = "git:" , 40 * hex ;                  (* exactly 40, D-008 *)
+
+integer         = [ "-" ] , ( "0" | positive_integer ) ;
+positive_integer= nonzero_digit , { digit } ;
+nonzero_digit   = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+
+boolean         = "true" | "false" ;
+
+
+(* --- Trivia ----------------------------------------------- docs/03 s.3.2 - *)
+(* Comments are preserved by the formatter with the attachment rules in
+   docs/03 s.3.2. They are trivia for the parser and content for the
+   formatter, which is why they appear here rather than being discarded. *)
+
+leading_comments= { comment } ;
+comment         = "#" , { ? any Unicode scalar except LF ? } , newline ;
+
+whitespace      = { " " | tab | newline } ;            (* insignificant, s.3.1 *)
+newline         = ? LF only; CR is AKR-P003 ? ;
+tab             = ? HT; legal between tokens, illegal in prose indent ? ;
+
+
+(* --- Notes ---------------------------------------------------------------- *)
+(*
+   1. Slot names, kinds, enum members and value types are NOT in this grammar.
+      "state completed" on a policy parses; it fails at stage B with AKR-T011.
+
+   2. The integer literal has no consumer slot in vocabulary 0.1. It is kept
+      so that adding a numeric slot is not a breaking grammar change, and so
+      that a stray number produces a type error rather than a parse error.
+      See docs/03 s.3.8.
+
+   3. Arrays are sets. No slot in vocabulary 0.1 has order-significant array
+      contents, which is why the formatter is free to sort them (docs/03 s.6.3).
+
+   4. There is no include, macro, template, variable, interpolation, or
+      expression production, and none is planned (docs/03 s.8).
+*)

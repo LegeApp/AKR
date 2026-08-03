@@ -1,0 +1,17 @@
+akr 0.1
+project fixtures
+
+record fx.term.prose/1 : term {
+    title "Prose dedent edge cases"
+    state active
+    scope [ all ]
+    definition """
+        First paragraph at the base indentation.
+
+            An indented block that keeps four spaces of relative indentation after
+            the common prefix is removed.
+
+        A line with a backslash \\ and a lone quote " which need no escaping,
+        because prose blocks are raw.
+        """
+}

@@ -1,0 +1,21 @@
+akr 0.1
+project save-your-skin
+
+record sys.req.deterministic-sim/1 : requirement {
+    title "The simulator is reproducible from a seed"
+    state active
+    scope [ path "sim/**" ]
+    statement """
+        Given the same seed and the same input sequence, two runs of the simulator
+        produce byte-identical state at every tick boundary, on any supported
+        platform.
+        """
+    rationale """
+        Reproducibility is what makes a simulation bug a bug report rather than a
+        story. Without it, every report costs an afternoon of not being able to
+        reproduce it.
+        """
+    verified_by [ @sim.evidence.determinism-suite-pass ]
+    author "dkoepke"
+    created_at 2026-01-20
+}

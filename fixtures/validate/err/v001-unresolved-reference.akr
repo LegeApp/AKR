@@ -1,0 +1,12 @@
+akr 0.1
+project fixtures
+
+record fx.policy.dangling/1 : policy {
+    title "Reference to a key that does not exist"
+    state active
+    scope [ all ]
+    rule """
+        Every reference resolves, or the build fails.
+        """
+    supported_by [ @fx.obs.does-not-exist ]
+}

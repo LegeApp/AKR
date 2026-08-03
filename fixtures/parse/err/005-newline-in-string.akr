@@ -1,0 +1,12 @@
+akr 0.1
+project fixtures
+
+record fx.term.raw-newline/1 : term {
+    title "A quoted string
+that continues on the next line"
+    state active
+    scope [ all ]
+    definition """
+        Multi-line text uses a prose block.
+        """
+}

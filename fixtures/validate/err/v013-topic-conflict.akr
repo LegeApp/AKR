@@ -1,0 +1,23 @@
+akr 0.1
+project fixtures
+
+record fx.policy.tandem-loose/1 : policy {
+    title "Tandem work, loosely"
+    state active
+    scope [ all ]
+    topic tandem-work
+    rule """
+        Engine and simulator should usually land together.
+        """
+}
+
+record fx.policy.tandem-strict/1 : policy {
+    title "Tandem work, strictly"
+    state active
+    scope [ path "sim/**" ]
+    topic tandem-work
+    rule """
+        Engine and simulator always land together. `all` overlaps everything, so these
+        two scopes overlap.
+        """
+}

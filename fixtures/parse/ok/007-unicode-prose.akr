@@ -1,0 +1,14 @@
+akr 0.1
+project fixtures
+
+record fx.term.unicode/1 : term {
+    title "Prose may be any valid UTF-8"
+    state active
+    scope [ all ]
+    definition """
+        Identifiers are ASCII; prose is not. Chinese: 知識台帳. Greek: γνῶσις.
+        Emoji in prose is legal and, like everything else here, boring: ✅
+        Escapes in a quoted string are separate: see 008.
+        """
+    aliases [ "knowledge ledger", "\u{6a2a}\u{65ad}" ]
+}

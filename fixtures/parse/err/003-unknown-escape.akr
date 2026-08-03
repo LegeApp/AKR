@@ -1,0 +1,11 @@
+akr 0.1
+project fixtures
+
+record fx.evidence.bad-escape/1 : evidence {
+    title "Unknown escape sequence"
+    state verified
+    result pass
+    method command
+    observed_at git:3f0a1c9d5b7e2648a0d4f1b8c36e9752ad014b6f
+    command "printf \q hello"
+}

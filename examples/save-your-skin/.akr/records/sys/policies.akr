@@ -1,0 +1,53 @@
+akr 0.1
+project save-your-skin
+
+record sys.policy.no-hand-edited-views/1 : policy {
+    title "Generated views are never edited by hand"
+    state active
+    scope [ path "docs/generated/**" ]
+    topic view-authorship
+    rule """
+        Nothing under docs/generated is edited by a person or an agent. Every file
+        there is written by `akr build` and carries a generated-by banner. A change to
+        what a view says is a change to a record.
+        """
+    rationale """
+        A hand-edited generated file is worse than no file: it looks authoritative,
+        it disagrees with the ledger, and the next build silently discards it.
+        """
+    author "dkoepke"
+    created_at 2026-02-02
+}
+
+record sys.policy.tandem-work/1 : policy {
+    title "Engine and simulator advance in tandem"
+    state active
+    scope [ all ]
+    topic tandem-work
+    rule """
+        No engine change lands without the matching simulator change in the same
+        commit, except on the tracks listed under exceptions, where the simulator may
+        lag by at most one milestone.
+        """
+    rationale """
+        Divergence between the two has cost more time than the coupling does. Twice in
+        M1 a viewer change sat unmatched for a week and the eventual reconciliation
+        took longer than writing both halves would have.
+        """
+    exceptions [ @sys.track.lighting ]
+    claim lag-bound {
+        text """
+            Permitted simulator lag on an excepted track is at most one milestone,
+            never two.
+            """
+    }
+    claim same-commit {
+        text """
+            Matching engine and simulator changes ship in one commit, not in a
+            follow-up commit on the same day.
+            """
+    }
+    supported_by [ @sys.assessment.projection-gaps ]
+    author "dkoepke"
+    created_at 2026-02-02
+}

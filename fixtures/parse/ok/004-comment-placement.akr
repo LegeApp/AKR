@@ -1,0 +1,15 @@
+akr 0.1
+project fixtures
+
+# Leading trivia for the record.
+# Two lines of it.
+record fx.policy.comments/1 : policy {
+    title "Comment attachment"
+    state active  # trailing trivia on a slot
+    scope [ all ]
+    # leading trivia for the rule slot
+    rule """
+        Comments attach to the next item, or to the value on their own line.
+        """
+    # trailing trivia for the record body
+}

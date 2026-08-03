@@ -1,0 +1,22 @@
+akr 0.1
+project fixtures
+
+record fx.decision.loop/1 : decision {
+    title "Revision 1 supersedes revision 2"
+    state superseded
+    scope [ all ]
+    decision """
+        A supersession cycle has no head.
+        """
+    supersedes [ @fx.decision.loop/2 ]
+}
+
+record fx.decision.loop/2 : decision {
+    title "Revision 2 supersedes revision 1"
+    state superseded
+    scope [ all ]
+    decision """
+        And so does this one.
+        """
+    supersedes [ @fx.decision.loop/1 ]
+}

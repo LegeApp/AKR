@@ -1,0 +1,30 @@
+akr 0.1
+project fixtures
+
+record fx.decision.replaced/1 : decision {
+    title "Replaced, revision 1"
+    state superseded
+    scope [ all ]
+    decision """
+        The old decision.
+        """
+}
+
+record fx.decision.replaced/2 : decision {
+    title "Replaced, revision 2"
+    state rejected
+    scope [ all ]
+    decision """
+        The replacement was itself rejected, so the key has no live head.
+        """
+    supersedes [ @fx.decision.replaced/1 ]
+}
+
+record fx.work.resting-on-nothing/1 : work {
+    title "Depends on a key whose head is terminal"
+    state active
+    intent """
+        The floating reference below resolves to a rejected revision.
+        """
+    depends_on [ @fx.decision.replaced ]
+}

@@ -1,0 +1,20 @@
+akr 0.1
+project fixtures
+
+record fx.policy.retired/1 : policy {
+    title "A withdrawn policy"
+    state withdrawn
+    scope [ all ]
+    rule """
+        No longer in force, and nothing replaced it.
+        """
+}
+
+record fx.work.builds-on-withdrawn/1 : work {
+    title "Depends on a withdrawn policy"
+    state active
+    intent """
+        Only supersedes, contradicts and derived_from may point at terminal records.
+        """
+    depends_on [ @fx.policy.retired/1 ]
+}

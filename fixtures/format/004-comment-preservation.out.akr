@@ -1,0 +1,14 @@
+akr 0.1
+project fixtures
+
+# Leading trivia for the record.
+record fx.policy.comments/1 : policy {
+    title "Comment preservation"
+    # over-indented leading trivia for the state slot
+    state active  # trailing trivia, badly spaced
+    scope [ all ]
+    rule """
+        Comments survive formatting; blank lines inside a body do not.
+        """
+    # trailing trivia for the record body
+}

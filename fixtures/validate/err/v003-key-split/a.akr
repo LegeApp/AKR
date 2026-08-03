@@ -1,0 +1,11 @@
+akr 0.1
+project fixtures
+
+record fx.policy.split/1 : policy {
+    title "Revision 1, in a.akr"
+    state superseded
+    scope [ all ]
+    rule """
+        The first revision.
+        """
+}

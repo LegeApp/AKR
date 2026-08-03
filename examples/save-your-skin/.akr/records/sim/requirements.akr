@@ -1,0 +1,19 @@
+akr 0.1
+project save-your-skin
+
+record sim.req.fixed-timestep/1 : requirement {
+    title "The simulator advances on a fixed timestep"
+    state active
+    scope [ path "sim/src/step.rs", path "sim/src/tick/**" ]
+    statement """
+        The simulator advances in fixed increments, decoupled from the frame rate. A
+        rendered frame consumes whole steps and never a partial one.
+        """
+    rationale """
+        A variable timestep and byte-identical reproducibility cannot both be had.
+        Reproducibility is the requirement; the fixed step is how it is met.
+        """
+    depends_on [ @sys.constraint.frame-budget-16ms, @sys.req.deterministic-sim ]
+    author "dkoepke"
+    created_at 2026-01-22
+}

@@ -1,0 +1,24 @@
+akr 0.1
+project save-your-skin
+
+record sim.decision.timestep-4ms/1 : decision {
+    title "Fix the simulator timestep at 4 ms"
+    state proposed
+    scope [ path "sim/src/step.rs" ]
+    topic timestep-length
+    decision """
+        The simulator steps at 4 ms, giving four steps per rendered frame at 60 Hz.
+        """
+    context """
+        The current 8 ms step is visible as input latency in the day loop. 4 ms halves
+        it and doubles the per-frame simulation cost.
+        """
+    consequences """
+        Four steps per frame instead of two. Whether that fits the frame budget is
+        exactly what is unresolved, which is why this is still a proposal.
+        """
+    depends_on [ @sys.constraint.frame-budget-16ms ]
+    implements [ @sim.req.fixed-timestep ]
+    author "dkoepke"
+    created_at 2026-07-02
+}
