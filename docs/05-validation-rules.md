@@ -258,10 +258,18 @@ and the legal set. Note that `needs-review` is not a state anywhere: staleness i
 **Stage** type · **Code** `AKR-T001` (missing) / `AKR-T002` (unknown)
 
 **Statement.** Every slot required by the kind is present; no slot outside the kind's
-declared set appears.
+declared set appears. Slots that a more specific rule owns are **excluded**: V-009 owns
+an observation's `observed_at`, and V-010 owns evidence's `result`, `method` and
+`observed_at`. V-008 says nothing about those, so one missing slot raises one code.
 
 **Why.** Rejecting unknown slots is what keeps the vocabulary closed. A tolerated typo
 becomes a de-facto extension, and then the schema lives in nobody's head.
+
+The exclusion exists because the overlap was real: before it, a single missing
+`observed_at` raised both `AKR-T001` ("observation requires slot `observed_at`") and
+`AKR-T021` ("observation requires `observed_at`"). The second says everything the first
+does and explains why it matters. A reader gains nothing from the pair, and a fixture
+asserting both would be pinning an implementation detail rather than a rule.
 
 ```
 # fails — `rule` is a policy slot; a decision uses `decision`

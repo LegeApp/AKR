@@ -1,2 +1,9 @@
-# V-017: the most valuable check in the system
+# V-017: the most valuable check in the system.
+#
+# Two codes, by design. A live child pinning a superseded plan revision is legal only
+# when the superseding record disposes of it (docs/04 §5.1) — that exemption is exactly
+# what gives V-017 something to bite on. Remove the disposition and both the missing
+# disposition and the now-unexcused part_of reference are true at once, so the pair
+# cannot be separated. See fixtures/README.md §3.
 AKR-R014 12
+AKR-L021 28

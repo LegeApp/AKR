@@ -329,7 +329,16 @@ impl Record {
     ///
     /// Covers relation slots, scope `ref` terms, reference-valued content slots, claim
     /// support, check evidence, and disposition heads and targets. This is the traversal
-    /// V-001, V-004, V-005 and V-006 are built on, and the one P3 will want.
+    /// V-001, V-004, V-005 and V-006 are built on.
+    ///
+    /// # Order
+    ///
+    /// Relation slots come first, in [`Relation`] **declaration order** — the order of
+    /// [`Relation::ALL`], which is the vocabulary's order — because `relations` is a
+    /// `BTreeMap` keyed by the enum. That is not alphabetical by name. Scope, content,
+    /// claim, check and disposition references follow, in that order. The order is
+    /// stable across runs, which is what callers actually depend on; nothing should rely
+    /// on it being any particular order beyond that.
     #[must_use]
     pub fn references(&self) -> Vec<(Option<Relation>, &Reference)> {
         let mut out: Vec<(Option<Relation>, &Reference)> = Vec::new();

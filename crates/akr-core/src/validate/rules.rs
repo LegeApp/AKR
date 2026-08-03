@@ -515,6 +515,15 @@ pub fn v007_state_legal(ledger: &Ledger) -> Vec<Diagnostic> {
 /// Raises `AKR-T001` (missing slot), `AKR-T002` (slot not valid for the kind),
 /// `AKR-T005` (block not permitted), `AKR-T006` (missing required block) and
 /// `AKR-T034` (`topic` on a non-normative kind).
+///
+/// # Slots a more specific rule owns
+///
+/// V-008 does **not** report a missing `observed_at` on an observation, or a missing
+/// `result`, `method` or `observed_at` on evidence. V-009 and V-010 own those slots and
+/// say something more useful about them. One fault raises one code: a reader who sees
+/// both `AKR-T001` and `AKR-T021` for a single missing commit learns nothing from the
+/// first, and a fixture that expects both is asserting an implementation detail rather
+/// than a rule.
 #[must_use]
 pub fn v008_slots_present(ledger: &Ledger) -> Vec<Diagnostic> {
     const RULE: RuleId = RuleId(8);
@@ -525,6 +534,9 @@ pub fn v008_slots_present(ledger: &Ledger) -> Vec<Diagnostic> {
             record.kind.content_slots().iter().map(|s| s.slot).collect();
 
         for spec in record.kind.content_slots() {
+            if owned_by_specific_rule(record.kind, spec.slot) {
+                continue;
+            }
             if spec.required && !record.content.contains_key(&spec.slot) {
                 out.push(Diagnostic::error(
                     c::T001,
@@ -594,6 +606,28 @@ pub fn v008_slots_present(ledger: &Ledger) -> Vec<Diagnostic> {
         }
     }
     out
+}
+
+/// Whether a required slot belongs to a rule more specific than V-008.
+///
+/// The overlap is real and was found by cross-validating the fixture corpus: without
+/// this, one missing `observed_at` produced both `AKR-T001` and `AKR-T021`.
+fn owned_by_specific_rule(kind: Kind, slot: ContentSlot) -> bool {
+    match kind {
+        // V-009 owns `observed_at`.
+        Kind::Observation => slot == ContentSlot::ObservedAt,
+        // V-010 owns all three of evidence's required slots.
+        Kind::Evidence => {
+            matches!(
+                slot,
+                ContentSlot::Result | ContentSlot::Method | ContentSlot::ObservedAt
+            )
+        }
+        // V-011 owns `resolution`, which the vocabulary marks conditional rather than
+        // required, so V-008 would not have reported it in any case.
+        Kind::Question => slot == ContentSlot::Resolution,
+        _ => false,
+    }
 }
 
 // ---------------------------------------------------------------------------------

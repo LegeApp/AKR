@@ -45,6 +45,22 @@ that produces an extra diagnostic fails, which is what keeps fixtures isolated t
 fault. Multi-file fixtures use a file named `expected` in the fixture directory, with
 paths implied by the directory's contents.
 
+### One deliberate exception
+
+`validate/err/v017-missing-disposition` lists **two** codes, and this is a property of
+the design rather than a leaky fixture. A live child may pin a superseded plan revision
+only when the superseding record disposes of it (`docs/04` §5.1); that exemption is what
+gives V-017 something to bite on. Take the disposition away and two things become true
+at once — the disposition is missing (`AKR-R014`) and the `part_of` reference has lost
+its excuse (`AKR-L021`) — so no arrangement of records separates them. Every other
+`validate/err` fixture produces exactly one diagnostic.
+
+Where a fixture produced a second code that was *not* by design, the fixture was fixed
+rather than its `.expected` widened: `v004-retired-anchor` now cites an assessment
+instead of a policy, so `supported_by`'s range is satisfied, and
+`v011-resolved-question-no-resolution` now supplies the `resolves` edge so that only the
+missing `resolution` slot is at fault.
+
 ## 3. What each group asserts
 
 | Group | Assertion | Stage |
@@ -106,7 +122,7 @@ point, so `007-idempotent` is not the only idempotence check, just the most expl
 | `validate/err/v014-supersession-cycle` | `AKR-R011` | V-014 |
 | `validate/err/v015-depends-cycle` | `AKR-R012` | V-015 |
 | `validate/err/v016-after-cycle` | `AKR-R013` | V-016 |
-| `validate/err/v017-missing-disposition` | `AKR-R014` | V-017 |
+| `validate/err/v017-missing-disposition` | `AKR-R014`, `AKR-L021` | V-017 (see §2) |
 | `validate/err/v018-two-plans` | `AKR-R018` | V-018 |
 | `validate/err/v019-live-depends-terminal` | `AKR-R021` | V-019 |
 | `validate/err/v020-completed-unsatisfied` | `AKR-R022` | V-020 |
