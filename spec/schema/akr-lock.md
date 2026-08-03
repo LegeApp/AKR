@@ -128,10 +128,11 @@ All three are SHA-256, rendered as 64 lowercase hex digits with a `sha256:` pref
 
 ### 3.1 Source file hash
 
-SHA-256 over the file's bytes **in canonical form** — that is, over the output of
-`akr fmt` for that file, not over whatever is on disk. A file that is not canonical fails
-`akr fmt --check` (`AKR-F001`) before the lock is ever consulted, so in a passing build
-the two are the same bytes.
+SHA-256 over the file's **raw bytes on disk** (see `docs/06-compiler-pipeline.md` §9:
+this hash answers "are the inputs on disk the same inputs?", a question about the
+filesystem, not about meaning). A file that is not canonical fails `akr fmt --check`
+(`AKR-F001`) before the lock is ever consulted, so in a passing build the raw bytes
+and the canonical form are the same bytes anyway.
 
 ### 3.2 Source-graph hash
 
