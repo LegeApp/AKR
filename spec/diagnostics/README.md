@@ -98,9 +98,14 @@ AKR-R001` prints the registry entry.
 - Codes are **never renumbered and never reused**. A retired code stays in the registry
   marked retired, with a pointer to whatever replaced it. Codes appear in logs, commit
   messages, and agent transcripts; recycling one falsifies history.
-- A code must be cited by at least one specification document, and a specification
-  document must not cite a code that is not registered. `tools/check-design.py` enforces
-  both directions.
+- A specification document must not cite a code that is not registered; this direction
+  is a hard failure in `tools/check-design.py`. In the other direction, a registered
+  code *should* be cited by at least one specification document, but registry-only
+  codes are permitted: a registry is allowed to define the complete fault surface of
+  its stage ahead of the prose that will eventually cite each code. The checker
+  reports uncited codes as warnings (`--pedantic` promotes them to failures).
+  *(Amended 2026-08-03 by the lead: the original both-directions-hard rule would have
+  failed the design set over 46 reserved language-stage codes.)*
 
 ## 7. Rule identifiers
 

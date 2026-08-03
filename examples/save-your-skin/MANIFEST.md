@@ -107,7 +107,7 @@ records where it matters):
 | `sys.term.tandem-work` | term | 1 | active | `sys/terms.akr` | Engine and simulator changes that land together | Term referenced by a policy `topic` |
 | `lege.term.renderer-boundary` | term | 1 | active | `lege/terms.akr` | The line the viewer may not reach across | Cross-namespace reference target |
 | `sys.req.deterministic-sim` | requirement | 1 | active | `sys/requirements.akr` | Same seed and inputs must produce the same run | `verified_by` on a non-planning kind |
-| `sim.req.fixed-timestep` | requirement | 1 | active | `sim/requirements.akr` | The simulator advances on a fixed timestep | `part_of` a requirement chain; `depends_on` a constraint |
+| `sim.req.fixed-timestep` | requirement | 1 | active | `sim/requirements.akr` | The simulator advances on a fixed timestep | `depends_on` a constraint and a requirement |
 | `lege.req.no-engine-types-in-viewer` | requirement | 1 | active | `lege/requirements.akr` | No engine type may appear in a viewer signature | Target of `implements` from a decision |
 | `sys.policy.tandem-work` | policy | 1 | active | `sys/policies.akr` | Engine and simulator advance in tandem, with listed exceptions | `topic`, `exceptions`, `supported_by`; **at_risk** at depth 2 |
 | `sys.policy.no-hand-edited-views` | policy | 1 | active | `sys/policies.akr` | Generated views are never edited by hand | The record D-025 gives force to |
@@ -141,7 +141,7 @@ records where it matters):
 | `sys.work.m3-audio-pass` | work | 1 | ready | `sys/work.akr` | Ambient audio for the day loop | Dispositioned `intentionally_dropped` |
 | `sys.work.legacy-roadmap-import` | work | 1 | proposed | `sys/work.akr` | Import the legacy roadmap's durable claims | **Migration**: `source { kind legacy }` + per-claim acceptance checks |
 | `sim.work.rewrite-projection` | work | 1 | blocked | `sim/work.akr` | Rewrite the projection pass | `blocked` state justified by a live `blocks` edge |
-| `lege.work.extract-render-graph` | work | 1 | active | `lege/work.akr` | Extract the render graph behind the boundary | `part_of` a cross-namespace plan |
+| `lege.work.extract-render-graph` | work | 1 | active | `lege/work.akr` | Extract the render graph behind the boundary | `part_of` a cross-namespace milestone |
 | `sys.policy.weekly-demo` | policy | 1 | withdrawn | `archive/sys/policies-archived.akr` | Weekly demo build, abandoned as a practice | **Archived**: terminal record that still resolves |
 
 ### Multi-revision keys
@@ -184,8 +184,9 @@ Evaluated at HEAD = C5, today = 2026-08-03:
 | `sys.assessment.projection-gaps/1` | at_risk | `supported_by` → `sim.obs.projection-gaps` |
 | `sys.assessment.m3-readiness/1` | at_risk | `supported_by` → `sim.obs.timestep-drift` |
 | `sys.policy.tandem-work/1` | at_risk | `supported_by` → `sys.assessment.projection-gaps` → `sim.obs.projection-gaps` |
+| `sim.work.rewrite-projection/1` | at_risk | `depends_on` → `sim.obs.projection-gaps` |
 
-Two stale records, three at risk, propagation depth 2. Nothing else is flagged;
+Two stale records, four at risk, propagation depth 2. Nothing else is flagged;
 `lege.obs.viewer-imports-engine/1` is terminal and is not evaluated.
 
 ## 8. Feature coverage
@@ -196,26 +197,26 @@ Two stale records, three at risk, propagation depth 2. Nothing else is flagged;
 | All four lifecycle classes | normative / empirical / planning / inquiry rows |
 | Supersession of a normative record | `lege.decision.renderer-boundary` 1 → 2 |
 | Supersession with disposition (D-017) | `sys.work.m3-plan` 1 → 2, two `disposition` blocks |
-| Claim anchors and `retired_claims` (D-011) | `sys.term.playable-day#day-boundary`, `sys.policy.tandem-work` |
+| Claim anchors and `retired_claims` (D-011) | Anchors: `sys.term.playable-day#day-boundary`, `sys.policy.tandem-work`; `retired_claims`: `lege.decision.renderer-boundary/2` retires `direct-calls` from `/1` |
 | All four reference forms (D-009) | Head, pinned, head+anchor, pinned+anchor across `sys/policies.akr` and `sys/work.akr` |
 | Scope terms and overlap (D-010) | `all`, `ref`, and `path` terms across policies, constraints and tracks |
 | `topic` exclusivity (D-004b) | `sys.policy.tandem-work` carries `topic tandem-work`; nothing else claims it |
 | Acceptance and evidence (D-016) | M1, M2, M3 acceptance map above |
 | Staleness by watched path (D-024a) | `sim.obs.projection-gaps` |
 | Staleness by review date (D-024b) | `sim.obs.timestep-drift` |
-| Reverse propagation (D-024) | The two at-risk assessments and the at-risk policy |
+| Reverse propagation (D-024) | The two at-risk assessments, the at-risk policy, and the at-risk work item |
 | Declared contradiction (D-023) | `sim.obs.timestep-drift` contradicts `sim.evidence.determinism-suite-pass`, `acknowledged true` |
 | Blocking (`blocks`) | `sim.question.timestep-vs-budget` blocks a decision and a work item |
 | Archived terminal records (D-018) | `sys.policy.weekly-demo` |
 | Legacy migration (D-022) | `sys.work.legacy-roadmap-import` with `source { kind legacy }` |
-| Cross-namespace relations | `lege.work.extract-render-graph` `part_of` `sys.work.m3-plan` |
+| Cross-namespace relations | `lege.work.extract-render-graph` `part_of` `sys.milestone.m3-playable-day` |
 
 ## 9. Expected tool outcomes (frozen)
 
 Writer B's transcripts must agree with these:
 
 - `akr check` — exits **0**. The example is a valid ledger; every V-rule passes.
-- `akr review-queue` — 2 stale records, 3 at risk, as in section 7.
+- `akr review-queue` — 2 stale records, 4 at risk, as in section 7.
 - `akr build` — emits six views; `ROADMAP.md` shows M1 and M2 complete, M3 active with
   one of two checks satisfied, M4 ready, M5 proposed, plus three standing tracks.
 - `akr context --goal sys.milestone.m3-playable-day --paths "sim/src/project/**"` —

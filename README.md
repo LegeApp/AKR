@@ -59,29 +59,29 @@ Specifications:
 
 | Path | Contents | Status |
 | --- | --- | --- |
-| `docs/00-overview.md` | Problem, model, anti-goals | planned |
-| `docs/01-architecture.md` | Layers, pipeline overview, trust and LLM boundary | planned |
-| `docs/02-data-model.md` | Record kinds, slots, lifecycles, relations, scope, claims, acceptance | planned |
-| `docs/03-syntax.md` | Lexical structure, grammar walkthrough, canonical formatting | planned |
-| `docs/04-references-and-versioning.md` | Keys, revisions, heads, ref modes, supersession, lock semantics | planned |
-| `docs/05-validation-rules.md` | Rule catalog V-001..V-024 with codes and examples | planned |
-| `docs/06-compiler-pipeline.md` | Stage contracts A–F, hashing, incrementality | planned |
-| `docs/07-cli.md` | Command reference, exit codes, JSON output | planned |
-| `docs/08-mcp.md` | Agent tool surface and `AGENTS.md` protocol | planned |
-| `docs/09-context-assembly.md` | Deterministic context assembly; search as ranking only | planned |
-| `docs/10-freshness-and-git.md` | `observed_at`, watches, staleness, impact propagation | planned |
-| `docs/11-projections.md` | Generated view catalog and rendering rules | planned |
-| `docs/12-migration.md` | Legacy Markdown import and disposition workflow | planned |
-| `docs/13-implementation-roadmap.md` | Phases P1–P9, crate layout, dogfood acceptance test | planned |
-| `docs/14-glossary.md` | Terminology anchor | planned |
-| `spec/grammar/akr.ebnf` | Formal grammar | planned |
-| `spec/schema/akr-lock.md` | `akr.lock` format specification | planned |
-| `spec/schema/index.sql` | SQLite index DDL sketch | planned |
-| `spec/diagnostics/codes-lang.md` | `AKR-P/F/T/L/R` registry | planned |
-| `spec/diagnostics/codes-runtime.md` | `AKR-I/E/X/G/C/M` registry | planned |
-| `examples/save-your-skin/` | Worked example: `.akr` sources, lock, generated views, transcripts | planned |
-| `fixtures/` | Parse, format, and validation conformance fixtures | planned |
-| `tools/check-design.py` | Design-set coherence checker | planned |
+| `docs/00-overview.md` | Problem, model, anti-goals | complete |
+| `docs/01-architecture.md` | Layers, pipeline overview, trust and LLM boundary | complete |
+| `docs/02-data-model.md` | Record kinds, slots, lifecycles, relations, scope, claims, acceptance | complete |
+| `docs/03-syntax.md` | Lexical structure, grammar walkthrough, canonical formatting | complete |
+| `docs/04-references-and-versioning.md` | Keys, revisions, heads, ref modes, supersession, lock semantics | complete |
+| `docs/05-validation-rules.md` | Rule catalog V-001..V-024 with codes and examples | complete |
+| `docs/06-compiler-pipeline.md` | Stage contracts A–F, hashing, incrementality | complete |
+| `docs/07-cli.md` | Command reference, exit codes, JSON output | complete |
+| `docs/08-mcp.md` | Agent tool surface and `AGENTS.md` protocol | complete |
+| `docs/09-context-assembly.md` | Deterministic context assembly; search as ranking only | complete |
+| `docs/10-freshness-and-git.md` | `observed_at`, watches, staleness, impact propagation | complete |
+| `docs/11-projections.md` | Generated view catalog and rendering rules | complete |
+| `docs/12-migration.md` | Legacy Markdown import and disposition workflow | complete |
+| `docs/13-implementation-roadmap.md` | Phases P1–P9, crate layout, dogfood acceptance test | complete |
+| `docs/14-glossary.md` | Terminology anchor | complete |
+| `spec/grammar/akr.ebnf` | Formal grammar | complete |
+| `spec/schema/akr-lock.md` | `akr.lock` format specification | complete |
+| `spec/schema/index.sql` | SQLite index DDL sketch | complete |
+| `spec/diagnostics/codes-lang.md` | `AKR-P/F/T/L/R` registry | complete |
+| `spec/diagnostics/codes-runtime.md` | `AKR-I/E/X/G/C/M` registry | complete |
+| `examples/save-your-skin/` | Worked example: `.akr` sources, lock, generated views, transcripts | complete |
+| `fixtures/` | Parse, format, and validation conformance fixtures | complete |
+| `tools/check-design.py` | Design-set coherence checker | complete |
 
 ## Anti-goals
 
