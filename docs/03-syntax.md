@@ -374,9 +374,15 @@ writing and is the CI gate (`AKR-F001`).
 | Indentation | 4 spaces per level. Never tabs. |
 | Slots | One per line. |
 | Braces | `{` on the same line as the name and head, `}` on its own line at the opening indentation. |
-| Blank lines | Exactly one between top-level items; none within a record body, except that a leading-comment group keeps a preceding blank line if it had one. |
+| Blank lines | Exactly one between top-level items, except that consecutive one-line `namespace` declarations group with none between them; none within a record body, except that a leading-comment group keeps a preceding blank line if it had one. |
 | Line width | Soft target 96 columns; only arrays and prose wrap. |
 | Trailing whitespace | Removed. |
+
+Namespace declarations group because they are a list rather than a sequence of items:
+five namespaces separated by blank lines read as five unrelated things, and the frozen
+`project.akr` of `examples/save-your-skin/MANIFEST.md` §2 is only canonical under this
+rule. Every other top-level item — records, `defaults`, and each lock-file entry — is
+separated by exactly one blank line.
 
 ### 6.2 Record order within a file
 
@@ -441,11 +447,19 @@ does not have opinions about line length inside prose.
 
 ### 6.6 What the formatter never does
 
-It never changes prose text, never reorders array elements whose order is meaningful
-(there are none — all array slots are sets), never adds or removes records, never
-resolves a reference, never touches a `.akr` file during `akr build`, and never rewrites
-a file that already matches its canonical form (so `akr fmt` on a formatted tree is a
-no-op and touches no mtimes).
+It never changes prose text, never reorders an array the author ordered deliberately
+(§6.3: reference and scope arrays sort, and string, glob and identifier arrays keep the
+order they were written in), never adds or removes records, never resolves a reference,
+never touches a `.akr` file during `akr build`, and never rewrites a file that already
+matches its canonical form (so `akr fmt` on a formatted tree is a no-op and touches no
+mtimes).
+
+The distinction in §6.3 is worth restating, because an earlier draft of this document
+claimed every array slot was a set and could be sorted. That is wrong. `aliases`,
+`watches` and `retired_claims` hold lists a person wrote in a chosen order — an alias
+list usually leads with the preferred spelling — and reordering them would churn diffs
+for no gain. References and scope terms carry no authored order, so sorting them makes
+diffs smaller without discarding information.
 
 ---
 

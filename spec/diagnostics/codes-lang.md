@@ -98,7 +98,7 @@ content hash, and the seal check (V-024) depends on it.
 | `AKR-F008` | Trailing comma | error | — | `trailing comma in array` | Accepted on input, removed on output. |
 | `AKR-F009` | Empty array | warning | — | `empty array `[ ]` means the same as omitting `{name}`` | The formatter removes it. |
 | `AKR-F010` | Prose indentation is not canonical | error | — | `prose content should be indented {n} spaces` | Content sits one level deeper than its slot. |
-| `AKR-F011` | Unsorted array elements | error | — | `array elements are not in canonical order` | All array slots are sets; the formatter sorts them (`docs/03` §6.3). |
+| `AKR-F011` | Unsorted array elements | error | — | `{reference\|scope} array elements are not in canonical order` | Applies to reference and scope arrays only, which carry no authored order. String, glob and identifier arrays keep the order they were written in and never raise this (`docs/03` §6.3, §6.6). |
 
 ---
 
