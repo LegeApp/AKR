@@ -111,15 +111,42 @@ surprising can check whether it was built from the sources they are looking at.
 
 ## 5. `ROADMAP.md`
 
-**Source query.** Live `milestone` records, then live `track` records. For each: its
-`plan_of_record`, its `part_of` children, and its acceptance checks with verdicts.
+**Source query.** The head revision of every `milestone` record, then of every `track`
+record, excluding archived ones (D-018). For each: its `plan_of_record`, its `part_of`
+children, its `depends_on` targets, and its acceptance checks with verdicts.
+
+**Completed milestones are included.** The query is over heads, not over live records: a
+roadmap that hides finished work cannot show what was finished, and "M1 and M2 are done"
+is the first thing a reader wants.
 
 **Section order.** (1) Milestones, in `after` topological order with key as tiebreak.
-(2) Tracks, by key. (3) A summary table.
+(2) Tracks, by key. (3) Two summary tables — milestones, then tracks.
 
-**Per milestone**, in this order: the `title` as a heading; a metadata line carrying
-state, key, target and freshness; the `intent` prose; the plan of record as a link; the acceptance checks with
-verdicts; the live child work items with their states.
+**Per milestone**, in this order: the `title` as a heading; a metadata line; the `intent`
+prose; the plan of record as a link; the acceptance heading and table; a **Depends on**
+line if it has `depends_on` targets; the live child work items; and, where it has a plan
+of record, the live work items under that plan.
+
+**Per track**, the same shape without acceptance: heading; metadata line; `intent`; a
+**Depends on** line; work items; and a closing line naming any work carried into the
+track by a `disposition` (D-017), which is not `part_of` the track and would otherwise
+appear nowhere.
+
+**The metadata line** carries, in this order and separated by ` · `: the state in
+backticks; the record's `@key/revision` in backticks; for tracks, `scope` with each term
+in its own backticks; `target` where present; `cadence` where present; `after` with each
+resolved target in backticks; and the freshness marker where the record has one. Absent
+slots are omitted rather than rendered empty.
+
+**Work item lists.** `- ` then the state in backticks, the title as a link, the
+`@key/revision`, and — under a plan of record — ` — part of `@key/rev`, dispositioned
+`outcome`[ into `@key/rev`]`. A freshness marker joins with ` — ` where it is the only
+qualifier and with `, ` where a disposition clause precedes it.
+
+**Nothing editorial.** Every byte comes from records (§1). A sentence explaining *why* a
+milestone is where it is belongs in the record's `intent` or in an `assessment`, not in
+the view — the renderer cannot produce it, so a view containing one is a view that has
+been hand-edited.
 
 **Rendered sample** — full file in
 [`../examples/save-your-skin/docs/generated/ROADMAP.md`](../examples/save-your-skin/docs/generated/ROADMAP.md):

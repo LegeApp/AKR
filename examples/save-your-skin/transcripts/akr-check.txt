@@ -38,7 +38,7 @@ $ akr check --format json
   "tool_version": "0.1.0",
   "command": "check",
   "commit": "e806b3f54a2d7091c5e13b8a26f490dc7b135e64",
-  "source_graph_hash": "sha256:14b201b2fd6796229868ebceed99c6a36153cde8d0c4527c8a81af21faa4a817",
+  "source_graph_hash": "sha256:5159d2714f688627a85906b161def17b0358155fbfc2a3fc00b681d29a305f55",
   "ok": true,
   "exit_code": 0,
   "diagnostics": [],
@@ -124,7 +124,7 @@ error[AKR-E011]: generated view is out of date
 note: 1 differing line; the emitted line is
       "`active` · `@sys.milestone.m3-playable-day/1` · target 2026-09-30 ..."
 note: the banner records source-graph
-      sha256:14b201b2fd6796229868ebceed99c6a36153cde8d0c4527c8a81af21faa4a817,
+      sha256:5159d2714f688627a85906b161def17b0358155fbfc2a3fc00b681d29a305f55,
       which matches the current sources, so this is a hand edit rather than a
       stale build
 help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views

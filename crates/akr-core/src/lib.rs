@@ -16,6 +16,7 @@
 //! - [`graph`] — deterministic cycles, reachability, and staleness propagation.
 //! - [`resolve`] — stages C and D: linking, heads, chains, and the resolved model.
 //! - [`lock`] — `akr.lock`: model, reader, writer, and verification.
+//! - [`render`] — stage F: generated views, the banner, and the views-current gate.
 //!
 //! # Sources of truth
 //!
@@ -28,6 +29,7 @@ pub mod graph;
 pub mod hash;
 pub mod lock;
 pub mod model;
+pub mod render;
 pub mod resolve;
 pub mod syntax;
 pub mod validate;

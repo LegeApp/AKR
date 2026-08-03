@@ -36,8 +36,8 @@ use crate::graph::{AtRisk, DiGraph, dependency_graph, propagate_staleness, sorte
 use crate::hash::{content_hash, source_graph_hash};
 use crate::lock::{Build, Lock, ResolutionEntry, SealEntry, SourceEntry};
 use crate::model::{
-    Commit, ContentHash, ContentSlot, HeadError, Ledger, LogicalKey, Record, Reference, Relation,
-    RevisionId, ScopeTerm, Segment,
+    Commit, ContentHash, ContentSlot, ContentValue, EvidenceResult, HeadError, Ledger, LogicalKey,
+    Record, Reference, Relation, RevisionId, ScopeTerm, Segment,
 };
 use crate::validate;
 use std::collections::{BTreeMap, BTreeSet};
@@ -215,6 +215,148 @@ pub fn reference_sites(record: &Record) -> Vec<(RefSite, &Reference)> {
     out
 }
 
+/// Why an acceptance check is or is not satisfied (D-016).
+///
+/// The four negative cases are distinguished because "not satisfied" without a reason is
+/// a fact an agent cannot act on: `docs/09-context-assembly.md` §4 step 7 renders each of
+/// them differently, and `ROADMAP.md` renders them into its acceptance table.
+///
+/// Not ordered: [`EvidenceResult`] has no ordering, and inventing one so that a verdict
+/// could be sorted would imply a severity ranking the design does not have.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Verdict {
+    /// Passing evidence, observed at a commit descending from the last content change.
+    Satisfied {
+        /// The evidence that satisfied it.
+        by: RevisionId,
+        /// Where that evidence was observed.
+        observed_at: Commit,
+        /// The last commit that changed the verified record, when the facts supply one.
+        last_change: Option<Commit>,
+    },
+    /// The check cites no evidence at all.
+    NoEvidence,
+    /// The cited evidence does not resolve. V-001 reports the reference itself.
+    Unresolved,
+    /// Evidence exists and does not report `pass`.
+    Failing {
+        /// The evidence.
+        by: RevisionId,
+        /// What it reported.
+        result: Option<EvidenceResult>,
+    },
+    /// Passing evidence, observed before the last content change — the condition that
+    /// stops a test from 200 commits ago closing a milestone redefined yesterday.
+    TooOld {
+        /// The evidence.
+        by: RevisionId,
+        /// Where it was observed.
+        observed_at: Commit,
+        /// The last content change it fails to descend from.
+        last_change: Commit,
+    },
+}
+
+impl Verdict {
+    /// Whether the check is satisfied.
+    #[must_use]
+    pub fn is_satisfied(&self) -> bool {
+        matches!(self, Self::Satisfied { .. })
+    }
+}
+
+/// One acceptance check and its verdict.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CheckVerdict {
+    /// The milestone or work record carrying the check.
+    pub owner: RevisionId,
+    /// The check identifier.
+    pub check: Segment,
+    /// Whether it is satisfied, and why not when it is not.
+    pub verdict: Verdict,
+}
+
+/// Computes the verdict for every acceptance check in the ledger, in canonical order.
+///
+/// Mirrors V-020's selection exactly — the first citation that passes and descends wins;
+/// otherwise the **last** failure reason is kept — so that the renderer and the rule can
+/// never disagree about why a milestone is not done. V-020 turns an unsatisfied verdict
+/// into `AKR-R022` for `completed` records only; this runs over every record, because a
+/// roadmap has to show progress on the ones that are not finished.
+///
+/// The descendant condition applies only when
+/// [`LedgerFacts`](crate::model::LedgerFacts) supplies `last_change` and an ancestry
+/// (phase P5). Absent them, passing evidence satisfies a check and the verdict records
+/// `last_change: None`, which is what V-020 does and for the same reason.
+#[must_use]
+pub fn acceptance_verdicts(ledger: &Ledger) -> Vec<CheckVerdict> {
+    let mut out = Vec::new();
+    for record in sorted_records(ledger) {
+        let Some(acceptance) = &record.acceptance else {
+            continue;
+        };
+        for check in &acceptance.checks {
+            let mut verdict = Verdict::NoEvidence;
+            for reference in &check.verified_by {
+                let Some(evidence) = ledger.resolve(reference).ok().flatten() else {
+                    verdict = Verdict::Unresolved;
+                    continue;
+                };
+                let result = evidence
+                    .get(ContentSlot::Result)
+                    .and_then(ContentValue::as_enum)
+                    .and_then(|e| EvidenceResult::from_name(e.as_str()));
+                if result != Some(EvidenceResult::Pass) {
+                    verdict = Verdict::Failing {
+                        by: evidence.id.clone(),
+                        result,
+                    };
+                    continue;
+                }
+                let observed_at = evidence
+                    .get(ContentSlot::ObservedAt)
+                    .and_then(ContentValue::as_commit)
+                    .cloned();
+                let last_change = ledger.facts.last_change.get(&record.id).cloned();
+                let descends = match (&observed_at, &last_change) {
+                    (Some(observed), Some(changed)) => ledger
+                        .facts
+                        .ancestry
+                        .is_descendant(observed, changed)
+                        .unwrap_or(true),
+                    _ => true,
+                };
+                match (descends, observed_at, last_change) {
+                    (true, Some(observed_at), last_change) => {
+                        verdict = Verdict::Satisfied {
+                            by: evidence.id.clone(),
+                            observed_at,
+                            last_change,
+                        };
+                        break;
+                    }
+                    (false, Some(observed_at), Some(last_change)) => {
+                        verdict = Verdict::TooOld {
+                            by: evidence.id.clone(),
+                            observed_at,
+                            last_change,
+                        };
+                    }
+                    _ => {
+                        verdict = Verdict::Unresolved;
+                    }
+                }
+            }
+            out.push(CheckVerdict {
+                owner: record.id.clone(),
+                check: check.id.clone(),
+                verdict,
+            });
+        }
+    }
+    out
+}
+
 /// The output of stages C and D: what every later stage and read command consumes.
 #[derive(Debug, Clone)]
 pub struct ResolvedModel<'a> {
@@ -245,6 +387,8 @@ pub struct ResolvedModel<'a> {
     pub resolutions: Vec<ResolutionEntry>,
     /// Supersession chains: for each key, its revisions oldest-first along `supersedes`.
     pub supersession: BTreeMap<LogicalKey, Vec<RevisionId>>,
+    /// Every acceptance check and its verdict, in canonical order.
+    pub acceptance: Vec<CheckVerdict>,
     /// Diagnostics from stages A–D, in rule then code then subject order.
     pub diagnostics: Vec<Diagnostic>,
 }
@@ -308,6 +452,7 @@ impl<'a> ResolvedModel<'a> {
             edges,
             resolutions,
             supersession,
+            acceptance: acceptance_verdicts(ledger),
             diagnostics: validate::validate_all(ledger),
         }
     }
@@ -322,6 +467,15 @@ impl<'a> ResolvedModel<'a> {
     #[must_use]
     pub fn is_head(&self, id: &RevisionId) -> bool {
         self.heads.get(&id.key) == Some(id)
+    }
+
+    /// The acceptance checks of one record, in check-identifier order.
+    #[must_use]
+    pub fn checks_of(&self, owner: &RevisionId) -> Vec<&CheckVerdict> {
+        self.acceptance
+            .iter()
+            .filter(|v| &v.owner == owner)
+            .collect()
     }
 
     /// The content hash of a revision, if the build computed one.
