@@ -81,8 +81,12 @@ those types and tested — before any text can be parsed.
 4. No dependency on any text format. The crate compiles with no parser.
 
 **Testing.** Unit tests per rule; property tests for overlap and for lifecycle
-reachability (every terminal state reachable from every initial state, no state
-unreachable).
+reachability: every terminal state reachable from some initial state, and every
+initial state able to reach some terminal state (no live state you can never
+leave). Not every terminal is reachable from every initial — `rejected` is
+reachable only from `proposed`, because a record already in force is withdrawn
+or superseded, never "considered and declined"; that asymmetry is pinned by its
+own test.
 
 ---
 
