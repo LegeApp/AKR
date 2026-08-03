@@ -12,6 +12,10 @@
 //! - [`syntax`] — lexer, parser, CST, canonical formatter, and lowering to the model.
 //! - [`validate`] — `V-001`..`V-024` as named functions over a [`model::Ledger`].
 //! - [`diagnostics`] — codes, severity, subjects, and the span-ready diagnostic type.
+//! - [`hash`] — SHA-256 and the three hashes of `spec/schema/akr-lock.md` §3.
+//! - [`graph`] — deterministic cycles, reachability, and staleness propagation.
+//! - [`resolve`] — stages C and D: linking, heads, chains, and the resolved model.
+//! - [`lock`] — `akr.lock`: model, reader, writer, and verification.
 //!
 //! # Sources of truth
 //!
@@ -20,6 +24,10 @@
 //! for meaning, and `spec/diagnostics/codes-lang.md` for diagnostic codes.
 
 pub mod diagnostics;
+pub mod graph;
+pub mod hash;
+pub mod lock;
 pub mod model;
+pub mod resolve;
 pub mod syntax;
 pub mod validate;

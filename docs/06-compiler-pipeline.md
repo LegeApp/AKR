@@ -358,15 +358,20 @@ canonical slot order per D-012, four-space indentation, canonical array layout, 
 blocks dedented and re-indented — and hash the resulting bytes, from the first byte of
 `record` through the final `}` and its terminating newline inclusive.
 
-Consequences that follow from choosing the canonical form rather than the raw bytes:
+Two exclusions, both normative in
+[`../spec/schema/akr-lock.md`](../spec/schema/akr-lock.md) §3.3 and both deliberate:
+
+- **Comment trivia is excluded.** Comments are commentary, not content. Adding a
+  clarifying comment to a sealed record must not trip `AKR-R051`, or people stop writing
+  comments — which is the opposite of what the format wants.
+- **Surrounding file content is excluded.** Moving a record between files, or reordering
+  it within one, does not change its hash. Identity is the key, never the file (D-018).
+
+And one consequence of hashing the canonical form rather than the raw bytes:
 
 - Reordering slots does not change the hash, because canonical formatting is applied
-  first. A sealed record survives `akr fmt`.
-- Comments **are** part of the hash, because the formatter preserves them (D-006).
-  Editing a comment on a sealed record is a modification, which is the intended reading:
-  the comment is part of what a reviewer approved.
-- The record's position in its file, the file's name, and the other records in the file
-  are all irrelevant, which follows from D-018.
+  first. A sealed record survives `akr fmt`. If a reformat *does* change a seal hash, the
+  file was not canonical before, and the mismatch is real information.
 
 This hash is what V-024 compares, and it is what `AKR-R051` reports when a sealed
 revision has drifted.

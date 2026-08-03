@@ -1,0 +1,575 @@
+//! Stage C and stage D: linking, head resolution, and the resolved model.
+//!
+//! # What this module is, and what it is not
+//!
+//! It is **not** a second head-resolution algorithm.
+//! [`Ledger::head`](crate::model::Ledger::head) and
+//! [`Ledger::resolve`](crate::model::Ledger::resolve) already implement the two-tier rule
+//! of `docs/04-references-and-versioning.md` §3, and the validation rules are written
+//! against them. This module *wraps* them: it resolves every reference once, caches the
+//! answers, and builds the derived structures later stages read — the head map, the
+//! supersession chains, the resolution log that becomes `akr.lock`, and the content
+//! hashes that seal sealed revisions.
+//!
+//! Reimplementing head resolution here would give the project two answers to the same
+//! question, which is exactly the failure the whole design exists to avoid.
+//!
+//! # The resolved model
+//!
+//! [`ResolvedModel`] is the data structure of `docs/06-compiler-pipeline.md` §6, minus
+//! the parts later phases own: `freshness` is P5's and `acceptance` verdicts need git
+//! ancestry, so both are computed elsewhere and attached through
+//! [`LedgerFacts`](crate::model::LedgerFacts).
+//!
+//! # Determinism
+//!
+//! Every collection here is a `BTreeMap`, a `BTreeSet`, or a `Vec` built by iterating
+//! records in [`RevisionId`] order. Nothing depends on insertion order, hash iteration, or
+//! filesystem order (`docs/06-compiler-pipeline.md` §11).
+
+mod source;
+
+pub use source::{Workspace, canonical_record_text, load_workspace};
+
+use crate::diagnostics::Diagnostic;
+use crate::graph::{AtRisk, DiGraph, dependency_graph, propagate_staleness, sorted_records};
+use crate::hash::{content_hash, source_graph_hash};
+use crate::lock::{Build, Lock, ResolutionEntry, SealEntry, SourceEntry};
+use crate::model::{
+    Commit, ContentHash, ContentSlot, HeadError, Ledger, LogicalKey, Record, Reference, Relation,
+    RevisionId, ScopeTerm, Segment,
+};
+use crate::validate;
+use std::collections::{BTreeMap, BTreeSet};
+
+/// The hash recorded for a revision whose canonical text the build did not have.
+///
+/// Sixty-four zeros: obviously not a real digest, and never equal to one. A lock entry
+/// carrying it is a build that ran without a formatter, which the seam in
+/// [`BuildInputs::canonical_text`] describes.
+pub const UNKNOWN_HASH: &str =
+    "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+
+/// One `.akr` file the build read.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SourceFile {
+    /// Repo-root-relative path with forward slashes.
+    pub path: String,
+    /// SHA-256 over the file's **raw bytes on disk** (`spec/schema/akr-lock.md` §3.1).
+    pub hash: ContentHash,
+    /// How many record revisions it contains.
+    pub records: u32,
+}
+
+/// Everything a build knows that the ledger itself does not.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BuildInputs {
+    /// Tool name and version, for example `akr 0.1.0`.
+    pub tool: String,
+    /// Grammar version of the sources.
+    pub grammar: String,
+    /// `vocabulary_version` from `spec/tables/vocabulary.json`.
+    pub vocabulary: String,
+    /// The commit the build resolved against.
+    pub commit: Option<Commit>,
+    /// UTC timestamp for `build.built_at`. Informational only, and excluded from every
+    /// comparison — see [`Lock::verify`].
+    pub built_at: String,
+    /// The source files, in any order; sorted where it matters.
+    pub sources: Vec<SourceFile>,
+    /// Canonical text per revision, keyed by revision identifier.
+    ///
+    /// # Seam
+    ///
+    /// Canonical text is the phase P2 formatter's output. Until it lands, a caller
+    /// supplies text that is already canonical — which every committed `.akr` file is —
+    /// or supplies nothing, in which case content hashes are [`UNKNOWN_HASH`] and
+    /// [`ResolvedModel::missing_hashes`] names every revision affected. V-024 then reports
+    /// nothing rather than accusing anyone of editing a sealed record, because
+    /// [`crate::lock::Lock::apply_facts`] leaves `computed` unset for those revisions.
+    pub canonical_text: BTreeMap<RevisionId, String>,
+}
+
+/// Where in a record a reference was written.
+///
+/// [`Record::references`](crate::model::Record::references) labels each reference with its
+/// [`Relation`] where it has one, which is all the validation rules need. The lock needs
+/// more: `spec/schema/akr-lock.md` §2.3 records "the slot the reference appeared in", and
+/// `exceptions`, `disposition` and `into` are slots without being relations. This enum
+/// carries that distinction, and [`RefSite::slot_name`] is what the lock writes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RefSite {
+    /// A relation slot: `depends_on`, `supersedes`, and the rest.
+    Relation(Relation),
+    /// A `ref` term in the `scope` slot.
+    Scope,
+    /// A reference-valued content slot, such as `exceptions`.
+    Content(ContentSlot),
+    /// The `supported_by` slot of a `claim` block.
+    ClaimSupport(Segment),
+    /// The `verified_by` slot of a `check` block.
+    CheckEvidence(Segment),
+    /// The head of a `disposition` block: the child being dispositioned.
+    DispositionTarget,
+    /// The `into` slot of a `disposition` block.
+    DispositionInto,
+}
+
+impl RefSite {
+    /// The slot name the lock records for this site.
+    #[must_use]
+    pub fn slot_name(&self) -> &str {
+        match self {
+            Self::Relation(r) => r.name(),
+            Self::Scope => "scope",
+            Self::Content(slot) => slot.name(),
+            Self::ClaimSupport(_) => Relation::SupportedBy.name(),
+            Self::CheckEvidence(_) => Relation::VerifiedBy.name(),
+            Self::DispositionTarget => "disposition",
+            Self::DispositionInto => "into",
+        }
+    }
+
+    /// The relation this site implies, where it implies one.
+    #[must_use]
+    pub fn relation(&self) -> Option<Relation> {
+        match self {
+            Self::Relation(r) => Some(*r),
+            Self::ClaimSupport(_) => Some(Relation::SupportedBy),
+            Self::CheckEvidence(_) => Some(Relation::VerifiedBy),
+            _ => None,
+        }
+    }
+}
+
+/// One resolved reference occurrence: an edge in the reference graph of stage C.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ResolvedEdge {
+    /// The referring revision.
+    pub from: RevisionId,
+    /// Where in the referring record the reference was written.
+    pub site: RefSite,
+    /// The reference as authored.
+    pub reference: Reference,
+    /// What it resolved to, if it resolved.
+    pub to: Option<RevisionId>,
+    /// Whether the reference was pinned. Floating references are the ones the lock records.
+    pub pinned: bool,
+}
+
+impl ResolvedEdge {
+    /// The relation this edge carries, where it carries one.
+    #[must_use]
+    pub fn relation(&self) -> Option<Relation> {
+        self.site.relation()
+    }
+}
+
+/// Every reference in a record, labelled with the slot it was written in.
+///
+/// The traversal order matches
+/// [`Record::references`](crate::model::Record::references): relation slots first in
+/// [`Relation`] order — the vocabulary's declaration order, which is not alphabetical —
+/// then scope, content, claims, checks and dispositions. The two agree about which
+/// references exist and differ only in how precisely each is labelled.
+#[must_use]
+pub fn reference_sites(record: &Record) -> Vec<(RefSite, &Reference)> {
+    let mut out: Vec<(RefSite, &Reference)> = Vec::new();
+    for (relation, refs) in &record.relations {
+        out.extend(refs.iter().map(|r| (RefSite::Relation(*relation), r)));
+    }
+    for term in &record.scope {
+        if let ScopeTerm::Ref(reference) = term {
+            out.push((RefSite::Scope, reference));
+        }
+    }
+    for (slot, value) in &record.content {
+        if let Some(refs) = value.as_refs() {
+            out.extend(refs.iter().map(|r| (RefSite::Content(*slot), r)));
+        }
+    }
+    for claim in &record.claims {
+        out.extend(
+            claim
+                .supported_by
+                .iter()
+                .map(|r| (RefSite::ClaimSupport(claim.anchor.clone()), r)),
+        );
+    }
+    if let Some(acceptance) = &record.acceptance {
+        for check in &acceptance.checks {
+            out.extend(
+                check
+                    .verified_by
+                    .iter()
+                    .map(|r| (RefSite::CheckEvidence(check.id.clone()), r)),
+            );
+        }
+    }
+    for disposition in &record.dispositions {
+        out.push((RefSite::DispositionTarget, &disposition.target));
+        if let Some(into) = &disposition.into {
+            out.push((RefSite::DispositionInto, into));
+        }
+    }
+    out
+}
+
+/// The output of stages C and D: what every later stage and read command consumes.
+#[derive(Debug, Clone)]
+pub struct ResolvedModel<'a> {
+    ledger: &'a Ledger,
+    /// The commit the build resolved against.
+    pub commit: Option<Commit>,
+    /// Tool version.
+    pub tool_version: String,
+    /// Grammar version.
+    pub grammar_version: String,
+    /// Vocabulary version.
+    pub vocabulary_version: String,
+    /// The source-graph hash over the raw bytes of every source file.
+    pub source_graph: ContentHash,
+    /// The source files, sorted by path.
+    pub sources: Vec<SourceFile>,
+    /// The head of every key that has one.
+    pub heads: BTreeMap<LogicalKey, RevisionId>,
+    /// Why a key has no single head, for the keys that do not.
+    pub head_errors: BTreeMap<LogicalKey, HeadError>,
+    /// Content hash per revision, for every revision whose canonical text was supplied.
+    pub content_hashes: BTreeMap<RevisionId, ContentHash>,
+    /// Revisions whose canonical text was not supplied.
+    pub missing_hashes: BTreeSet<RevisionId>,
+    /// Every resolved reference occurrence, in canonical order.
+    pub edges: Vec<ResolvedEdge>,
+    /// The floating resolutions the lock records, deduplicated per §2.3 and sorted.
+    pub resolutions: Vec<ResolutionEntry>,
+    /// Supersession chains: for each key, its revisions oldest-first along `supersedes`.
+    pub supersession: BTreeMap<LogicalKey, Vec<RevisionId>>,
+    /// Diagnostics from stages A–D, in rule then code then subject order.
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+impl<'a> ResolvedModel<'a> {
+    /// Runs stages C and D over a ledger.
+    ///
+    /// Linking, head resolution, supersession chains, content hashing, the resolution
+    /// log, and the full rule catalogue. The rules are run through
+    /// [`validate::validate_all`] rather than re-expressed, so there is one catalogue and
+    /// one ordering.
+    #[must_use]
+    pub fn build(ledger: &'a Ledger, inputs: &BuildInputs) -> Self {
+        let mut sources = inputs.sources.clone();
+        sources.sort();
+        sources.dedup_by(|a, b| a.path == b.path);
+        let source_graph = source_graph_hash(sources.iter().map(|s| (s.path.as_str(), &s.hash)));
+
+        let mut content_hashes = BTreeMap::new();
+        let mut missing_hashes = BTreeSet::new();
+        for record in sorted_records(ledger) {
+            match inputs.canonical_text.get(&record.id) {
+                Some(text) => {
+                    content_hashes.insert(record.id.clone(), content_hash(text));
+                }
+                None => {
+                    missing_hashes.insert(record.id.clone());
+                }
+            }
+        }
+
+        let mut heads = BTreeMap::new();
+        let mut head_errors = BTreeMap::new();
+        for key in ledger.keys() {
+            match ledger.head(key) {
+                Ok(record) => {
+                    heads.insert(key.clone(), record.id.clone());
+                }
+                Err(error) => {
+                    head_errors.insert(key.clone(), error);
+                }
+            }
+        }
+
+        let edges = link(ledger);
+        let resolutions = resolution_log(&edges, &content_hashes);
+        let supersession = supersession_chains(ledger);
+
+        Self {
+            ledger,
+            commit: inputs.commit.clone(),
+            tool_version: inputs.tool.clone(),
+            grammar_version: inputs.grammar.clone(),
+            vocabulary_version: inputs.vocabulary.clone(),
+            source_graph,
+            sources,
+            heads,
+            head_errors,
+            content_hashes,
+            missing_hashes,
+            edges,
+            resolutions,
+            supersession,
+            diagnostics: validate::validate_all(ledger),
+        }
+    }
+
+    /// The ledger this model was built from.
+    #[must_use]
+    pub fn ledger(&self) -> &'a Ledger {
+        self.ledger
+    }
+
+    /// Whether a revision is the head of its key.
+    #[must_use]
+    pub fn is_head(&self, id: &RevisionId) -> bool {
+        self.heads.get(&id.key) == Some(id)
+    }
+
+    /// The content hash of a revision, if the build computed one.
+    #[must_use]
+    pub fn content_hash(&self, id: &RevisionId) -> Option<&ContentHash> {
+        self.content_hashes.get(id)
+    }
+
+    /// Whether the build produced any diagnostic of severity `error`.
+    ///
+    /// Applying the `--strict` profile — under which warnings are errors — is the
+    /// caller's job, not this crate's (D-013).
+    #[must_use]
+    pub fn has_errors(&self) -> bool {
+        self.diagnostics
+            .iter()
+            .any(|d| d.severity == crate::diagnostics::Severity::Error)
+    }
+
+    /// Walks forward along `supersedes`: what replaced this revision, transitively.
+    ///
+    /// Returns the revision itself when nothing supersedes it. Cycle-safe: a supersession
+    /// cycle is V-014's problem, and this must not hang while that diagnostic is produced.
+    #[must_use]
+    pub fn current(&self, id: &RevisionId) -> RevisionId {
+        let chain = self.supersession.get(&id.key);
+        let Some(chain) = chain else {
+            return id.clone();
+        };
+        match chain.iter().position(|c| c == id) {
+            Some(at) => chain[chain.len() - 1].clone().max(chain[at].clone()),
+            None => id.clone(),
+        }
+    }
+
+    /// Walks backward along `supersedes`: the revisions this one replaced, newest first.
+    #[must_use]
+    pub fn history(&self, id: &RevisionId) -> Vec<RevisionId> {
+        let Some(chain) = self.supersession.get(&id.key) else {
+            return vec![id.clone()];
+        };
+        match chain.iter().position(|c| c == id) {
+            Some(at) => chain[..=at].iter().rev().cloned().collect(),
+            None => vec![id.clone()],
+        }
+    }
+
+    /// The dependency graph over the three propagating relations.
+    #[must_use]
+    pub fn dependency_graph(&self) -> DiGraph<RevisionId> {
+        dependency_graph(self.ledger)
+    }
+
+    /// Propagates staleness from a set of stale revisions (D-024).
+    ///
+    /// The set itself is P5's to compute, from `observed_at`, `watches` and
+    /// `review_after`. The walk is here because it is a graph operation over the resolved
+    /// model, and because implementing it now means P5 adds a predicate rather than an
+    /// algorithm.
+    #[must_use]
+    pub fn at_risk(&self, stale: &BTreeSet<RevisionId>) -> Vec<AtRisk> {
+        propagate_staleness(self.ledger, stale)
+    }
+
+    /// Builds the `akr.lock` this model implies.
+    ///
+    /// Every field is derived: sources and their raw-byte hashes from the build inputs,
+    /// the source-graph hash from those, resolutions from the link log, and one seal per
+    /// revision in a state other than `proposed` (D-015). Ordering is applied by
+    /// [`Lock::render`].
+    #[must_use]
+    pub fn to_lock(&self) -> Lock {
+        let seals = sorted_records(self.ledger)
+            .into_iter()
+            .filter(|r| r.is_sealed())
+            .map(|r| SealEntry {
+                id: r.id.clone(),
+                state: r.state,
+                hash: self
+                    .content_hashes
+                    .get(&r.id)
+                    .cloned()
+                    .unwrap_or_else(|| ContentHash(UNKNOWN_HASH.to_owned())),
+            })
+            .collect();
+
+        Lock {
+            project: self.ledger.project.name.clone(),
+            build: Build {
+                tool: self.tool_version.clone(),
+                grammar: self.grammar_version.clone(),
+                vocabulary: self.vocabulary_version.clone(),
+                commit: self.commit.clone(),
+                source_graph: self.source_graph.clone(),
+                built_at: String::new(),
+            },
+            sources: self
+                .sources
+                .iter()
+                .map(|s| SourceEntry {
+                    path: s.path.clone(),
+                    hash: s.hash.clone(),
+                    records: s.records,
+                })
+                .collect(),
+            resolutions: self.resolutions.clone(),
+            seals,
+        }
+    }
+}
+
+// -------------------------------------------------------------------------------------
+// Stage C
+// -------------------------------------------------------------------------------------
+
+/// Stage C: resolve every reference occurrence in the ledger.
+///
+/// Records are visited in [`RevisionId`] order and, within a record, in the order
+/// [`reference_sites`] yields — relation slots first in [`Relation`] order, then scope,
+/// content, claims, checks and dispositions. That makes the resolution log byte-stable
+/// (`docs/06-compiler-pipeline.md` §5).
+///
+/// Resolution failures are not reported here. V-001 owns that message, and producing it
+/// twice would double every diagnostic about a typo.
+#[must_use]
+pub fn link(ledger: &Ledger) -> Vec<ResolvedEdge> {
+    let mut edges = Vec::new();
+    for record in sorted_records(ledger) {
+        for (site, reference) in reference_sites(record) {
+            edges.push(ResolvedEdge {
+                from: record.id.clone(),
+                site,
+                reference: reference.clone(),
+                to: ledger
+                    .resolve(reference)
+                    .ok()
+                    .flatten()
+                    .map(|target| target.id.clone()),
+                pinned: reference.is_pinned(),
+            });
+        }
+    }
+    edges
+}
+
+/// The lock's `resolution` entries: one per distinct (referring revision, slot, target
+/// key) among the **floating** references that resolved (`spec/schema/akr-lock.md` §2.3).
+///
+/// Pinned references are excluded: a pinned reference cannot change what it points at, so
+/// locking it would be noise. Anchors are excluded too — the anchor is part of the
+/// referring record's text, and the resolution being locked is the revision.
+#[must_use]
+pub fn resolution_log(
+    edges: &[ResolvedEdge],
+    hashes: &BTreeMap<RevisionId, ContentHash>,
+) -> Vec<ResolutionEntry> {
+    let mut seen: BTreeMap<(RevisionId, String, LogicalKey), ResolutionEntry> = BTreeMap::new();
+
+    for edge in edges {
+        if edge.pinned {
+            continue;
+        }
+        let Some(to) = &edge.to else { continue };
+        let slot = edge.site.slot_name().to_owned();
+        seen.entry((edge.from.clone(), slot.clone(), to.key.clone()))
+            .or_insert_with(|| ResolutionEntry {
+                from: edge.from.clone(),
+                slot,
+                to: to.clone(),
+                hash: hashes
+                    .get(to)
+                    .cloned()
+                    .unwrap_or_else(|| ContentHash(UNKNOWN_HASH.to_owned())),
+            });
+    }
+    seen.into_values().collect()
+}
+
+/// Supersession chains: for each key, its revisions oldest-first along `supersedes`.
+///
+/// Only edges within one key contribute; a `supersedes` edge across keys is V-014's
+/// problem (`AKR-R017`) and is ignored here rather than producing a nonsensical chain.
+/// Revisions that no chain reaches are appended in revision order, so every revision of a
+/// key appears exactly once and the result is a total order even for a key with no
+/// `supersedes` edges at all.
+#[must_use]
+pub fn supersession_chains(ledger: &Ledger) -> BTreeMap<LogicalKey, Vec<RevisionId>> {
+    let mut out = BTreeMap::new();
+
+    for key in ledger.keys() {
+        let revisions = ledger.revisions_of(key);
+        // successor[old] = new, from `supersedes` edges within this key.
+        let mut successor: BTreeMap<u32, u32> = BTreeMap::new();
+        for record in &revisions {
+            for target in record.targets(Relation::Supersedes) {
+                if &target.key != key {
+                    continue;
+                }
+                if let Some(old) = target.revision.or_else(|| {
+                    ledger
+                        .head(&target.key)
+                        .ok()
+                        .map(|record| record.id.revision)
+                }) {
+                    successor.entry(old).or_insert(record.id.revision);
+                }
+            }
+        }
+
+        let superseded: BTreeSet<u32> = successor.keys().copied().collect();
+        let successors: BTreeSet<u32> = successor.values().copied().collect();
+        let mut chain: Vec<u32> = Vec::new();
+        let mut placed: BTreeSet<u32> = BTreeSet::new();
+
+        // Start from every revision that supersedes nothing, in ascending order.
+        for record in &revisions {
+            let revision = record.id.revision;
+            if successors.contains(&revision) || placed.contains(&revision) {
+                continue;
+            }
+            let mut cursor = revision;
+            loop {
+                if !placed.insert(cursor) {
+                    break; // cycle; V-014 reports it
+                }
+                chain.push(cursor);
+                match successor.get(&cursor) {
+                    Some(next) if !placed.contains(next) => cursor = *next,
+                    _ => break,
+                }
+            }
+        }
+        // Anything a chain did not reach — a cycle member, or an orphan.
+        for record in &revisions {
+            if placed.insert(record.id.revision) {
+                chain.push(record.id.revision);
+            }
+        }
+        debug_assert_eq!(chain.len(), revisions.len());
+        let _ = &superseded;
+
+        out.insert(
+            key.clone(),
+            chain
+                .into_iter()
+                .map(|revision| RevisionId::new(key.clone(), revision))
+                .collect(),
+        );
+    }
+    out
+}
