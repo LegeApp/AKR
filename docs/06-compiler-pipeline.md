@@ -378,8 +378,9 @@ revision has drifted.
 Precisely: for every source file the build read — `project.akr` and every `*.akr` under
 `records/` and `archive/`, but **not** `akr.lock` and **not** anything under `cache/` —
 compute the SHA-256 of its raw bytes. Sort the pairs by repository-relative path using a
-byte comparison. Serialise each pair as `path` `\t` `sha256:hex` `\n`, concatenate, and
-hash the result.
+byte comparison. Serialise each pair as `path` `NUL` `sha256:hex` `LF` (the form given
+in `spec/schema/akr-lock.md` §3.2 — NUL because it cannot occur in a path), concatenate,
+and hash the result.
 
 Raw bytes, not canonical form, because this hash answers "are the inputs on disk the same
 inputs?" — a question about the filesystem, not about meaning. It appears in the `meta`
@@ -531,7 +532,7 @@ akr build [--dir <path>] [--strict|--lenient] [--at <commit>] [--today <date>]
 $ akr build
 parsed 42 revisions in 19 files
 resolved 40 heads, 2 superseded revisions
-2 stale records, 3 at risk (see akr review-queue)
+2 stale records, 4 at risk (see akr review-queue)
 wrote .akr/cache/index.sqlite
 wrote docs/generated/ (6 views, 2 changed)
 akr.lock unchanged

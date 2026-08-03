@@ -32,11 +32,16 @@ The goal is itself a milestone. No containing milestone or track.
   implements  @lege.req.no-engine-types-in-viewer/1
 
 @sim.work.rewrite-projection/1      work  blocked  part_of @sys.milestone.m3-playable-day
+                                                     [AT RISK depth 1]
   Rewrite the day-boundary projection so that pending state reconciliation is
   one path rather than four, and bring coverage on that path up to the
   steady-state level.
   BLOCKED BY  @sim.question.timestep-vs-budget/1  (open)
   depends_on  @sim.obs.projection-gaps/1  [STALE]
+  AT RISK     via depends_on -> @sim.obs.projection-gaps/1
+              The coverage measurement this work item rests on was made before
+              the projection code changed. Re-measure before deciding what the
+              rewrite has to achieve.
 
 @sys.work.m3-audio-pass/1           work  ready    part_of @sys.work.m3-plan/1
   Ambient audio beds for the four day phases, plus footstep variation on the
@@ -212,7 +217,9 @@ STALE (2)
   @sim.obs.timestep-drift/1
       review_after 2026-07-15 passed
 
-AT RISK (3)
+AT RISK (4)
+  @sim.work.rewrite-projection/1      depth 1
+      depends_on   -> @sim.obs.projection-gaps/1
   @sys.assessment.m3-readiness/1      depth 1
       supported_by -> @sim.obs.timestep-drift/1
   @sys.assessment.projection-gaps/1   depth 1

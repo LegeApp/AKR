@@ -158,6 +158,8 @@ function of (ledger, commit, request).
 {
   "mode": "ref",
   "dependents": [
+    { "key": "sim.work.rewrite-projection", "rev": 1, "depth": 1,
+      "via": "depends_on", "path": ["@sim.obs.projection-gaps"] },
     { "key": "sys.assessment.projection-gaps", "rev": 1, "depth": 1,
       "via": "supported_by", "path": ["@sim.obs.projection-gaps"] }
   ],
@@ -175,7 +177,7 @@ disturb.
 { "review_clean": false }
 // output
 { "ok": true, "diagnostics": [],
-  "counts": { "records": 40, "revisions": 42, "stale": 2, "at_risk": 3 } }
+  "counts": { "records": 40, "revisions": 42, "stale": 2, "at_risk": 4 } }
 ```
 
 Runs stages A–D over the ledger as it stands on disk. An agent calls it after a batch of
@@ -413,9 +415,11 @@ proceed past it without an answer, and it now knows to say so rather than guessi
 → knowledge.impact { "ref": "@sim.obs.projection-gaps" }
 ```
 
-One dependent at depth 1 (`sys.assessment.projection-gaps`, via `supported_by`) and one
-at depth 2 (`sys.policy.tandem-work`). Rewriting the projection pass will require
-re-observing, and two records downstream will need review when it does.
+Three dependents: at depth 1, `sim.work.rewrite-projection` itself (via `depends_on` —
+the agent's own work item rests on the stale observation) and
+`sys.assessment.projection-gaps` (via `supported_by`); at depth 2,
+`sys.policy.tandem-work`. Rewriting the projection pass will require re-observing, and
+three records downstream will need review when it does.
 
 **4. Record what it found.**
 
@@ -438,10 +442,10 @@ the agent is writing knowledge that knows how to expire.
 ```jsonc
 → knowledge.validate { }
 ← { "ok": true, "diagnostics": [],
-    "counts": { "records": 41, "revisions": 43, "stale": 2, "at_risk": 3 } }
+    "counts": { "records": 41, "revisions": 43, "stale": 2, "at_risk": 4 } }
 ```
 
-Still 2 stale and 3 at risk: the new observation is current, and nothing it touched
+Still 2 stale and 4 at risk: the new observation is current, and nothing it touched
 became stale. The agent reports that the rewrite is blocked on
 `@sim.question.timestep-vs-budget` and stops — which is the outcome the whole design
 exists to produce, in place of a confident rewrite built on a stale observation.

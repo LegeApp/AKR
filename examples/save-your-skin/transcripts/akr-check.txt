@@ -22,7 +22,7 @@ akr check — save-your-skin
     contradictions                1 declared, 1 acknowledged
 
   build facts (not diagnostics):
-    2 records stale, 3 at risk — see `akr review-queue`
+    2 records stale, 4 at risk — see `akr review-queue`
 
 no diagnostics
 
@@ -50,7 +50,7 @@ $ akr check --format json
     "heads": 40,
     "checks": { "total": 8, "satisfied": 3 },
     "stale": 2,
-    "at_risk": 3
+    "at_risk": 4
   }
 }
 
@@ -77,7 +77,7 @@ error[AKR-G041]: review queue is not empty
    |                                                "sim/src/project/**"
    |                                                matched by 5d9c2a70
    |
-note: review queue holds 2 stale and 1 at-risk record at depth 1, 2 further at
+note: review queue holds 2 stale and 4 at-risk records: 3 at depth 1, 1 at
       depth 2
 help: run `akr review-queue` for the full list, or drop --review-clean
 

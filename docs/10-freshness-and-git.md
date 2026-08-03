@@ -220,29 +220,40 @@ all.
 ### Propagation
 
 ```
-   sim.obs.projection-gaps/1                 sim.obs.timestep-drift/1
-   STALE (watch: sim/src/project/**,         STALE (review_after 2026-07-15
-          matched by 5d9c2a70)                      passed)
-            │                                          │
-            │ supported_by                             │ supported_by
-            ▼                                          ▼
-   sys.assessment.projection-gaps/1          sys.assessment.m3-readiness/1
-   AT RISK depth 1                           AT RISK depth 1
-            │
-            │ supported_by
-            ▼
-   sys.policy.tandem-work/1
-   AT RISK depth 2
+        sim.obs.projection-gaps/1                     sim.obs.timestep-drift/1
+        STALE (watch: sim/src/project/**,             STALE (review_after
+               matched by 5d9c2a70)                          2026-07-15 passed)
+          │                      │                              │
+          │ depends_on           │ supported_by                 │ supported_by
+          ▼                      ▼                              ▼
+ sim.work.rewrite-      sys.assessment.projection-     sys.assessment.m3-
+ projection/1           gaps/1                         readiness/1
+ AT RISK depth 1        AT RISK depth 1                AT RISK depth 1
+                                 │
+                                 │ supported_by
+                                 ▼
+                        sys.policy.tandem-work/1
+                        AT RISK depth 2
 ```
 
-**2 stale, 3 at risk, maximum propagation depth 2.** Nothing else is flagged, which is
+**2 stale, 4 at risk, maximum propagation depth 2.** Nothing else is flagged, which is
 the property worth checking: a forty-record project with two aged observations produces
-five entries in the review queue, not forty.
+six entries in the review queue, not forty.
 
-Read the bottom-left edge carefully, because it is the whole argument for propagation.
+Two edges in that picture are worth reading slowly, because between them they are the
+whole argument for propagation.
+
 `sys.policy.tandem-work` is a live, active governance rule that nothing has touched. Its
 support rests on an assessment, which rests on an observation, which was made before the
 projection code changed. Nobody looking at the policy would have known. The graph knew.
+
+`sim.work.rewrite-projection` is the other direction of the same point, and the one an
+agent meets first. It is the work item somebody is about to pick up, and it declares
+`depends_on [ @sim.obs.projection-gaps ]` — the coverage measurement that motivated it.
+That measurement is now stale, so the *premise of the work* is stale, and the flag says so
+before anyone starts. Note that this is a `work` record: propagation is not restricted to
+records that make claims about the world. Anything that declares its correctness rests on
+something stale is flagged, whatever its kind.
 
 ## 6. `akr impact --git-diff`
 
@@ -312,16 +323,18 @@ STALE (2)
   sim.obs.timestep-drift/1         observation  verified
       review_after 2026-07-15 passed (19 days ago)
 
-AT RISK (3)
-  depth 1  sys.assessment.projection-gaps/1  assessment
-             via supported_by -> @sim.obs.projection-gaps
-  depth 1  sys.assessment.m3-readiness/1     assessment
+AT RISK (4)
+  depth 1  sim.work.rewrite-projection/1      work
+             via depends_on   -> @sim.obs.projection-gaps
+  depth 1  sys.assessment.m3-readiness/1      assessment
              via supported_by -> @sim.obs.timestep-drift
-  depth 2  sys.policy.tandem-work/1          policy
+  depth 1  sys.assessment.projection-gaps/1   assessment
+             via supported_by -> @sim.obs.projection-gaps
+  depth 2  sys.policy.tandem-work/1           policy
              via supported_by -> @sys.assessment.projection-gaps
                               -> @sim.obs.projection-gaps
 
-2 stale, 3 at risk
+2 stale, 4 at risk
 ```
 
 **Exit 0**, always, however long the queue is. A non-empty queue is normal and healthy: it

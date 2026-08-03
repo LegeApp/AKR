@@ -67,7 +67,7 @@ audit has never been run and recorded.
 **Work items**
 
 - `active` [Extract the render graph behind the boundary](ACTIVE-WORK.md#extract-the-render-graph-behind-the-boundary) `@lege.work.extract-render-graph/1`
-- `blocked` [Rewrite the projection pass](ACTIVE-WORK.md#rewrite-the-projection-pass) `@sim.work.rewrite-projection/1`
+- `blocked` [Rewrite the projection pass](ACTIVE-WORK.md#rewrite-the-projection-pass) `@sim.work.rewrite-projection/1` — **at risk**
 
 **Under the plan of record**
 

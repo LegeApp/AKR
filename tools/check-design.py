@@ -19,8 +19,9 @@ Two severities, mirroring AKR's own:
              nowhere, a code outside its owner's range, a corpus that disagrees with
              the frozen manifest. Exits 1.
     warning  a documentation gap that breaks nothing — most often a registered
-             diagnostic code that no specification document cites yet. Reported
-             always; fails the run only under --pedantic.
+             diagnostic code that no specification document cites yet, which
+             `spec/diagnostics/README.md` §6 explicitly permits. Reported always;
+             fails the run only under --pedantic.
 
 Checks whose inputs are missing report SKIPPED rather than failing, so the tool is
 useful while the design set is still being written.

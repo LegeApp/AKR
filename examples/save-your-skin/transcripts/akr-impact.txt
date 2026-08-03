@@ -79,7 +79,9 @@ newly stale (1)
       watches "sim/src/project/**" matched by 5d9c2a70
       observed_at 7c41d0ba, which 5d9c2a70 descends from
 
-newly at risk (2)
+newly at risk (3)
+  @sim.work.rewrite-projection/1      depth 1
+      depends_on   -> @sim.obs.projection-gaps/1
   @sys.assessment.projection-gaps/1   depth 1
       supported_by -> @sim.obs.projection-gaps/1
   @sys.policy.tandem-work/1           depth 2
@@ -101,12 +103,14 @@ $ akr impact @sim.obs.projection-gaps
 
 dependents along supported_by, depends_on, derived_from
 
+  depth 1  @sim.work.rewrite-projection/1     work        blocked
+             via depends_on
   depth 1  @sys.assessment.projection-gaps/1  assessment  verified
              via supported_by
   depth 2  @sys.policy.tandem-work/1          policy      active
              via supported_by -> @sys.assessment.projection-gaps/1
 
-2 dependents, maximum depth 2
+3 dependents, maximum depth 2
 
 # Run before proposing a supersession: this is what you are about to disturb.
 

@@ -18,7 +18,7 @@ raised, not an answer given.
 knowledge is perfect. Two stale records across forty on a project mid-milestone is a
 healthy number.
 
-**2 stale · 3 at risk · maximum propagation depth 2**
+**2 stale · 4 at risk · maximum propagation depth 2**
 
 ## Stale (2)
 
@@ -57,11 +57,24 @@ is exactly the kind of thing that should be looked at again on a timer.
 **Suggested action** — re-run the week-long divergence test. If the drift is gone, this
 observation is disproven and the contradiction resolves itself.
 
-## At risk (3)
+## At risk (4)
 
 Records that rest on something stale, along `supported_by`, `depends_on` or
 `derived_from` only (D-024). Ordered by propagation depth, then by key. None of these has
 been changed; each is flagged because its support has aged.
+
+### Rewrite the projection pass
+
+`blocked` · `@sim.work.rewrite-projection/1` · work · **depth 1** ·
+[ACTIVE-WORK.md](ACTIVE-WORK.md#rewrite-the-projection-pass)
+
+**Via** `depends_on` → `@sim.obs.projection-gaps/1` (stale: watched path moved)
+
+The premise of this work item is the coverage measurement that motivated it, and that
+measurement is stale. Anyone picking the item up should re-measure before deciding what
+the rewrite has to achieve. Propagation is not restricted to records that make claims
+about the world: any kind that declares its correctness rests on something stale is
+flagged.
 
 ### M3 is one blocked work item away from ready
 
@@ -98,4 +111,5 @@ For contrast, and because "why is this *not* here?" is asked as often as the rev
 | `@lege.obs.frame-budget-headroom/1` | `observed_at` is C5, which is HEAD. C5 touched `lege/src/render/**`, which it watches, but the observation was made *at* that commit. |
 | `@lege.obs.viewer-imports-engine/1` | `disproven` — terminal records are not evaluated for freshness at all. |
 | `@sys.policy.no-hand-edited-views/1` | Nothing it rests on is stale; it has no `supported_by` edge. |
-| `@sys.milestone.m3-playable-day/1` | Staleness does not propagate along `part_of`, `after`, `plan_of_record`, `implements` or `blocks`. A milestone is not endangered by one aged observation beneath it. |
+| `@sys.milestone.m3-playable-day/1` | Staleness does not propagate along `part_of`, `after`, `plan_of_record`, `implements` or `blocks`. A milestone is not endangered by one aged observation beneath it — but `@sim.work.rewrite-projection/1` beneath it is, because that record declares `depends_on`. |
+| `@sim.question.timestep-vs-budget/1` | It `blocks` an at-risk work item, and `blocks` does not propagate. A blocker is not endangered by the thing it blocks. |

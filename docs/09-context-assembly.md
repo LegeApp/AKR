@@ -394,7 +394,7 @@ $ akr context --goal sys.milestone.m3-playable-day --paths "sim/src/project/**"
 | 8 observations | `sim.obs.projection-gaps/1` (stale), `sim.obs.timestep-drift/1` (stale), `sys.assessment.m3-readiness/1`, `sys.assessment.projection-gaps/1`, `lege.evidence.boundary-lint-pass/1`, `sim.evidence.determinism-suite-pass/1`, `sys.evidence.playable-day-demo/1` | path overlap, `ref` scope on the goal, or `supported_by`/`verified_by`/`depends_on` from a selected record |
 | 9 questions | `sim.question.timestep-vs-budget/1` (open) | `blocks` a selected work item |
 | 10 contradictions | `sim.obs.timestep-drift/1` ↔ `sim.evidence.determinism-suite-pass/1`, acknowledged | declared, symmetric |
-| 11 staleness | 2 stale, 3 at risk | stage D |
+| 11 staleness | 2 stale, 4 at risk | stage D |
 
 Twenty-three records. The three exclusions the frozen manifest calls out explicitly:
 

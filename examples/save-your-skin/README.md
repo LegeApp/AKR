@@ -105,24 +105,34 @@ already accounts for the change.
 
 ### Reverse propagation
 
-Two stale observations flag three dependents along `supported_by`:
+Two stale observations flag four dependents, along `supported_by` and `depends_on`:
 
 ```
-sim.obs.projection-gaps/1  STALE          sim.obs.timestep-drift/1  STALE
-          │ supported_by                            │ supported_by
-          ▼                                         ▼
-sys.assessment.projection-gaps/1          sys.assessment.m3-readiness/1
-AT RISK depth 1                           AT RISK depth 1
-          │ supported_by
-          ▼
-sys.policy.tandem-work/1
-AT RISK depth 2
+       sim.obs.projection-gaps/1                sim.obs.timestep-drift/1
+       STALE                                    STALE
+         │                    │                        │
+         │ depends_on         │ supported_by           │ supported_by
+         ▼                    ▼                        ▼
+sim.work.rewrite-     sys.assessment.          sys.assessment.
+projection/1          projection-gaps/1        m3-readiness/1
+AT RISK depth 1       AT RISK depth 1          AT RISK depth 1
+                              │ supported_by
+                              ▼
+                      sys.policy.tandem-work/1
+                      AT RISK depth 2
 ```
 
-The bottom-left edge is the argument for propagation. `sys.policy.tandem-work` is a live
-governance rule nobody has touched, and its support rests on an assessment that rests on
-an observation made before the projection code changed. No reader of the policy would
-have known.
+Two of those edges carry the argument for propagation, in opposite directions.
+
+`sys.policy.tandem-work` is a live governance rule nobody has touched, and its support
+rests on an assessment that rests on an observation made before the projection code
+changed. No reader of the policy would have known.
+
+`sim.work.rewrite-projection` is the work item somebody is about to pick up. It declares
+`depends_on [ @sim.obs.projection-gaps ]` — the coverage measurement that motivated it —
+and that measurement is stale, so the premise of the work is stale before anyone starts.
+Note the kind: propagation is not restricted to records that make claims about the world.
+Anything declaring that its correctness rests on something stale is flagged.
 
 Where to look: [`docs/generated/REVIEW-REQUIRED.md`](docs/generated/REVIEW-REQUIRED.md),
 [`transcripts/akr-review-queue.txt`](transcripts/akr-review-queue.txt).
@@ -183,7 +193,7 @@ These match `MANIFEST.md` §9 exactly. Full output in
 | [`akr check`](transcripts/akr-check.txt) | **Exits 0.** 40 records, 42 revisions, no diagnostics. The example is a valid ledger and every V-rule passes. |
 | [`akr check --review-clean`](transcripts/akr-check.txt) | Exits 1 with `AKR-G041`. The opt-in gate, shown to make the difference visible. |
 | [`akr check --views-current`](transcripts/akr-check.txt) | Exits 0. The six committed views match what the sources render. |
-| [`akr review-queue`](transcripts/akr-review-queue.txt) | **2 stale, 3 at risk**, maximum depth 2. Exits 0. |
+| [`akr review-queue`](transcripts/akr-review-queue.txt) | **2 stale, 4 at risk**, maximum depth 2. Exits 0. |
 | [`akr context --goal sys.milestone.m3-playable-day --paths "sim/src/project/**"`](transcripts/akr-context.txt) | 23 records across 11 sections. Includes M3, `sys.work.m3-plan/2`, the in-scope policies and constraints, the blocked work item with its blocking question, both M3 checks with the satisfied one marked, `sim.obs.projection-gaps` with a staleness warning, and the acknowledged contradiction. **Excludes** `sys.work.m3-plan/1`, `lege.decision.renderer-boundary/1` and `sys.policy.weekly-demo`. |
 | [`akr impact --git-diff 5d9c2a70..e806b3f5`](transcripts/akr-impact.txt) | **No newly stale records.** C5 touches only `lege/src/render/**` and `docs/generated/**`, and the one record watching the former already observes at C5. |
 | `akr build` | Emits the six views in [`docs/generated/`](docs/generated/); a second run changes nothing. |
@@ -197,17 +207,3 @@ These match `MANIFEST.md` §9 exactly. Full output in
    receives. The point of the whole system is in this file.
 4. `.akr/records/sys/work.akr` — supersession with disposition, in source form.
 5. [`MANIFEST.md`](MANIFEST.md) — the contract everything above is checked against.
-
-## Known discrepancy
-
-`sim.work.rewrite-projection/1` carries `depends_on [ @sim.obs.projection-gaps ]`. Under a
-literal reading of D-024, `depends_on` propagates staleness, so that work record would be a
-**fourth** at-risk record at depth 1. `MANIFEST.md` §7 is frozen at three at-risk records
-and states "nothing else is flagged", and §9 fixes the expected `akr review-queue` output
-at 2 stale and 3 at risk.
-
-Everything in this directory follows the frozen manifest. The discrepancy is recorded here
-rather than resolved, because resolving it means either amending `MANIFEST.md` §7 to four
-at-risk records or dropping the `depends_on` edge from
-`.akr/records/sim/work.akr` — both of which are decisions for the design lead, in their own
-commit.

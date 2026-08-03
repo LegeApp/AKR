@@ -196,7 +196,7 @@ descendant-commit rule for acceptance, and `akr impact`.
 **Exit criteria.**
 
 1. Against a synthetic repository reproducing MANIFEST §4, the derivation produces
-   **exactly 2 stale and 3 at-risk** records, with the causes and depths of MANIFEST §7.
+   **exactly 2 stale and 4 at-risk** records, with the causes and depths of MANIFEST §7.
 2. `akr impact --git-diff C4..C5` reports no newly stale records (MANIFEST §9).
 3. Acceptance verdicts match MANIFEST §6, including M3's one satisfied and one
    unsatisfied check.
@@ -404,7 +404,7 @@ against `examples/save-your-skin/` and then against the AKR repository itself.
    `akr check --views-current` exits 0 immediately afterwards.
 3. **`akr build` twice in a row produces no diff** — not in the views, not in `akr.lock`,
    not anywhere. The second run reports every view unchanged.
-4. **`akr review-queue` reports exactly 2 stale and 3 at-risk records**, with the causes
+4. **`akr review-queue` reports exactly 2 stale and 4 at-risk records**, with the causes
    and propagation paths of MANIFEST §7, and exits 0.
 5. **`akr context --goal sys.milestone.m3-playable-day --paths "sim/src/project/**"`
    returns the bundle of MANIFEST §9** — M3, `sys.work.m3-plan/2`, the in-scope policies

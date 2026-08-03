@@ -268,7 +268,7 @@ reachable from `observed_at 7c41d0ba`.
 
 **Matched path** — `sim/src/project/` (C4, 2 commits after the observation)
 
-## At risk (3)
+## At risk (4)
 
 ### Projection gaps put the M3 date at risk
 

@@ -28,7 +28,7 @@ shared surface.
 
 ### Rewrite the projection pass
 
-`blocked` · `@sim.work.rewrite-projection/1` · part of `@sys.milestone.m3-playable-day/1`
+`blocked` · `@sim.work.rewrite-projection/1` · part of `@sys.milestone.m3-playable-day/1` · **at risk**
 
 Rewrite the day-boundary projection so that pending state reconciliation is one
 path rather than four, and bring coverage on that path up to the steady-state
@@ -40,6 +40,10 @@ level.
   `@sim.question.timestep-vs-budget/1`
 
 **depends_on** `@sim.obs.projection-gaps/1`
+
+> At risk at depth 1 via `depends_on` → `@sim.obs.projection-gaps/1` (stale). The coverage
+> measurement this work item rests on was made before the projection code changed. See
+> [REVIEW-REQUIRED.md](REVIEW-REQUIRED.md#rewrite-the-projection-pass).
 
 ## Under M3 plan of record
 
@@ -124,7 +128,7 @@ _(none)_
 | --- | --- | --- |
 | Extract the render graph behind the boundary | `active` | `@sys.milestone.m3-playable-day/1` |
 | M3 plan of record | `active` | plan of record for M3 |
-| Rewrite the projection pass | `blocked` | `@sys.milestone.m3-playable-day/1` |
+| Rewrite the projection pass | `blocked`, at risk | `@sys.milestone.m3-playable-day/1` |
 | Ambient audio for the day loop | `ready` | `@sys.work.m3-plan/1` |
 | Lighting pass for the day loop | `ready` | `@sys.work.m3-plan/1` |
 | Import the legacy roadmap | `proposed` | `@sys.track.tooling-hygiene/1` |

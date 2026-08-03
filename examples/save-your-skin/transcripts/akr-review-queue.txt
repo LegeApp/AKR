@@ -18,7 +18,12 @@ STALE (2)
       note       contradicts @sim.evidence.determinism-suite-pass/1
                  (acknowledged)
 
-AT RISK (3)
+AT RISK (4)
+
+  depth 1  sim.work.rewrite-projection/1        work        blocked
+             via depends_on   -> @sim.obs.projection-gaps/1
+             note   the coverage measurement this work item rests on was made
+                    before the projection code changed
 
   depth 1  sys.assessment.m3-readiness/1        assessment  verified
              via supported_by -> @sim.obs.timestep-drift/1
@@ -30,7 +35,7 @@ AT RISK (3)
              via supported_by -> @sys.assessment.projection-gaps/1
                               -> @sim.obs.projection-gaps/1
 
-2 stale, 3 at risk, maximum propagation depth 2
+2 stale, 4 at risk, maximum propagation depth 2
 
 $ echo $?
 0
@@ -52,14 +57,16 @@ STALE (2)
 
 2 stale
 
-$ akr review-queue --at-risk-only --kind policy
+$ akr review-queue --at-risk-only --kind policy --kind work
 
-AT RISK (1)
-  depth 2  sys.policy.tandem-work/1   policy  active
+AT RISK (2)
+  depth 1  sim.work.rewrite-projection/1   work    blocked
+             via depends_on   -> @sim.obs.projection-gaps/1
+  depth 2  sys.policy.tandem-work/1        policy  active
              via supported_by -> @sys.assessment.projection-gaps/1
                               -> @sim.obs.projection-gaps/1
 
-1 at risk
+2 at risk
 
 
 # --- JSON, for a CI job summary ------------------------------------------
@@ -89,6 +96,9 @@ $ akr review-queue --format json
         "observed_at": "5d9c2a70e31f8b46c07d5924ab6e3f1074c9d285" }
     ],
     "at_risk": [
+      { "key": "sim.work.rewrite-projection", "rev": 1, "kind": "work",
+        "depth": 1, "via": "depends_on",
+        "path": ["sim.obs.projection-gaps"] },
       { "key": "sys.assessment.m3-readiness", "rev": 1, "kind": "assessment",
         "depth": 1, "via": "supported_by",
         "path": ["sim.obs.timestep-drift"] },
@@ -99,7 +109,7 @@ $ akr review-queue --format json
         "depth": 2, "via": "supported_by",
         "path": ["sys.assessment.projection-gaps", "sim.obs.projection-gaps"] }
     ],
-    "counts": { "stale": 2, "at_risk": 3, "max_depth": 2 }
+    "counts": { "stale": 2, "at_risk": 4, "max_depth": 2 }
   }
 }
 
@@ -127,8 +137,9 @@ AT RISK (1)
              via supported_by -> @sim.obs.timestep-drift/1
 1 stale, 1 at risk
 
-# Re-observing one record cleared it and both records downstream of it. That
-# is the whole argument for propagation: fixing the source fixes the set.
+# Re-observing one record cleared it and all three records downstream of it:
+# the work item, the assessment, and the policy behind the assessment. That is
+# the whole argument for propagation: fixing the source fixes the set.
 
 # 2. Or decide it still holds. That is a legitimate outcome, recorded the same
 #    way — a new revision with a fresh observed_at and unchanged prose:

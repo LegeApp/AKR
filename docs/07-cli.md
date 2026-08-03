@@ -66,7 +66,7 @@ The distinction between 1 and 3 is what makes CI logs readable: exit 1 means *fi
 ledger*, exit 3 means *fix the checkout*.
 
 **Staleness never changes an exit code** (D-024). A project with two stale records and
-three at-risk records exits 0 from `akr check`. The opt-in gate is `--review-clean`,
+four at-risk records exits 0 from `akr check`. The opt-in gate is `--review-clean`,
 which raises `AKR-G041` and exits 1.
 
 ## 4. The write pipeline
@@ -242,7 +242,7 @@ akr check — save-your-skin
   stage D  resolve       40 heads            ok
 
   build facts (not diagnostics):
-    2 records stale, 3 at risk — see `akr review-queue`
+    2 records stale, 4 at risk — see `akr review-queue`
 
 no diagnostics
 ```
@@ -282,7 +282,7 @@ Runs stages A–F: everything `akr check` does, then the index, then the views, 
 $ akr build
 parsed 42 revisions in 19 files
 resolved 40 heads, 2 superseded revisions
-2 stale records, 3 at risk (see akr review-queue)
+2 stale records, 4 at risk (see akr review-queue)
 wrote .akr/cache/index.sqlite
 wrote docs/generated/ (6 views, 2 changed)
 akr.lock unchanged
