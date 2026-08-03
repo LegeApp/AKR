@@ -70,7 +70,7 @@ source ".akr/records/sys/policies.akr" {
 | Slot | Type | Meaning |
 | --- | --- | --- |
 | head | string | Path, repo-root-relative, forward slashes. |
-| `hash` | string | SHA-256 over the file's bytes in canonical form (§3.1). |
+| `hash` | string | Source file hash — SHA-256 over the file's raw bytes (§3.1). |
 | `records` | integer | Record count. Informational; makes a truncated file obvious at a glance. |
 
 `records` is the one integer-typed slot in the whole design set, and it lives here rather
