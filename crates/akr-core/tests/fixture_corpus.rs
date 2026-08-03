@@ -70,27 +70,13 @@ fn expected_codes(path: &Path) -> Vec<String> {
 /// Fixtures that produce diagnostics their `.expected` file does not list.
 ///
 /// `fixtures/README.md` §2 says a `.expected` file is the **complete** set of diagnostics
-/// for the stage under test, "which is what keeps fixtures isolated to one fault". Each
-/// entry here is a fixture that is not so isolated. They are waived rather than edited
-/// because `fixtures/` and the rule bodies belong to the language half of the design set;
-/// the findings are reported rather than patched over, and this table is the report.
-///
-/// | Fixture | Extra | Why |
-/// | --- | --- | --- |
-/// | `v004-retired-anchor` | `AKR-L031` | The citing record uses `supported_by [ @fx.policy.anchors#gone ]`. `supported_by`'s range is `observation`, `evidence`, `assessment`, so a `policy` target is out of range and V-005 fires alongside V-004. Anchoring the claim on an empirical record would isolate the fixture. |
-/// | `v009-observation-no-commit` | `AKR-T001` | `observed_at` is a *required content slot* of `observation`, so V-008 reports it missing as well as V-009. The two rules genuinely overlap; V-009 exists to give the better message, not to be the only one. |
-/// | `v010-evidence-missing-result` | `AKR-T001` | The same V-008/V-010 overlap, for `result`. |
-/// | `v011-resolved-question-no-resolution` | `AKR-T031` (twice) | V-011 checks two things and the fixture breaks both: no `resolution` slot, and nothing declaring `resolves`. One code, two diagnostics; the `.expected` file lists it once. |
-/// | `v017-missing-disposition` | `AKR-L021` | By design, per `docs/04-references-and-versioning.md` §5: a `part_of` pinned to a superseded plan revision is legal *because* the superseding plan dispositions it, and "without that block it is `AKR-L021`". The fixture omits the block, so both codes are correct. |
-///
-/// Each entry lists the codes a fixture produces **in addition** to its `.expected` file.
-const WAIVED_EXTRA: &[(&str, &[&str])] = &[
-    ("v004-retired-anchor", &["AKR-L031"]),
-    ("v009-observation-no-commit", &["AKR-T001"]),
-    ("v010-evidence-missing-result", &["AKR-T001"]),
-    ("v011-resolved-question-no-resolution", &["AKR-T031"]),
-    ("v017-missing-disposition", &["AKR-L021"]),
-];
+/// for the stage under test, "which is what keeps fixtures isolated to one fault". This
+/// table once carried five waivers found during P3 cross-validation; all five were
+/// resolved at the source — v004 and v011 were re-isolated, V-008 now defers to the
+/// rule that owns a slot (V-009/V-010/V-011), and v017's deliberate two-code pair is
+/// listed in its own `.expected` and documented in `fixtures/README.md` §2. The table
+/// stays so any future non-isolated fixture has a documented, greppable home.
+const WAIVED_EXTRA: &[(&str, &[&str])] = &[];
 
 fn waived_for(fixture: &str) -> Vec<String> {
     WAIVED_EXTRA
