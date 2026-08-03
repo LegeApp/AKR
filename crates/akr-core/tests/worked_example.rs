@@ -28,11 +28,21 @@ fn workspace() -> Workspace {
     load_workspace(&root, &root.join(".akr")).expect("the worked example loads")
 }
 
+/// The build inputs the committed lock and the committed view banners were produced with.
+///
+/// `commit` is C5, the HEAD of the synthetic history in `MANIFEST.md` §4; `built_at` is
+/// the frozen "today" of the same section. Both are *inputs*, not clock readings, so the
+/// build stays a pure function of them (`docs/01-architecture.md` §4).
 fn inputs(base: &BuildInputs) -> BuildInputs {
     BuildInputs {
         tool: "akr 0.1.0".to_owned(),
         grammar: "0.1".to_owned(),
         vocabulary: "0.1".to_owned(),
+        commit: Some(
+            akr_core::model::Commit::new("e806b3f54a2d7091c5e13b8a26f490dc7b135e64")
+                .expect("a frozen commit"),
+        ),
+        built_at: "2026-08-03T09:14:00Z".to_owned(),
         ..base.clone()
     }
 }
@@ -133,12 +143,71 @@ fn the_committed_lock_parses() {
     assert_eq!(lock.build.built_at, "2026-08-03T09:14:00Z");
 }
 
+/// Set `AKR_REGENERATE=1` to rewrite the committed lock from the sources.
+///
+/// The same discipline as the roadmap snapshot: the artefact is build output, pinned by a
+/// test, and regenerating it is a deliberate act that shows up as a diff.
+fn regenerating() -> bool {
+    std::env::var("AKR_REGENERATE").is_ok_and(|v| v == "1")
+}
+
+#[test]
+fn the_committed_lock_is_reproduced_byte_for_byte() {
+    // `akr.lock` is build output (D-014), so it is snapshot-tested exactly like the views.
+    // Every digest in it is real: the source hashes are SHA-256 over raw disk bytes, the
+    // seal hashes over canonical record text, and the source-graph hash over the sorted
+    // pairs — which is why it agrees with the `source-graph:` line of all six view banners.
+    let workspace = workspace();
+    let model = ResolvedModel::build(&workspace.ledger, &inputs(&workspace.inputs));
+    let rendered = model.to_lock().render();
+    let path = example_root().join(".akr/akr.lock");
+
+    if regenerating() {
+        std::fs::write(&path, &rendered).expect("writable");
+        return;
+    }
+
+    let committed = std::fs::read_to_string(&path).expect("the committed lock");
+    if committed != rendered {
+        let first = committed
+            .lines()
+            .zip(rendered.lines())
+            .enumerate()
+            .find(|(_, (a, b))| a != b)
+            .map(|(n, (a, b))| (n + 1, a.to_owned(), b.to_owned()));
+        panic!("akr.lock differs at {first:?}; rerun with AKR_REGENERATE=1 to update");
+    }
+}
+
+#[test]
+fn the_lock_source_graph_matches_every_view_banner() {
+    // `docs/11-projections.md` §4: the source-graph hash is identical across all six views
+    // of one build. It is the same value the lock records, which is what lets a reader
+    // holding a view tell whether it matches the ledger in front of them.
+    let workspace = workspace();
+    let model = ResolvedModel::build(&workspace.ledger, &inputs(&workspace.inputs));
+    let expected = format!("     source-graph: {}", model.source_graph);
+    let generated = example_root().join("docs/generated");
+    for view in [
+        "ROADMAP.md",
+        "CURRENT-STATE.md",
+        "ACTIVE-WORK.md",
+        "REVIEW-REQUIRED.md",
+        "OPEN-QUESTIONS.md",
+        "DECISION-HISTORY.md",
+    ] {
+        let text = std::fs::read_to_string(generated.join(view)).expect("a committed view");
+        assert!(
+            text.lines().nth(1) == Some(expected.as_str()),
+            "{view} banner does not carry the lock's source-graph hash"
+        );
+    }
+}
+
 #[test]
 fn the_computed_lock_agrees_with_the_committed_one() {
-    // The committed lock was written by hand from `spec/schema/akr-lock.md`. Every
-    // resolution, seal and source in it has to be one this resolver computes, and vice
-    // versa. Hashes are excluded: the committed ones are illustrative by declared
-    // convention (§5), and this ledger's real content hashes are computed below.
+    // Structural agreement, asserted separately from the byte snapshot so that a failure
+    // says *what* disagreed rather than only *where*.
     let workspace = workspace();
     let model = ResolvedModel::build(&workspace.ledger, &inputs(&workspace.inputs));
     let computed = model.to_lock();

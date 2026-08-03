@@ -371,6 +371,12 @@ pub struct ResolvedModel<'a> {
     pub vocabulary_version: String,
     /// The source-graph hash over the raw bytes of every source file.
     pub source_graph: ContentHash,
+    /// The `build.built_at` timestamp for the lock, taken from the build inputs.
+    ///
+    /// Informational only, excluded from every comparison, and never read from a clock
+    /// inside the build — it is an input, so two builds with the same inputs still
+    /// produce the same lock (`spec/schema/akr-lock.md` §2.1, §6).
+    pub built_at: String,
     /// The source files, sorted by path.
     pub sources: Vec<SourceFile>,
     /// The head of every key that has one.
@@ -444,6 +450,7 @@ impl<'a> ResolvedModel<'a> {
             grammar_version: inputs.grammar.clone(),
             vocabulary_version: inputs.vocabulary.clone(),
             source_graph,
+            built_at: inputs.built_at.clone(),
             sources,
             heads,
             head_errors,
@@ -570,7 +577,7 @@ impl<'a> ResolvedModel<'a> {
                 vocabulary: self.vocabulary_version.clone(),
                 commit: self.commit.clone(),
                 source_graph: self.source_graph.clone(),
-                built_at: String::new(),
+                built_at: self.built_at.clone(),
             },
             sources: self
                 .sources

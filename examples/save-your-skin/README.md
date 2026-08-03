@@ -29,12 +29,25 @@ MANIFEST.md              frozen inventory, history, and expected outcomes
 README.md                this file
 .akr/
     project.akr          namespaces and defaults
-    akr.lock             head resolutions and content hashes
+    akr.lock             head resolutions and content hashes      [generated]
     records/             the ledger, by namespace and kind group
     archive/             terminal records that still resolve
 docs/generated/          the six views, exactly as `akr build` emits them
 transcripts/             expected output of four commands
 ```
+
+**`akr.lock` and `docs/generated/ROADMAP.md` are real build output.** Both are produced by
+the implementation from the `.akr` sources beside them, and both are pinned by snapshot
+tests that fail on any drift, so neither can be edited by hand without CI noticing. Every
+digest in them is genuine: source hashes over raw disk bytes, seal hashes over canonical
+record text, and one source-graph hash shared by the lock and the banner of all six views.
+
+The remaining five views are still hand-written against `docs/11-projections.md`, awaiting
+their renderers. They carry the same banner values as `ROADMAP.md`, and each will be
+replaced by generated output as its renderer lands.
+
+When the lock needs regenerating — after any change to the records — the procedure is a
+rebuild, never a hand edit, and never a hand-merge of a conflict.
 
 ## The synthetic history
 

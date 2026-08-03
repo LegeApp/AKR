@@ -196,50 +196,57 @@ build {
     grammar "0.1"
     vocabulary "0.1"
     commit git:e806b3f54a2d7091c5e13b8a26f490dc7b135e64
-    source_graph "sha256:18cd53738ba80ab55997a6cf5087debd5b53ebf7845d2eea7f56b7d825c88bd7"
+    source_graph "sha256:5159d2714f688627a85906b161def17b0358155fbfc2a3fc00b681d29a305f55"
     built_at 2026-08-03T09:14:00Z
 }
 
 source ".akr/project.akr" {
-    hash "sha256:52453eaa28a9134f1e073fbe67432628019038154dc1dd48849191fe3ffe4855"
+    hash "sha256:7af283fc0ca469613119b9e146ce111f85f311821939f09e9c44b8de1deaebb9"
     records 0
 }
 
 source ".akr/records/sys/policies.akr" {
-    hash "sha256:ee2557459c2c85d6e29828e260202cf7b6616f11b9624d8b86245a0a2075daec"
+    hash "sha256:335dfe637e083fbccdb4eaf1b4ea51c8d7dc8136f96acc048fd3f41846b37c99"
     records 2
 }
 
 resolution @sys.assessment.projection-gaps/1 {
     slot supported_by
     to @sim.obs.projection-gaps/1
-    hash "sha256:f362ae90e2c22114a1066422f72a189d527f4f9dc60eeb8105c4d784206ad3fe"
+    hash "sha256:bd65a0916647a85e0e30d58d15c8e6a531392d22141ffc9021c80b34dade1a64"
 }
 
 resolution @sys.work.m3-plan/2 {
     slot implements
     to @sys.policy.tandem-work/1
-    hash "sha256:83b7cd31ff8d90e295e68c962aae2c4eca811ca5042e19c64f730ccb758dd914"
+    hash "sha256:2663167b4b66a4ed4b0bf7c20f5edd7f5023234671435307aaf302e86ad8f914"
 }
 
 seal @lege.decision.renderer-boundary/1 {
     state superseded
-    hash "sha256:7c5aa9f31875e8f11fd411ccc69565981e339c90fd91adb61f15586a137c4531"
+    hash "sha256:89c817d141949f9adc59c6f417206d8791c9f10b1572611800897af5ea912258"
 }
 
 seal @sys.policy.tandem-work/1 {
     state active
-    hash "sha256:83b7cd31ff8d90e295e68c962aae2c4eca811ca5042e19c64f730ccb758dd914"
+    hash "sha256:2663167b4b66a4ed4b0bf7c20f5edd7f5023234671435307aaf302e86ad8f914"
 }
 ```
 
-**Illustrative hashes.** Every digest in this design set — here and in
-`examples/save-your-skin/.akr/akr.lock` — is generated as the SHA-256 of the identifier
-string itself (`sha256(".akr/project.akr")`, `sha256("sys.policy.tandem-work/1")`), not
-of any record's content. They are valid, stable, and reproducible from this sentence, and
-they are obviously not real content hashes. A real `akr build` recomputes all of them.
-This convention exists so that the worked example can show the lock's shape without
-inviting anyone to treat a hand-written digest as authoritative.
+**These digests are real.** The excerpt above is copied from
+`examples/save-your-skin/.akr/akr.lock`, which is generated output: every value in it is
+computed by the implementation from the sources beside it. The source hashes are SHA-256
+over raw disk bytes (§3.1), the seal hashes over canonical record text (§3.3), and
+`source_graph` over the sorted pairs (§3.2) — which is why the same `source_graph` value
+appears in the banner of all six generated views (D-025). A snapshot test regenerates the
+file and fails on any drift, so the excerpt and the file cannot diverge.
+
+Note that `@sys.policy.tandem-work/1` shows the same digest in its `seal` entry and in the
+`resolution` that points at it. That is not a coincidence and not an error: both record the
+content hash of the same revision.
+
+The shape examples in §2 above are **not** real digests — they are placeholders chosen to
+be readable, and no build produces them.
 
 ---
 
