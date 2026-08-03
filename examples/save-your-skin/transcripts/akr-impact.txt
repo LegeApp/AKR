@@ -1,0 +1,130 @@
+$ cd examples/save-your-skin
+
+# --- Git mode: what would this range invalidate? --------------------------
+#
+# C4 = 5d9c2a70e31f8b46c07d5924ab6e3f1074c9d285
+# C5 = e806b3f54a2d7091c5e13b8a26f490dc7b135e64  (HEAD)
+
+$ akr impact --git-diff 5d9c2a70..e806b3f5
+
+range 5d9c2a70..e806b3f5, 1 commit
+
+touched paths
+  lege/src/render/**
+  docs/generated/**
+
+watch globs tested: 4 across 4 live empirical records
+
+  "lege/src/render/**"   @lege.obs.frame-budget-headroom/1
+      MATCHED by e806b3f5, but observed_at is e806b3f5 — the observation was
+      made at this commit and already accounts for it. Not newly stale.
+  "sim/src/project/**"   @sim.obs.projection-gaps/1
+      not matched by this range (already stale from 5d9c2a70, unchanged)
+  "sim/src/step.rs"      @sim.obs.timestep-drift/1
+      not matched by this range (already stale by review_after, unchanged)
+  "lege/**"              @lege.obs.viewer-imports-engine/1
+      not evaluated — record is disproven (terminal)
+
+  docs/generated/** matches no watch glob. Generated output should not be
+  watched by anything; if it were, every build would invalidate knowledge.
+
+newly stale:   none
+newly at risk: none
+
+$ echo $?
+0
+
+
+# --- The same, in JSON ----------------------------------------------------
+
+$ akr impact --git-diff 5d9c2a70..e806b3f5 --format json
+{
+  "akr": "0.1",
+  "tool_version": "0.1.0",
+  "command": "impact",
+  "commit": "e806b3f54a2d7091c5e13b8a26f490dc7b135e64",
+  "source_graph_hash": "sha256:14b201b2fd6796229868ebceed99c6a36153cde8d0c4527c8a81af21faa4a817",
+  "ok": true,
+  "exit_code": 0,
+  "diagnostics": [],
+  "result": {
+    "mode": "git_diff",
+    "range": { "from": "5d9c2a70e31f8b46c07d5924ab6e3f1074c9d285",
+               "to":   "e806b3f54a2d7091c5e13b8a26f490dc7b135e64",
+               "commits": 1 },
+    "touched_paths": ["docs/generated/**", "lege/src/render/**"],
+    "newly_stale": [],
+    "newly_at_risk": []
+  }
+}
+
+
+# --- A range that DOES invalidate something -------------------------------
+#
+# C2 = 7c41d0ba92e6f37518a3cd406b5e2f91d8074a63
+# C4 = 5d9c2a70e31f8b46c07d5924ab6e3f1074c9d285
+
+$ akr impact --git-diff 7c41d0ba..5d9c2a70
+
+range 7c41d0ba..5d9c2a70, 2 commits
+
+touched paths
+  lege/src/**
+  sim/src/step.rs
+  sim/src/project/**
+  sim/tests/determinism.rs
+
+newly stale (1)
+  @sim.obs.projection-gaps/1   observation  verified
+      watches "sim/src/project/**" matched by 5d9c2a70
+      observed_at 7c41d0ba, which 5d9c2a70 descends from
+
+newly at risk (2)
+  @sys.assessment.projection-gaps/1   depth 1
+      supported_by -> @sim.obs.projection-gaps/1
+  @sys.policy.tandem-work/1           depth 2
+      supported_by -> @sys.assessment.projection-gaps/1
+                   -> @sim.obs.projection-gaps/1
+
+$ echo $?
+0
+
+# Note the exit status. `akr impact` reports; it does not judge. A range that
+# invalidates three records is information, not a failure.
+
+
+# --- Record mode: what rests on this? -------------------------------------
+
+$ akr impact @sim.obs.projection-gaps
+
+@sim.obs.projection-gaps/1  observation  verified  [STALE]
+
+dependents along supported_by, depends_on, derived_from
+
+  depth 1  @sys.assessment.projection-gaps/1  assessment  verified
+             via supported_by
+  depth 2  @sys.policy.tandem-work/1          policy      active
+             via supported_by -> @sys.assessment.projection-gaps/1
+
+2 dependents, maximum depth 2
+
+# Run before proposing a supersession: this is what you are about to disturb.
+
+$ echo $?
+0
+
+
+# --- A range that is not in the repository --------------------------------
+
+$ akr impact --git-diff deadbeef..HEAD
+
+error[AKR-G013]: unknown revision argument
+  --> --git-diff
+   |
+   = --git-diff: "deadbeef" is not a commit in this repository
+help: AKR takes full 40-hex commits, never abbreviations (D-008)
+
+1 error
+
+$ echo $?
+1

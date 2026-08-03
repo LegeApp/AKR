@@ -1,0 +1,240 @@
+$ cd examples/save-your-skin
+$ akr context --goal sys.milestone.m3-playable-day --paths "sim/src/project/**"
+
+AKR CONTEXT BUNDLE
+goal        sys.milestone.m3-playable-day/1 — M3 — playable day
+commit      e806b3f54a2d7091c5e13b8a26f490dc7b135e64
+paths       sim/src/project/**
+generated   akr 0.1.0, source-graph
+            sha256:14b201b2fd6796229868ebceed99c6a36153cde8d0c4527c8a81af21faa4a817
+
+── 1. GOAL ──────────────────────────────────────────────────────────────────
+
+@sys.milestone.m3-playable-day/1  milestone  active  target 2026-09-30
+
+  A player can start, play and finish one in-game day without a crash, a
+  soft-lock, or a placeholder asset.
+
+  after         @sys.milestone.m2-deterministic-sim/1  (completed)
+  depends_on    @sys.term.playable-day/1
+
+── 2. MILESTONE ─────────────────────────────────────────────────────────────
+
+The goal is itself a milestone. No containing milestone or track.
+
+── 3. WORK ITEMS ────────────────────────────────────────────────────────────
+
+@lege.work.extract-render-graph/1   work  active   part_of @sys.milestone.m3-playable-day
+  Move the render graph behind the frame-snapshot boundary so the viewer
+  builds and tests without the simulator crate, and the snapshot type is the
+  only shared surface.
+  depends_on  @lege.decision.renderer-boundary/2
+  implements  @lege.req.no-engine-types-in-viewer/1
+
+@sim.work.rewrite-projection/1      work  blocked  part_of @sys.milestone.m3-playable-day
+  Rewrite the day-boundary projection so that pending state reconciliation is
+  one path rather than four, and bring coverage on that path up to the
+  steady-state level.
+  BLOCKED BY  @sim.question.timestep-vs-budget/1  (open)
+  depends_on  @sim.obs.projection-gaps/1  [STALE]
+
+@sys.work.m3-audio-pass/1           work  ready    part_of @sys.work.m3-plan/1
+  Ambient audio beds for the four day phases, plus footstep variation on the
+  three surface types in the day-loop scenes.
+  DISPOSITIONED by @sys.work.m3-plan/2: intentionally_dropped
+    "Ambient audio is not part of a playable day as the term defines it. It is
+     not scheduled anywhere and that is deliberate; revisit after M4."
+
+@sys.work.m3-lighting-pass/1        work  ready    part_of @sys.work.m3-plan/1
+  One lighting pass over the day-loop scenes: dawn, noon, dusk and night keys
+  for each of the six interiors.
+  DISPOSITIONED by @sys.work.m3-plan/2: carried_forward into @sys.track.lighting
+    "Lighting is standing work that no milestone contains. Moving it to the
+     track is where it should have been from the start."
+
+  Note: the last two are part_of plan revision 1, which revision 2 superseded.
+  part_of pins to a plan revision, so they are still reachable and are shown
+  with the disposition that governs them. This is the one thing a replan most
+  often loses, and it is why they are here.
+
+── 4. PLAN OF RECORD ────────────────────────────────────────────────────────
+
+@sys.work.m3-plan/2  work  active  plan_of_record @sys.milestone.m3-playable-day
+                                   target 2026-09-15
+
+  Land the renderer boundary first, since the viewer work is unblocked and the
+  sim step is not. Then the sim step rewrite, then the asset audit. Lighting
+  moves to the standing track; ambient audio is dropped from the milestone.
+
+  supersedes  @sys.work.m3-plan/1
+  implements  @sys.policy.tandem-work/1
+
+  disposition @sys.work.m3-audio-pass     intentionally_dropped
+  disposition @sys.work.m3-lighting-pass  carried_forward -> @sys.track.lighting
+
+── 5. NORMATIVE (in scope) ──────────────────────────────────────────────────
+
+@sys.term.playable-day/1            term        active  scope all
+  One in-game day, from the morning wake state to the following morning wake
+  state, played end to end by one player without a crash, a soft-lock, or a
+  placeholder asset.
+  #day-boundary  A day boundary is the morning wake state, not midnight.
+
+@sys.term.tandem-work/1             term        active  scope all
+  An engine change and its matching simulator change, landed in one commit.
+
+@sys.constraint.single-threaded-sim/1  constraint  active  scope path "sim/**"
+  The simulator is single-threaded. The determinism requirement and the target
+  platform's threading model leave no room for a work-stealing scheduler in
+  the tick loop.
+
+@sys.policy.tandem-work/1           policy      active  scope all
+                                                topic tandem-work   [AT RISK]
+  No engine change lands without the matching simulator change in the same
+  commit, except on the tracks listed under exceptions, where the simulator
+  may lag by at most one milestone.
+  #lag-bound     Permitted simulator lag on an excepted track is at most one
+                 milestone, never two.
+  #same-commit   Matching engine and simulator changes ship in one commit.
+  exceptions    @sys.track.lighting/1
+  supported_by  @sys.assessment.projection-gaps/1
+
+@sys.req.deterministic-sim/1        requirement active  scope path "sim/**"
+  Given the same seed and the same input sequence, two runs of the simulator
+  produce byte-identical state at every tick boundary, on any supported
+  platform.
+  verified_by   @sim.evidence.determinism-suite-pass/1
+
+── 6. DEPENDENCIES AND BLOCKERS ─────────────────────────────────────────────
+
+BLOCKERS
+  @sim.question.timestep-vs-budget/1  question  open   depth 1
+    blocks @sim.work.rewrite-projection/1, @sim.decision.timestep-4ms/1
+
+DEPENDENCIES
+  @lege.decision.renderer-boundary/2  decision     active  depth 1
+    via depends_on from @lege.work.extract-render-graph/1
+  @lege.req.no-engine-types-in-viewer/1  requirement active  depth 1
+    via implements from @lege.work.extract-render-graph/1
+  @lege.term.renderer-boundary/1      term         active  depth 2
+    via depends_on from @lege.req.no-engine-types-in-viewer/1
+  @sys.constraint.frame-budget-16ms/1 constraint   active  depth 2
+    via depends_on from @sim.question.timestep-vs-budget/1
+
+  Note: the last one is out of scope by the path test — its scope is
+  path "lege/**", path "sim/src/step.rs" — and is in the bundle anyway because
+  the question blocking this work rests on it. Scope asks what governs the code
+  you are touching; the graph asks what the thing you are touching rests on.
+
+── 7. ACCEPTANCE ────────────────────────────────────────────────────────────
+
+@sys.milestone.m3-playable-day/1  —  1 of 2 satisfied
+
+  [x] full-day-demo            method observation
+      A recorded session shows one complete in-game day, start to finish,
+      with no crash and no soft-lock.
+      SATISFIED by @sys.evidence.playable-day-demo/1
+        result pass, observed_at e806b3f5, which descends from b2e58f14
+        (the last commit that changed this milestone's content)
+
+  [ ] no-placeholder-assets    method command
+      The asset audit reports zero placeholder assets on the day-loop path.
+      command "cargo run -p tools -- audit-assets --path content/day-loop"
+      NOT SATISFIED — no evidence
+
+  This is why M3 is active rather than completed. `akr complete` would fail
+  with AKR-R022 naming no-placeholder-assets.
+
+── 8. OBSERVATIONS ──────────────────────────────────────────────────────────
+
+@sim.obs.projection-gaps/1     observation  verified  [STALE]  observed_at 7c41d0ba
+  Across the projection suite the least-covered paths cluster at the transition
+  from one in-game day to the next: 41 percent line coverage there against 88
+  percent for steady-state paths.
+  scope path "sim/src/project/**"   watches "sim/src/project/**"
+
+@sim.obs.timestep-drift/1      observation  verified  [STALE]  observed_at 5d9c2a70
+  Two runs from the same seed diverge by exactly one tick of accumulated state
+  after roughly seven in-game days.
+  scope path "sim/src/step.rs"      watches "sim/src/step.rs"
+  contradicts @sim.evidence.determinism-suite-pass/1  (acknowledged)
+
+@sys.assessment.m3-readiness/1     assessment  verified  [AT RISK]  as_of e806b3f5
+  Of the M3 acceptance checks, the full-day demo has passed. The remaining
+  check depends on the projection rewrite, which is blocked on an unanswered
+  timestep question.
+  confidence medium   supported_by @sim.obs.timestep-drift/1
+
+@sys.assessment.projection-gaps/1  assessment  verified  [AT RISK]  as_of 5d9c2a70
+  The uncovered day-boundary paths sit on the critical path for M3. On current
+  evidence the rewrite is roughly two weeks of work that has not been
+  scheduled, and the milestone target does not account for it.
+  confidence medium   supported_by @sim.obs.projection-gaps/1
+
+@lege.evidence.boundary-lint-pass/1  evidence  verified  pass  observed_at b2e58f14
+  Zero engine types in public viewer signatures.
+
+@sim.evidence.determinism-suite-pass/1  evidence  verified  pass  observed_at 5d9c2a70
+  512 seeds, 10 000 ticks each, byte-identical state at every tick boundary.
+  The suite runs 10 000 ticks, which is under two in-game days; the drift
+  observed over a week is outside what this sweep covers.
+
+@sys.evidence.playable-day-demo/1  evidence  verified  pass  observed_at e806b3f5
+  One complete in-game day, 41 minutes, start to finish. No crash, no
+  soft-lock. Two placeholder textures visible in the barn interior.
+
+── 9. OPEN QUESTIONS ────────────────────────────────────────────────────────
+
+@sim.question.timestep-vs-budget/1  question  open
+  At 4 ms the simulator runs four steps per rendered frame. Does the resulting
+  per-frame cost fit inside the 16 ms budget on target hardware, with the
+  renderer's share unchanged? Nobody has measured four steps against the budget
+  on the target box.
+  blocks      @sim.decision.timestep-4ms/1, @sim.work.rewrite-projection/1
+  depends_on  @sys.constraint.frame-budget-16ms/1
+
+── 10. CONTRADICTIONS ───────────────────────────────────────────────────────
+
+@sim.evidence.determinism-suite-pass/1  <->  @sim.obs.timestep-drift/1
+  declared by  @sim.obs.timestep-drift/1
+  status       ACKNOWLEDGED (acknowledged true)
+
+  The suite reports byte-identical state; the observation reports a one-tick
+  divergence. Both stand: the suite runs 10 000 ticks and the divergence
+  appears after roughly seven in-game days, which is outside what the sweep
+  covers. Acknowledged rather than resolved, and surfaced here every time.
+
+── 11. STALENESS ────────────────────────────────────────────────────────────
+
+STALE (2)
+  @sim.obs.projection-gaps/1
+      watches "sim/src/project/**" matched by 5d9c2a70; observed_at 7c41d0ba
+  @sim.obs.timestep-drift/1
+      review_after 2026-07-15 passed
+
+AT RISK (3)
+  @sys.assessment.m3-readiness/1      depth 1
+      supported_by -> @sim.obs.timestep-drift/1
+  @sys.assessment.projection-gaps/1   depth 1
+      supported_by -> @sim.obs.projection-gaps/1
+  @sys.policy.tandem-work/1           depth 2
+      supported_by -> @sys.assessment.projection-gaps/1
+                   -> @sim.obs.projection-gaps/1
+
+  These are warnings, not diagnostics. No record above has been changed and
+  none has been declared false (D-003, D-024).
+
+── EXCLUDED ─────────────────────────────────────────────────────────────────
+  superseded revisions   2   @sys.work.m3-plan/1,
+                             @lege.decision.renderer-boundary/1
+  archived               1   @sys.policy.weekly-demo/1
+  terminal               4   @sys.milestone.m1-walking-skeleton/1,
+                             @sys.milestone.m2-deterministic-sim/1,
+                             @lege.obs.viewer-imports-engine/1,
+                             @lege.question.text-rendering-owner/1
+  out of scope          12
+
+23 records, 11 sections, ~5 100 tokens. No prose truncated.
+
+$ echo $?
+0

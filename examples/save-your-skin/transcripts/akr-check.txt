@@ -1,0 +1,141 @@
+$ cd examples/save-your-skin
+$ akr check
+
+akr check — save-your-skin
+  40 records, 42 revisions, 26 files
+  commit e806b3f5, grammar 0.1, vocabulary 0.1, today 2026-08-03
+
+  stage A  parse          42 revisions       ok
+  stage B  type-check     42 revisions       ok
+  stage C  link           50 references      ok
+  stage D  resolve        40 heads           ok
+
+  resolve detail
+    heads                        35 live, 5 resolved by supersession chain
+    supersession chains           2 (lege.decision.renderer-boundary,
+                                     sys.work.m3-plan)
+    dispositions checked          2 unfinished children, 2 dispositioned
+    topics                        5 on live records, no overlapping pair
+    plan_of_record                1 live, 1 superseded
+    acceptance                    8 checks, 3 satisfied
+    sealed revisions             39 hashed, 39 match akr.lock
+    contradictions                1 declared, 1 acknowledged
+
+  build facts (not diagnostics):
+    2 records stale, 3 at risk — see `akr review-queue`
+
+no diagnostics
+
+$ echo $?
+0
+
+
+# --- The same run in JSON -------------------------------------------------
+
+$ akr check --format json
+{
+  "akr": "0.1",
+  "tool_version": "0.1.0",
+  "command": "check",
+  "commit": "e806b3f54a2d7091c5e13b8a26f490dc7b135e64",
+  "source_graph_hash": "sha256:14b201b2fd6796229868ebceed99c6a36153cde8d0c4527c8a81af21faa4a817",
+  "ok": true,
+  "exit_code": 0,
+  "diagnostics": [],
+  "result": {
+    "records": 40,
+    "revisions": 42,
+    "files": 26,
+    "references": 50,
+    "heads": 40,
+    "checks": { "total": 8, "satisfied": 3 },
+    "stale": 2,
+    "at_risk": 3
+  }
+}
+
+$ echo $?
+0
+
+
+# --- Why exit 0 with a non-empty review queue -----------------------------
+#
+# Staleness is a BUILD FACT, not a diagnostic (D-024). It carries no AKR-* code,
+# never enters the diagnostic stream, and never changes an exit status. The
+# ledger is valid; two of its observations have aged. Those are different
+# statements and the tool keeps them apart.
+#
+# Projects that want a hard gate opt in:
+
+$ akr check --review-clean
+
+error[AKR-G041]: review queue is not empty
+  --> .akr/records/sim/observations.akr:4:1
+   |
+ 4 | record sim.obs.projection-gaps/1 : observation {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ stale: watches
+   |                                                "sim/src/project/**"
+   |                                                matched by 5d9c2a70
+   |
+note: review queue holds 2 stale and 1 at-risk record at depth 1, 2 further at
+      depth 2
+help: run `akr review-queue` for the full list, or drop --review-clean
+
+1 error
+
+$ echo $?
+1
+
+
+# --- The views gate, which IS the CI gate ---------------------------------
+
+$ akr check --views-current
+
+akr check — save-your-skin
+  40 records, 42 revisions, 26 files
+  commit e806b3f5, grammar 0.1, vocabulary 0.1, today 2026-08-03
+
+  stages A-D                                 ok
+  stage F  emit (in memory)   6 views        ok
+    ROADMAP.md               current
+    CURRENT-STATE.md         current
+    ACTIVE-WORK.md           current
+    REVIEW-REQUIRED.md       current
+    OPEN-QUESTIONS.md        current
+    DECISION-HISTORY.md      current
+
+no diagnostics
+
+$ echo $?
+0
+
+
+# --- What a hand edit looks like ------------------------------------------
+
+$ sed -i '48s/`active`/`nearly done`/' docs/generated/ROADMAP.md
+$ akr check --views-current
+
+error[AKR-E011]: generated view is out of date
+  --> docs/generated/ROADMAP.md:48:1
+   |
+48 | `nearly done` · `@sys.milestone.m3-playable-day/1` · target 2026-09-30
+   | ^^^^^^^^^^^^ this line differs from the emitted view
+   |
+note: 1 differing line; the emitted line is
+      "`active` · `@sys.milestone.m3-playable-day/1` · target 2026-09-30 ..."
+note: the banner records source-graph
+      sha256:14b201b2fd6796229868ebceed99c6a36153cde8d0c4527c8a81af21faa4a817,
+      which matches the current sources, so this is a hand edit rather than a
+      stale build
+help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views
+
+1 error
+
+$ echo $?
+1
+
+$ git checkout docs/generated/ROADMAP.md
+$ akr check --views-current
+no diagnostics
+$ echo $?
+0

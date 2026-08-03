@@ -1,0 +1,728 @@
+# 07 — Command Line Interface
+
+The complete `akr` command surface: invocation model, global flags, exit codes, the
+write pipeline, per-command reference, JSON output, and CI recipes.
+
+Normative for command names, flag names, exit codes, the write pipeline's atomicity
+guarantee, and the JSON envelope. Output text shown below is illustrative in wording and
+normative in *content*: every field shown is present, and no command prints information
+this document does not describe.
+
+---
+
+## 1. Invocation model
+
+```
+akr [GLOBAL FLAGS] <command> [COMMAND FLAGS] [ARGUMENTS]
+```
+
+One binary, no daemon, no server, no state outside the workspace. Every command:
+
+1. Locates the workspace by walking up from `--dir` (default: the current directory)
+   until it finds a `.akr/` directory. Not found is `AKR-C011`, exit 3.
+2. Reads `.akr/project.akr` for namespaces and defaults. Missing is `AKR-C012`, exit 3.
+3. Runs whatever part of the pipeline it needs
+   ([`06-compiler-pipeline.md`](06-compiler-pipeline.md) §1) and then does its work.
+
+Commands divide into four groups, and the division is worth internalising:
+
+| Group | Commands | Pipeline | Writes |
+| --- | --- | --- | --- |
+| **Read** | `get`, `search`, `context`, `impact`, `why-current`, `review-queue`, `view`, `explain` | A–E | nothing |
+| **Verify** | `check`, `fmt --check` | A–D (+F in memory) | nothing |
+| **Build** | `build`, `fmt`, `lock` | A–F | cache, views, lock, formatted sources |
+| **Write** | `propose`, `revise`, `supersede`, `complete`, `abandon`, `evidence add`, `import`, `init` | A–D, then write | `.akr` source files |
+
+Only the write group touches `.akr/records/`. `akr build` never does (D-003).
+
+## 2. Global flags
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--dir <path>` | `.` | Where to start looking for the workspace. |
+| `--strict` | **on** | Warnings are errors. The default profile (D-013). |
+| `--lenient` | off | Warnings stay warnings. Intended for `akr import` on legacy material and nothing else. Combining it with `--strict` is `AKR-C005`. |
+| `--format text\|json` | `text` | Output form. `json` is a stable envelope (§5); `text` is for humans and may be reworded between versions. |
+| `--at <commit>` | `HEAD` | Resolve the build against this commit instead of HEAD. Changes staleness, acceptance descendancy, and the banner. Unknown commit is `AKR-G013`. Combining it with `--git-diff` is `AKR-C005`. |
+| `--today <date>` | the system date | The date used for `review_after` comparisons. Exists so that tests and the worked example are reproducible; it is the only clock input to the build. |
+| `--no-color` | auto | Disable ANSI colour. Also disabled when stdout is not a terminal. |
+| `--no-rebuild` | off | Fail rather than rebuild the index. For read-only checkouts. Raises `AKR-I031` when a rebuild would be needed. |
+| `--quiet` | off | Suppress progress lines; diagnostics and command output still print. |
+| `--version`, `--help` | | Print and exit 0. |
+
+An unknown flag is `AKR-C002`; an unknown command is `AKR-C001`; a missing required
+argument is `AKR-C003`; a bad flag value is `AKR-C004`. All four exit 2.
+
+## 3. Exit codes
+
+| Code | Meaning | When |
+| --- | --- | --- |
+| **0** | Success | The command did what it was asked. Includes a `check` that found only build facts such as staleness. |
+| **1** | Diagnostics | One or more `AKR-*` diagnostics of effective severity `error` were produced. Under `--strict` that includes warnings. |
+| **2** | Usage | The invocation was malformed: `AKR-C001`–`AKR-C005`, `AKR-C041`. Nothing was read and nothing was written. |
+| **3** | Environment | The workspace or repository is unusable: `AKR-C011`, `AKR-C012`, `AKR-G001`, `AKR-G003`, `AKR-I003`. Not a ledger problem. |
+
+The distinction between 1 and 3 is what makes CI logs readable: exit 1 means *fix the
+ledger*, exit 3 means *fix the checkout*.
+
+**Staleness never changes an exit code** (D-024). A project with two stale records and
+three at-risk records exits 0 from `akr check`. The opt-in gate is `--review-clean`,
+which raises `AKR-G041` and exits 1.
+
+## 4. The write pipeline
+
+Every command in the write group performs exactly this sequence, and none of them
+performs a partial version of it:
+
+```
+   1. parse        the current ledger                    (stage A)
+   2. apply        the requested change, in memory
+   3. validate     the RESULTING ledger                  (stages A-D)
+   4. format       every touched record canonically      (D-012)
+   5. write        touched files, atomically
+```
+
+Consequences, all of them load-bearing:
+
+- **Validation is of the result, not the change.** Adding a record that creates a cycle
+  fails, even though the record itself is well formed.
+- **Failure writes nothing.** If step 3 produces any diagnostic of effective severity
+  error, the command reports them, raises `AKR-C031`, exits 1, and leaves the working
+  tree byte-identical to how it found it. There is no partial write and no `.bak` file.
+- **Every write is canonically formatted**, so a written record and a hand-written one
+  are indistinguishable, and `akr fmt` on a freshly written ledger is a no-op.
+- **Writes are per-file atomic**: write to a temporary file in the same directory, fsync,
+  rename. A crash leaves either the old file or the new one.
+- **Sealed revisions are refused up front.** Attempting to modify a non-`proposed`
+  revision is `AKR-C032`, with the fix named in the message (`akr revise`). The
+  build-time equivalent is `AKR-R051` (D-015). Attempting to write a revision that is not
+  the head is `AKR-C033`.
+- **Nothing is staged or committed.** The tool never runs `git add`. What to commit and
+  when is the operator's decision.
+
+## 5. JSON output
+
+`--format json` prints exactly one JSON document to stdout, with this envelope:
+
+```json
+{
+  "akr": "0.1",
+  "tool_version": "0.1.0",
+  "command": "check",
+  "commit": "e806b3f54a2d7091c5e13b8a26f490dc7b135e64",
+  "source_graph_hash": "sha256:4d1f8a0c93b7e256a1c4f0d8b39e6725c081af43d2e97b6051fc3a8d7e204b19",
+  "ok": true,
+  "exit_code": 0,
+  "diagnostics": [],
+  "result": { }
+}
+```
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `akr` | string | Envelope version. Bumped only on a breaking change to the envelope. |
+| `tool_version` | string | Semver of the binary. |
+| `command` | string | The command as invoked, with subcommand: `"evidence add"`. |
+| `commit` | string | 40 hex, the commit the build resolved against. |
+| `source_graph_hash` | string | `sha256:` + 64 hex. |
+| `ok` | boolean | `exit_code == 0`. |
+| `exit_code` | integer | Mirrors the process exit status. |
+| `diagnostics` | array | See below. Present and empty on success. |
+| `result` | object | Command-specific; documented per command. |
+
+A diagnostic object:
+
+```json
+{
+  "code": "AKR-R001",
+  "severity": "error",
+  "stage": "resolve",
+  "rule": "V-012",
+  "message": "two live revisions of one key",
+  "path": ".akr/records/sys/work.akr",
+  "line": 48, "column": 1,
+  "key": "sys.work.m3-plan", "rev": 2,
+  "notes": [ { "message": "revision 1 is also active", "line": 12, "column": 1 } ],
+  "help": "supersede revision 1, or withdraw it (see V-012)"
+}
+```
+
+Rules for JSON output, which exist so that a script can rely on it:
+
+- Object keys are emitted in a fixed order; arrays follow the ordering guarantees of
+  [`06-compiler-pipeline.md`](06-compiler-pipeline.md) §11.
+- Nothing is written to stdout except the document. Progress lines go to stderr, and
+  `--quiet` silences them.
+- Diagnostics appear in `diagnostics` **and** are not duplicated in `result`.
+- `fmt` and `init` have no JSON form: their output is a file-system effect, not data.
+  Requesting one is `AKR-C041`, exit 2.
+
+---
+
+## 6. Command reference
+
+### `akr init`
+
+```
+akr init [--dir <path>] [--project <name>] [--namespace <name> ...]
+```
+
+Creates `.akr/project.akr`, `.akr/records/`, `.akr/archive/`, an `AGENTS.md` stub
+([`08-mcp.md`](08-mcp.md) §8), and `.gitignore` entries for `.akr/cache/` and
+`.agent/scratch/`.
+
+An existing `.akr/` is `AKR-C013`; `akr init` never overwrites. A project name outside
+key-segment form is `AKR-C023`.
+
+```
+$ akr init --project save-your-skin --namespace sys --namespace sim --namespace lege
+created .akr/project.akr
+created .akr/records/, .akr/archive/
+created AGENTS.md
+appended 2 entries to .gitignore
+```
+
+Exit 0, or 1 on `AKR-C013`/`AKR-C023`, or 3 if the directory is unwritable.
+
+---
+
+### `akr fmt`
+
+```
+akr fmt [--check] [<path> ...]
+```
+
+Parses each `.akr` file and re-emits it in canonical form (D-012): canonical slot order,
+four-space indentation, arrays on one line under 96 columns and one element per line
+above it, prose blocks dedented and re-indented, comments preserved with their D-006
+attachment, exactly one blank line between records and none within them.
+
+With no paths, formats every `.akr` file in the workspace including `akr.lock`. With
+`--check`, writes nothing and reports differences as `AKR-F` diagnostics, exiting 1 if
+any. `--format json` is `AKR-C041`.
+
+```
+$ akr fmt --check
+error[AKR-F001]: file is not canonically formatted
+  --> .akr/records/sim/work.akr:23:5
+   |
+23 |     state blocked
+   |     ^^^^^^^^^^^^^ slot `state` must precede `intent`
+   |
+help: run `akr fmt`
+1 file needs formatting
+```
+
+Exit 0 if clean, 1 if differences (with `--check`) or a parse error.
+
+---
+
+### `akr check`
+
+```
+akr check [--review-clean] [--views-current] [--at <commit>] [--today <date>]
+```
+
+Runs stages A–D and reports every diagnostic. This is the command CI runs.
+
+| Flag | Effect |
+| --- | --- |
+| `--review-clean` | Additionally fail if the review queue is non-empty: `AKR-G041`, exit 1. Opt-in, because staleness is a build fact and not a defect (D-024). |
+| `--views-current` | Additionally run stage F in memory and compare against the committed views: `AKR-E011` (differs), `AKR-E012` (missing), `AKR-E013` (bad banner), `AKR-E014` (unexpected file). This is the D-025 gate. |
+
+```
+$ akr check
+akr check — save-your-skin
+  40 records, 42 revisions, 19 files
+  commit e806b3f5, grammar 0.1, vocabulary 0.1
+
+  stage A  parse         42 revisions        ok
+  stage B  type-check    42 revisions        ok
+  stage C  link          118 references      ok
+  stage D  resolve       40 heads            ok
+
+  build facts (not diagnostics):
+    2 records stale, 3 at risk — see `akr review-queue`
+
+no diagnostics
+```
+
+Exit 0. With diagnostics:
+
+```
+$ akr check
+error[AKR-R014]: superseding plan does not dispose of an unfinished child
+  --> .akr/records/sys/work.akr:61:1
+   |
+61 | record sys.work.m3-plan/2 : work {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ supersedes @sys.work.m3-plan/1
+   |
+note: @sys.work.m3-audio-pass is part_of the superseded plan and is in state `ready`
+  --> .akr/records/sys/work.akr:96:1
+help: add a `disposition @sys.work.m3-audio-pass { outcome ... }` block (see V-017)
+
+1 error
+```
+
+Exit 1.
+
+---
+
+### `akr build`
+
+```
+akr build [--at <commit>] [--today <date>]
+```
+
+Runs stages A–F: everything `akr check` does, then the index, then the views, then
+`akr.lock`. The exact sequence is [`06-compiler-pipeline.md`](06-compiler-pipeline.md)
+§13. Only files whose bytes change are rewritten, so a no-op build produces no diff.
+
+```
+$ akr build
+parsed 42 revisions in 19 files
+resolved 40 heads, 2 superseded revisions
+2 stale records, 3 at risk (see akr review-queue)
+wrote .akr/cache/index.sqlite
+wrote docs/generated/ (6 views, 2 changed)
+akr.lock unchanged
+```
+
+Exit 0, or 1 on any diagnostic — in which case nothing is written, because the pipeline
+halts at the failing stage boundary.
+
+---
+
+### `akr view`
+
+```
+akr view <name> [--format text|json]
+```
+
+Renders one view to stdout without writing it. `<name>` is a catalogue name from
+[`11-projections.md`](11-projections.md) §2, case-insensitively and with or without the
+`.md` suffix: `roadmap`, `current-state`, `active-work`, `review-required`,
+`open-questions`, `decision-history`. Anything else is `AKR-E003`.
+
+Text output is the exact bytes `akr build` would write, banner included, which makes
+`akr view roadmap | diff - docs/generated/ROADMAP.md` a hand-rollable version of
+`--views-current`. JSON output is the view's model — sections and rows — before
+rendering.
+
+---
+
+### `akr get`
+
+```
+akr get <ref> [--rev <n>] [--history] [--relations] [--format text|json]
+```
+
+Retrieves one record. `<ref>` is any of the four forms of D-009. With no revision, the
+current head. `--history` lists every revision with its state and supersession edges;
+`--relations` adds inbound edges, which are not visible in the source text.
+
+```
+$ akr get @sys.policy.tandem-work
+sys.policy.tandem-work/1 : policy    state active    head
+  title    Engine and simulator advance in tandem
+  scope    all
+  topic    tandem-work
+  freshness  at_risk (depth 2, via @sys.assessment.projection-gaps
+                                -> @sim.obs.projection-gaps)
+
+  rule
+    No engine change lands without the matching simulator change in the
+    same commit, except on the tracks listed under exceptions.
+
+  claims
+    #lag-bound     Permitted simulator lag is at most one milestone.
+    #same-commit   Matching changes ship in one commit.
+
+  relations (outbound)
+    exceptions     -> @sys.track.lighting/1
+    supported_by   -> @sys.assessment.projection-gaps/1
+  relations (inbound)
+    implements     <- @sys.decision.view-generation/1
+```
+
+Exit 0, or 1 if the reference does not resolve.
+
+---
+
+### `akr search`
+
+```
+akr search <query> [--kind <kind> ...] [--state <state> ...] [--limit <n>]
+```
+
+Full-text search over live revisions (`records_fts`), ranked by BM25 and then by key.
+Filters are applied *before* ranking.
+
+**Search ranks; it never authorises.** Nothing enters a context bundle because it matched
+a query ([`09-context-assembly.md`](09-context-assembly.md) §1). `akr search` is a
+navigation aid for a human or an agent that already knows roughly what it is looking for.
+
+```
+$ akr search "frame budget" --kind constraint --kind observation
+  0.91  sys.constraint.frame-budget-16ms/1  constraint  active    16 ms frame budget at p99
+  0.74  lege.obs.frame-budget-headroom/1    observation verified  p99 frame time is 11.4 ms
+2 results
+```
+
+A malformed query is `AKR-X031`; an unavailable backend is `AKR-X032`; a cache built
+without FTS5 is `AKR-I022`. Exit 0 even with zero results — an empty result set is an
+answer.
+
+---
+
+### `akr context`
+
+```
+akr context --goal <key> [--paths <glob> ...] [--budget <tokens>]
+            [--format text|json]
+```
+
+Assembles the deterministic context bundle specified in
+[`09-context-assembly.md`](09-context-assembly.md). The `--goal` must be a live
+`milestone`, `work` or `track` record: unresolvable is `AKR-X001`, terminal is
+`AKR-X002`, wrong kind is `AKR-X003`. A malformed `--paths` glob is `AKR-X011`; one that
+matches nothing is `AKR-X012` (warning). A budget too small for the mandatory sections is
+`AKR-X021`; prose truncation is `AKR-X022` (warning).
+
+This is the single most important command for agent use, and the one an agent should
+call first in any session. A full worked bundle is in `09-context-assembly.md` §7 and in
+[`../examples/save-your-skin/transcripts/akr-context.txt`](../examples/save-your-skin/transcripts/akr-context.txt).
+
+---
+
+### `akr impact`
+
+```
+akr impact <ref> | --git-diff <A>..<B> [--depth <n>] [--format text|json]
+```
+
+Two modes.
+
+**Record mode** — `akr impact @key` — reports what depends on a record: the reverse
+closure along `supported_by`, `depends_on` and `derived_from`, with the path and depth of
+each dependent. Answers "what breaks if I supersede this?".
+
+**Git mode** — `akr impact --git-diff C4..C5` — reports what a *commit range* would make
+stale: which `watches` globs the range's touched paths match, which records own them, and
+what propagates from there. Answers "what does this branch invalidate?", which makes it
+the natural pre-commit and pre-merge hook
+([`10-freshness-and-git.md`](10-freshness-and-git.md) §6).
+
+```
+$ akr impact --git-diff C4..C5
+range 5d9c2a70..e806b3f5, 1 commit, 2 touched path groups
+  lege/src/render/**    matches watches of:
+    lege.obs.frame-budget-headroom/1   observed_at e806b3f5 — already current
+  docs/generated/**     matches no watches
+
+newly stale: none
+newly at risk: none
+```
+
+An unknown revision on either side of `..` is `AKR-G013`. Combining `--git-diff` with
+`--at` is `AKR-C005`. Exit 0; `impact` reports, it does not judge.
+
+---
+
+### `akr why-current`
+
+```
+akr why-current <ref> [--format text|json]
+```
+
+Explains, mechanically, why the tool considers a record's head to be the head and its
+freshness to be what it is. Prints the supersession chain, the head-resolution verdict,
+the lock entry, the freshness derivation with the deciding commit or date, and the
+propagation path if the record is at risk.
+
+```
+$ akr why-current @sys.assessment.projection-gaps
+sys.assessment.projection-gaps — head is revision 1
+
+  head resolution
+    revision 1  verified   LIVE      -> head
+    (no other revisions)
+    lock: resolved to /1, hash sha256:9c02… (sealed, matches)
+
+  freshness
+    not stale: no `watches` globs, no `review_after`
+    AT RISK (depth 1)
+      @sim.obs.projection-gaps/1 is stale
+        cause: watches "sim/src/project/**" matched by 5d9c2a70
+        observed_at 7c41d0ba, which 5d9c2a70 descends from
+      propagated via: supported_by
+```
+
+This command exists because "why does the tool think that?" is the question a knowledge
+system must always be able to answer. Exit 0, or 1 if the reference does not resolve.
+
+---
+
+### `akr explain`
+
+```
+akr explain <code> | <rule>
+```
+
+Prints the registry entry for a diagnostic code (`akr explain AKR-R014`) or the rule
+catalogue entry for a validation rule (`akr explain V-017`): title, severity, stage, the
+rule it enforces or the code it raises, the message template, cause, fix, and a minimal
+reproducing source.
+
+Needs no workspace: it reads only the compiled-in registries. Exit 0, or 2 if the
+argument is neither a registered code nor a known rule.
+
+---
+
+### `akr propose`
+
+```
+akr propose <key> --kind <kind> [--title <text>] [--from <file>] [--edit]
+```
+
+Creates revision 1 of a new key in the initial state of its class — `proposed` for
+normative and planning kinds, `open` for `question`, `verified` for empirical kinds,
+which have no proposal state. Writes into the conventional file for the key's namespace
+and kind group, creating it if needed.
+
+An existing key is an error: use `akr revise`. An undeclared namespace is `AKR-L004`.
+The write pipeline of §4 applies in full, so a proposal that would break the ledger is
+refused and nothing is written (`AKR-C031`).
+
+---
+
+### `akr revise`
+
+```
+akr revise <key> [--from <file>] [--edit] [--state <state>]
+```
+
+Creates revision *n+1* of an existing key by copying the head and applying edits.
+Revision *n* is left exactly as it is; if it was sealed, its content hash still matches.
+This is the only way to change a settled record (D-015), and `AKR-C032` names it when
+someone tries the other way.
+
+`--state` moves the new revision along its class's lifecycle. An illegal transition is
+`AKR-T011` (V-007).
+
+---
+
+### `akr supersede`
+
+```
+akr supersede <old-key> --with <new-key> [--disposition <child>=<outcome>[:<into>] ...]
+```
+
+Creates or updates the superseding record with a `supersedes` edge, moves the old head
+to `superseded`, and — for planning records — requires a `disposition` block for every
+unfinished `part_of` child of the old record (D-017).
+
+The command **lists the children it needs a disposition for and refuses to write until
+each has one**. This is the single most valuable interaction in the tool: it is the
+moment the author knows the answer and the only moment anyone will ever ask.
+
+```
+$ akr supersede sys.work.m3-plan --with sys.work.m3-plan
+error[AKR-R014]: superseding plan does not dispose of an unfinished child
+  2 unfinished children of @sys.work.m3-plan/1:
+    @sys.work.m3-lighting-pass   ready
+    @sys.work.m3-audio-pass      ready
+help: rerun with, for example,
+  --disposition sys.work.m3-lighting-pass=carried_forward:sys.track.lighting
+  --disposition sys.work.m3-audio-pass=intentionally_dropped
+nothing written
+```
+
+Exit 1, working tree untouched.
+
+---
+
+### `akr complete`
+
+```
+akr complete <key> [--check <id>=<evidence-ref> ...]
+```
+
+Moves a `milestone` or `work` record to `completed`. Every acceptance check must be
+satisfied by evidence with `result pass` whose `observed_at` commit descends from the
+last commit that changed the record's content (D-016). An unsatisfied check is
+`AKR-R022` (V-020) and nothing is written.
+
+```
+$ akr complete sys.milestone.m3-playable-day
+error[AKR-R022]: acceptance check is not satisfied
+  --> .akr/records/sys/milestones.akr:74:9
+   |
+74 |         check no-placeholder-assets {
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ no evidence with result `pass`
+   |
+help: run the check and record it with
+  `akr evidence add sys.evidence.asset-audit --result pass --method command`
+  then `akr complete sys.milestone.m3-playable-day
+        --check no-placeholder-assets=@sys.evidence.asset-audit/1`
+nothing written
+```
+
+---
+
+### `akr abandon`
+
+```
+akr abandon <key> --reason <text> [--disposition <child>=<outcome>[:<into>] ...]
+```
+
+Moves a planning record to `abandoned`. Like `supersede`, it demands a disposition for
+every unfinished child — abandoning a plan silently is exactly the failure D-017 exists
+to prevent. `--reason` is required and lands in a `note`.
+
+Nothing is deleted; the record stays, terminal, and its references keep resolving.
+
+---
+
+### `akr evidence add`
+
+```
+akr evidence add <key> --result pass|fail|inconclusive
+                       --method manual|command|observation
+                       [--command <text>] [--artifact <path>] [--summary <text>]
+                       [--observed-at <commit>]
+```
+
+Creates an `evidence` record. `--observed-at` defaults to HEAD; a commit not in the
+repository is `AKR-G011`.
+
+The command deliberately offers **no** flag for "what this verifies". Evidence never
+declares what it verifies (D-016); the link is authored on the check, with
+`verified_by [ @key/n ]`, or supplied to `akr complete --check`. The absence of the flag
+is the enforcement of the one-directional rule at the ergonomic level, where it matters.
+
+---
+
+### `akr review-queue`
+
+```
+akr review-queue [--stale-only] [--at-risk-only] [--kind <kind> ...]
+                 [--format text|json]
+```
+
+Lists everything the build flagged: stale records first with their cause, then at-risk
+records ordered by propagation depth, then key
+([`10-freshness-and-git.md`](10-freshness-and-git.md) §7). This is the human-facing half
+of the freshness model; `REVIEW-REQUIRED.md` is the committed half.
+
+**Exit 0 regardless of queue length.** A non-empty queue is normal and healthy — it means
+the project is moving and the ledger noticed. Projects that want a gate use
+`akr check --review-clean`.
+
+---
+
+### `akr import`
+
+```
+akr import <path> [--namespace <ns>] [--tracking <key>] [--lenient] [--dry-run]
+```
+
+Reads a legacy document, proposes records for the durable claims in it, attaches a
+`source { kind legacy … }` block with an excerpt to each, and creates or updates the
+tracking `work` record whose acceptance checks enumerate the claims (D-022). Everything
+lands in `proposed` state for review (`AKR-M042` if not).
+
+`--lenient` is the one place warnings are downgraded, and it is per-invocation: without
+it, an import that produced warnings fails with `AKR-M041` and writes nothing. A missing
+source is `AKR-M001`; an unimportable format is `AKR-M002`; a colliding key is
+`AKR-M012`; an undeclared namespace is `AKR-M013`.
+
+Full workflow, boundaries, and a worked example: [`12-migration.md`](12-migration.md).
+
+---
+
+### `akr lock`
+
+```
+akr lock [--check] [--update]
+```
+
+`--check` recomputes what `akr.lock` should contain and reports drift without writing:
+a sealed revision whose hash no longer matches is `AKR-R051`, a head resolution absent
+from an otherwise-current lock is `AKR-R052`. `--update` rewrites the lock from the
+current build, which is also what step 11 of `akr build` does.
+
+The lock is written in AKR syntax with an `akr-lock 0.1` header and is committed
+(D-014). Its schema is [`../spec/schema/akr-lock.md`](../spec/schema/akr-lock.md).
+
+---
+
+## 7. CI recipes
+
+### The gate
+
+One command, and it is the whole story:
+
+```yaml
+- name: AKR
+  run: |
+    akr check --views-current
+```
+
+`akr check` fails on any diagnostic. `--views-current` additionally fails if
+`docs/generated/` was hand-edited or was not rebuilt after a ledger change, which is what
+gives `sys.policy.no-hand-edited-views` force rather than good intentions (D-025).
+
+Note what is **not** in the gate: `--review-clean`. Staleness is a build fact, and a
+project whose CI fails because knowledge aged will delete the knowledge rather than
+review it.
+
+### Reporting, without gating
+
+```yaml
+- name: AKR review queue
+  if: always()
+  run: akr review-queue --format json > akr-review.json
+```
+
+Exit 0 regardless of contents; post it as a PR comment or a job summary.
+
+### Pre-commit
+
+```bash
+#!/bin/sh
+# .git/hooks/pre-commit
+akr fmt --check || exit 1
+akr check       || exit 1
+akr impact --git-diff HEAD..  # informational; never fails the commit
+```
+
+`akr impact` on the staged range tells the author which observations their change is
+about to invalidate, at the one moment they are equipped to fix it.
+
+### Nightly
+
+```bash
+akr check --review-clean --format json > queue.json || true
+```
+
+`review_after` dates pass with the calendar rather than with commits, so a nightly job is
+the only thing that notices them promptly. Run it as a notification, not a gate.
+
+### Release
+
+```bash
+akr build
+akr lock --check
+git diff --exit-code docs/generated/ akr.lock
+```
+
+Together these assert that the committed views and lock are exactly what the current
+sources produce.
+
+---
+
+Next: [`08-mcp.md`](08-mcp.md) for the agent-facing form of these commands,
+[`09-context-assembly.md`](09-context-assembly.md) for what `akr context` computes, or
+[`../examples/save-your-skin/transcripts/`](../examples/save-your-skin/transcripts/) for
+real output from a real ledger.
