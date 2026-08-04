@@ -479,17 +479,28 @@ fn a_hand_edit_fails_with_e011_naming_the_file_and_the_first_differing_line() {
         .zip(edited.lines())
         .position(|(a, b)| a != b)
         .expect("a differing line");
-    let note = diagnostic.notes.first().expect("a note");
-    let text = note.message.as_deref().expect("note text");
+    // One note per side, so neither line has to share a row with the other: a generated
+    // view's lines are long, and a single note holding both is unreadable in a terminal.
+    let notes: Vec<&str> = diagnostic
+        .notes
+        .iter()
+        .filter_map(|note| note.message.as_deref())
+        .collect();
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    for note in &notes {
+        assert!(
+            note.starts_with(&format!("line {expected_line} ")),
+            "{note}"
+        );
+    }
     assert!(
-        text.starts_with(&format!("line {expected_line}: ")),
-        "{text}"
+        notes[0].contains("nearly done"),
+        "quotes the committed line: {notes:?}"
     );
     assert!(
-        text.contains("nearly done"),
-        "quotes the committed line: {text}"
+        notes[1].contains("`active`"),
+        "quotes the emitted line: {notes:?}"
     );
-    assert!(text.contains("`active`"), "quotes the emitted line: {text}");
 
     assert!(
         diagnostic

@@ -171,6 +171,7 @@ impl View {
 pub struct Freshness {
     stale: BTreeSet<RevisionId>,
     at_risk: BTreeMap<RevisionId, AtRisk>,
+    causes: BTreeMap<RevisionId, crate::freshness::StaleCause>,
 }
 
 impl Freshness {
@@ -187,13 +188,36 @@ impl Freshness {
             .into_iter()
             .map(|entry| (entry.id.clone(), entry))
             .collect();
-        Self { stale, at_risk }
+        Self {
+            stale,
+            at_risk,
+            causes: BTreeMap::new(),
+        }
     }
 
     /// Whether a revision is stale in its own right.
     #[must_use]
     pub fn is_stale(&self, id: &RevisionId) -> bool {
         self.stale.contains(id)
+    }
+
+    /// Attaches the causes a review queue computed, so a bundle can say *why* stale.
+    ///
+    /// Optional because the projections renderer does not need them and the roadmap
+    /// snapshot tests construct a `Freshness` from a bare set.
+    #[must_use]
+    pub fn with_causes(
+        mut self,
+        causes: BTreeMap<RevisionId, crate::freshness::StaleCause>,
+    ) -> Self {
+        self.causes = causes;
+        self
+    }
+
+    /// Why a revision is stale, when the caller supplied causes.
+    #[must_use]
+    pub fn cause(&self, id: &RevisionId) -> Option<&crate::freshness::StaleCause> {
+        self.causes.get(id)
     }
 
     /// The at-risk entry for a revision, if it has one.

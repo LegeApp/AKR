@@ -29,7 +29,7 @@
 
 mod source;
 
-pub use source::{Workspace, canonical_record_text, load_workspace};
+pub use source::{SpanIndex, Workspace, canonical_record_text, load_workspace};
 
 use crate::diagnostics::Diagnostic;
 use crate::graph::{AtRisk, DiGraph, dependency_graph, propagate_staleness, sorted_records};

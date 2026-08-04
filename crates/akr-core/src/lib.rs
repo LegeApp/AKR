@@ -20,6 +20,8 @@
 //! - [`render`] — stage F: generated views, the banner, and the views-current gate.
 //! - [`git`] — commits, ancestry, and changed paths, through the subprocess.
 //! - [`freshness`] — staleness, propagation, impact, and the review queue.
+//! - [`context`] — deterministic context assembly for agents.
+//! - [`json`] — the minimal writer behind `--format json`.
 //! - [`evidence`] — recording what was observed, and attaching it to a check.
 //!
 //! # Sources of truth
@@ -28,12 +30,14 @@
 //! checked against it by `tests/vocabulary.rs`. `docs/02-data-model.md` is authoritative
 //! for meaning, and `spec/diagnostics/codes-lang.md` for diagnostic codes.
 
+pub mod context;
 pub mod diagnostics;
 pub mod evidence;
 pub mod freshness;
 pub mod git;
 pub mod graph;
 pub mod hash;
+pub mod json;
 pub mod lock;
 pub mod model;
 pub mod ops;

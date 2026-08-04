@@ -1,0 +1,251 @@
+//! Every command of `docs/07-cli.md` §6, exercised through the real binary.
+//!
+//! The transcripts pin what four commands *print*; this pins that the rest run at all,
+//! exit as §3 says, and produce a JSON envelope with the fields §5 fixes. Between them the
+//! read surface has no command that has never been executed.
+
+mod support;
+
+use support::{Example, SYS_TANDEM};
+
+/// The envelope fields §5 declares, in the order it declares them.
+const ENVELOPE: &[&str] = &[
+    "\"akr\":",
+    "\"tool_version\":",
+    "\"command\":",
+    "\"commit\":",
+    "\"source_graph_hash\":",
+    "\"ok\":",
+    "\"exit_code\":",
+    "\"diagnostics\":",
+    "\"result\":",
+];
+
+fn assert_envelope(text: &str, command: &str) {
+    let mut cursor = 0;
+    for field in ENVELOPE {
+        let found = text[cursor..]
+            .find(field)
+            .unwrap_or_else(|| panic!("{command}: envelope has no {field}\n{text}"));
+        cursor += found + field.len();
+    }
+    assert!(
+        text.contains(&format!("\"command\": {command:?}")),
+        "{command}: envelope names the wrong command\n{text}"
+    );
+    assert!(
+        text.ends_with("}\n"),
+        "{command}: envelope is not a document"
+    );
+}
+
+#[test]
+fn help_and_version_need_no_workspace() {
+    let dir = std::env::temp_dir();
+    for args in [vec!["--help"], vec!["--version"]] {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_akr"))
+            .args(&args)
+            .current_dir(&dir)
+            .output()
+            .expect("runs");
+        assert_eq!(output.status.code(), Some(0), "{args:?}");
+        assert!(!output.stdout.is_empty(), "{args:?}");
+    }
+}
+
+#[test]
+fn every_read_command_runs_and_produces_an_envelope() {
+    let example = Example::materialise("commands");
+    let cases: &[(&str, &[&str])] = &[
+        ("check", &["check"]),
+        ("build", &["build"]),
+        ("view", &["view", "roadmap"]),
+        ("get", &["get", "@sys.milestone.m3-playable-day"]),
+        ("why-current", &["why-current", "@sys.work.m3-plan"]),
+        ("impact", &["impact", "@sim.obs.projection-gaps"]),
+        ("review-queue", &["review-queue"]),
+        ("lock", &["lock", "--check"]),
+        (
+            "context",
+            &["context", "--goal", "sys.milestone.m3-playable-day"],
+        ),
+        ("explain", &["explain", "AKR-G013"]),
+    ];
+    for (name, args) in cases {
+        let text = example.run(args);
+        assert_eq!(text.code, 0, "akr {}: {}", args.join(" "), text.output());
+        assert!(
+            !text.stdout.is_empty(),
+            "akr {} printed nothing",
+            args.join(" ")
+        );
+
+        let mut json = vec!["--format", "json"];
+        json.extend_from_slice(args);
+        let envelope = example.run(&json);
+        assert_eq!(
+            envelope.code,
+            0,
+            "akr {} --format json: {}",
+            args.join(" "),
+            envelope.output()
+        );
+        assert_envelope(&envelope.stdout, name);
+    }
+}
+
+#[test]
+fn fmt_leaves_a_canonical_workspace_alone() {
+    let example = Example::materialise("fmt");
+    let check = example.run(&["fmt", "--check"]);
+    assert_eq!(check.code, 0, "{}", check.output());
+    assert!(
+        check.stdout.contains("canonically formatted"),
+        "{}",
+        check.stdout
+    );
+
+    let run = example.run(&["fmt"]);
+    assert_eq!(run.code, 0, "{}", run.output());
+    assert!(run.stdout.contains("unchanged"), "{}", run.stdout);
+}
+
+#[test]
+fn fmt_and_init_refuse_json() {
+    let example = Example::materialise("no-json");
+    for args in [
+        vec!["--format", "json", "fmt", "--check"],
+        vec!["--format", "json", "init"],
+    ] {
+        let run = example.run(&args);
+        assert_eq!(run.code, 2, "{args:?}: {}", run.output());
+        assert!(run.stderr.contains("AKR-C041"), "{}", run.stderr);
+    }
+}
+
+#[test]
+fn build_is_idempotent() {
+    let example = Example::materialise("build-twice");
+    let first = example.run(&["build"]);
+    let second = example.run(&["build"]);
+    assert_eq!(first.code, 0, "{}", first.output());
+    assert_eq!(second.code, 0, "{}", second.output());
+    // The second run rewrites nothing: a build that churns files makes the D-025 CI gate
+    // unusable, because every checkout would show a diff.
+    assert!(
+        second.stdout.contains("unchanged") || second.stdout.contains("0 written"),
+        "a second build must write nothing:\n{}",
+        second.stdout
+    );
+    assert_eq!(example.run(&["check", "--views-current"]).code, 0);
+}
+
+#[test]
+fn lock_check_agrees_with_the_lock_the_tool_writes() {
+    let example = Example::materialise("lock-check");
+    assert_eq!(example.run(&["lock", "--check"]).code, 0);
+    assert_eq!(example.run(&["lock"]).code, 0);
+    assert_eq!(example.run(&["lock", "--check"]).code, 0);
+}
+
+#[test]
+fn init_scaffolds_a_workspace_and_never_overwrites() {
+    let dir = std::env::temp_dir().join(format!("akr-p6-init-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp directory");
+
+    let run = |args: &[&str]| {
+        std::process::Command::new(env!("CARGO_BIN_EXE_akr"))
+            .args(args)
+            .current_dir(&dir)
+            .output()
+            .expect("runs")
+    };
+    let first = run(&["init", "--project", "demo"]);
+    assert_eq!(first.status.code(), Some(0), "{first:?}");
+    assert!(dir.join(".akr/project.akr").is_file());
+    assert!(dir.join(".akr/records").is_dir());
+    assert!(dir.join(".akr/archive").is_dir());
+
+    let agents = std::fs::read_to_string(dir.join("AGENTS.md")).expect("AGENTS.md");
+    assert!(agents.contains("## Project knowledge (AKR)"));
+    assert!(agents.contains("knowledge.context"));
+    let ignore = std::fs::read_to_string(dir.join(".gitignore")).expect(".gitignore");
+    assert!(ignore.contains(".akr/cache/"));
+    assert!(ignore.contains(".agent/scratch/"));
+
+    // A fresh workspace checks clean, which is the only useful definition of "scaffolded".
+    let check = run(&["check"]);
+    assert_eq!(
+        check.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&check.stderr)
+    );
+
+    let second = run(&["init"]);
+    assert_eq!(second.status.code(), Some(3));
+    assert!(String::from_utf8_lossy(&second.stderr).contains("AKR-C013"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_deferred_commands_say_which_phase_brings_them() {
+    let example = Example::materialise("deferred");
+    let cases: &[(&[&str], &str, &str)] = &[
+        (&["search", "projection"], "AKR-I022", "P7"),
+        (&["import", "docs/legacy.md"], "AKR-M002", "P8"),
+        (&["propose", "work", "sys.work.x"], "AKR-C001", "P6c"),
+        (&["revise", "@sys.work.m3-plan"], "AKR-C001", "P6c"),
+        (&["supersede", "@sys.work.m3-plan"], "AKR-C001", "P6c"),
+        (&["complete", "@sys.work.m3-plan"], "AKR-C001", "P6c"),
+        (&["abandon", "@sys.work.m3-plan"], "AKR-C001", "P6c"),
+        (&["evidence", "add"], "AKR-C001", "P6c"),
+    ];
+    for (args, code, phase) in cases {
+        let run = example.run(args);
+        assert_eq!(run.code, 3, "akr {}: {}", args.join(" "), run.output());
+        let text = run.output();
+        assert!(text.contains(code), "akr {}: {text}", args.join(" "));
+        assert!(text.contains(phase), "akr {}: {text}", args.join(" "));
+    }
+}
+
+#[test]
+fn explain_covers_both_diagnostic_registries() {
+    let example = Example::materialise("explain");
+    // `C` codes are this crate's, `L` codes are the language half: `akr explain` reads both
+    // registries so an agent never has to know which half a code came from.
+    for code in ["AKR-C011", "AKR-G013", "AKR-E011", "AKR-L001", "AKR-R051"] {
+        let run = example.run(&["explain", code]);
+        assert_eq!(run.code, 0, "{code}: {}", run.output());
+        assert!(run.stdout.contains(code), "{code}: {}", run.stdout);
+    }
+    let unknown = example.run(&["explain", "AKR-Z999"]);
+    assert_eq!(unknown.code, 2, "{}", unknown.output());
+}
+
+// -------------------------------------------------------------------------------------
+// The second worked example
+// -------------------------------------------------------------------------------------
+
+/// `examples/sys-tandem/` through the binary.
+///
+/// The second worked example, materialised the same way: its history is synthetic too, so
+/// the binary can only see it against a real repository built from `MANIFEST.md` §2. What
+/// is asserted is what the manifest freezes — a clean check, and a queue of two stale and
+/// four at-risk records — which is the claim the example exists to make.
+#[test]
+fn the_tandem_example_checks_clean_and_has_the_queue_its_manifest_declares() {
+    let example = Example::of(&SYS_TANDEM, "sys-tandem");
+    let check = example.run(&["check"]);
+    assert_eq!(check.code, 0, "{}", check.output());
+
+    let queue = example.run(&["review-queue"]);
+    assert_eq!(queue.code, 0, "{}", queue.output());
+    assert!(
+        queue.stdout.contains("2 stale, 4 at risk"),
+        "{}",
+        queue.stdout
+    );
+}

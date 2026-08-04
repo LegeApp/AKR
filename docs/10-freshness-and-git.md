@@ -294,7 +294,7 @@ akr impact --git-diff <A>..<B> [--depth <n>] [--format text|json]
 2. Collect the paths touched by commits in `(A, B]`.
 3. For each live empirical record whose `observed_at` is reachable from `A`, test its
    watch globs against those paths.
-4. A match that the record was not already stale for is **newly stale**.
+4. A match that the record was not already stale for **at `A`** is **newly stale**.
 5. Propagate from the newly stale set along the three relations of §4. New dependents
    are **newly at risk**.
 6. Report both sets, with cause and path.
@@ -303,6 +303,12 @@ Note step 3's condition. A record observed *after* `A` has already accounted for
 the range, so it is tested only against the commits it does not contain. Without that
 condition, `akr impact` would report every observation in the repository as endangered by
 any large range, and nobody would run it twice.
+
+Note step 4's baseline as well. "Already stale" means stale **as of `A`**, computed by
+running §3's derivation with `A` in place of HEAD — not stale as of HEAD. The distinction
+matters for exactly the interesting case: a range that has already been merged made some
+record stale, and asking `akr impact` what that range did must answer "this one", not
+"nothing, it was already stale" — which it is, because of the range being asked about.
 
 **Against the frozen example**, `akr impact --git-diff C4..C5` reports **no newly stale
 records**. C5 touches `lege/src/render/**` and `docs/generated/**`. The only record

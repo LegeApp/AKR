@@ -90,7 +90,11 @@ pub fn check_views_current(dir: &Path, cx: RenderContext<'_>) -> io::Result<Vec<
                 )
                 .note(crate::diagnostics::Label::with_message(
                     Subject::File(display.clone()),
-                    format!("line {line}: committed {committed_line:?}, emitted {rendered_line:?}"),
+                    format!("line {line} committed: {committed_line:?}"),
+                ))
+                .note(crate::diagnostics::Label::with_message(
+                    Subject::File(display.clone()),
+                    format!("line {line} emitted:   {rendered_line:?}"),
                 ))
                 .help(
                     "run `akr build` and commit the result; see @sys.policy.no-hand-edited-views",
@@ -228,9 +232,13 @@ fn differing_lines(committed: &str, rendered: &str) -> usize {
 }
 
 /// A path for a diagnostic subject: repo-relative where possible, forward slashes.
+/// A path as a diagnostic should name it: forward slashes, and relative to the working
+/// directory when it is under it, so `docs/generated/ROADMAP.md` rather than an absolute
+/// path that says nothing a reader needs.
 fn display_path(path: &Path) -> String {
-    path.components()
-        .map(|c| c.as_os_str().to_string_lossy().into_owned())
-        .collect::<Vec<_>>()
-        .join("/")
+    let relative = std::env::current_dir()
+        .ok()
+        .and_then(|cwd| path.strip_prefix(cwd).ok().map(Path::to_path_buf));
+    let path = relative.as_deref().unwrap_or(path);
+    path.to_string_lossy().replace('\\', "/")
 }

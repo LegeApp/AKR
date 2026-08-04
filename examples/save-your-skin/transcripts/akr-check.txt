@@ -17,7 +17,7 @@ akr check — save-your-skin
     dispositions checked          2 unfinished children, 2 dispositioned
     topics                        5 on live records, no overlapping pair
     plan_of_record                1 live, 1 superseded
-    acceptance                    8 checks, 3 satisfied
+    acceptance                    9 checks, 3 satisfied
     sealed revisions             39 hashed, 39 match akr.lock
     contradictions                1 declared, 1 acknowledged
 
@@ -48,7 +48,10 @@ $ akr check --format json
     "files": 26,
     "references": 50,
     "heads": 40,
-    "checks": { "total": 8, "satisfied": 3 },
+    "checks": {
+      "total": 9,
+      "satisfied": 3
+    },
     "stale": 2,
     "at_risk": 4
   }
@@ -69,17 +72,36 @@ $ echo $?
 
 $ akr check --review-clean
 
-error[AKR-G041]: review queue is not empty
+akr check — save-your-skin
+  40 records, 42 revisions, 26 files
+  commit e806b3f5, grammar 0.1, vocabulary 0.1, today 2026-08-03
+
+  stage A  parse          42 revisions       ok
+  stage B  type-check     42 revisions       ok
+  stage C  link           50 references      ok
+  stage D  resolve        40 heads           ok
+
+  resolve detail
+    heads                        35 live, 5 resolved by supersession chain
+    supersession chains           2 (lege.decision.renderer-boundary,
+                                     sys.work.m3-plan)
+    dispositions checked          2 unfinished children, 2 dispositioned
+    topics                        5 on live records, no overlapping pair
+    plan_of_record                1 live, 1 superseded
+    acceptance                    9 checks, 3 satisfied
+    sealed revisions             39 hashed, 39 match akr.lock
+    contradictions                1 declared, 1 acknowledged
+
+  build facts (not diagnostics):
+    2 records stale, 4 at risk — see `akr review-queue`
+
+error[AKR-G041]: review queue holds 2 stale and 4 at-risk records
   --> .akr/records/sim/observations.akr:4:1
    |
  4 | record sim.obs.projection-gaps/1 : observation {
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ stale: watches
-   |                                                "sim/src/project/**"
-   |                                                matched by 5d9c2a70
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ stale: watches "sim/src/project/**" matched by 5d9c2a70
    |
-note: review queue holds 2 stale and 4 at-risk records: 3 at depth 1, 1 at
-      depth 2
-help: run `akr review-queue` for the full list, or drop --review-clean
+help: run `akr review-queue` for the full list, or drop --review-clean (see V-104)
 
 1 error
 
@@ -115,19 +137,23 @@ $ echo $?
 $ sed -i '48s/`active`/`nearly done`/' docs/generated/ROADMAP.md
 $ akr check --views-current
 
-error[AKR-E011]: generated view is out of date
-  --> docs/generated/ROADMAP.md:48:1
-   |
-48 | `nearly done` · `@sys.milestone.m3-playable-day/1` · target 2026-09-30
-   | ^^^^^^^^^^^^ this line differs from the emitted view
-   |
-note: 1 differing line; the emitted line is
-      "`active` · `@sys.milestone.m3-playable-day/1` · target 2026-09-30 ..."
-note: the banner records source-graph
-      sha256:5159d2714f688627a85906b161def17b0358155fbfc2a3fc00b681d29a305f55,
-      which matches the current sources, so this is a hand edit rather than a
-      stale build
-help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views
+akr check — save-your-skin
+  40 records, 42 revisions, 26 files
+  commit e806b3f5, grammar 0.1, vocabulary 0.1, today 2026-08-03
+
+  stages A-D                                 ok
+  stage F  emit (in memory)   6 views        FAILED
+    ROADMAP.md               DIFFERS
+    CURRENT-STATE.md         current
+    ACTIVE-WORK.md           current
+    REVIEW-REQUIRED.md       current
+    OPEN-QUESTIONS.md        current
+    DECISION-HISTORY.md      current
+
+error[AKR-E011]: docs/generated/ROADMAP.md differs from the view this build would emit (1 differing line)
+note: line 48 committed: "`nearly done` · `@sys.milestone.m3-playable-day/1` · target 2026-09-30 · after `@sys.milestone.m2-deterministic-sim/1`"
+note: line 48 emitted:   "`active` · `@sys.milestone.m3-playable-day/1` · target 2026-09-30 · after `@sys.milestone.m2-deterministic-sim/1`"
+help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
 
 1 error
 
@@ -136,6 +162,19 @@ $ echo $?
 
 $ git checkout docs/generated/ROADMAP.md
 $ akr check --views-current
+akr check — save-your-skin
+  40 records, 42 revisions, 26 files
+  commit e806b3f5, grammar 0.1, vocabulary 0.1, today 2026-08-03
+
+  stages A-D                                 ok
+  stage F  emit (in memory)   6 views        ok
+    ROADMAP.md               current
+    CURRENT-STATE.md         current
+    ACTIVE-WORK.md           current
+    REVIEW-REQUIRED.md       current
+    OPEN-QUESTIONS.md        current
+    DECISION-HISTORY.md      current
+
 no diagnostics
 $ echo $?
 0

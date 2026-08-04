@@ -10,23 +10,8 @@ $ akr impact --git-diff 5d9c2a70..e806b3f5
 range 5d9c2a70..e806b3f5, 1 commit
 
 touched paths
-  lege/src/render/**
-  docs/generated/**
-
-watch globs tested: 4 across 4 live empirical records
-
-  "lege/src/render/**"   @lege.obs.frame-budget-headroom/1
-      MATCHED by e806b3f5, but observed_at is e806b3f5 — the observation was
-      made at this commit and already accounts for it. Not newly stale.
-  "sim/src/project/**"   @sim.obs.projection-gaps/1
-      not matched by this range (already stale from 5d9c2a70, unchanged)
-  "sim/src/step.rs"      @sim.obs.timestep-drift/1
-      not matched by this range (already stale by review_after, unchanged)
-  "lege/**"              @lege.obs.viewer-imports-engine/1
-      not evaluated — record is disproven (terminal)
-
-  docs/generated/** matches no watch glob. Generated output should not be
-  watched by anything; if it were, every build would invalidate knowledge.
+  docs/generated/ROADMAP.md
+  lege/src/render/mod.rs
 
 newly stale:   none
 newly at risk: none
@@ -49,10 +34,15 @@ $ akr impact --git-diff 5d9c2a70..e806b3f5 --format json
   "diagnostics": [],
   "result": {
     "mode": "git_diff",
-    "range": { "from": "5d9c2a70e31f8b46c07d5924ab6e3f1074c9d285",
-               "to":   "e806b3f54a2d7091c5e13b8a26f490dc7b135e64",
-               "commits": 1 },
-    "touched_paths": ["docs/generated/**", "lege/src/render/**"],
+    "range": {
+      "from": "5d9c2a70e31f8b46c07d5924ab6e3f1074c9d285",
+      "to": "e806b3f54a2d7091c5e13b8a26f490dc7b135e64",
+      "commits": 1
+    },
+    "touched_paths": [
+      "docs/generated/ROADMAP.md",
+      "lege/src/render/mod.rs"
+    ],
     "newly_stale": [],
     "newly_at_risk": []
   }
@@ -69,9 +59,9 @@ $ akr impact --git-diff 7c41d0ba..5d9c2a70
 range 7c41d0ba..5d9c2a70, 2 commits
 
 touched paths
-  lege/src/**
+  lege/src/lib.rs
+  sim/src/project/mod.rs
   sim/src/step.rs
-  sim/src/project/**
   sim/tests/determinism.rs
 
 newly stale (1)
@@ -103,12 +93,13 @@ $ akr impact @sim.obs.projection-gaps
 
 dependents along supported_by, depends_on, derived_from
 
-  depth 1  @sim.work.rewrite-projection/1     work        blocked
-             via depends_on
-  depth 1  @sys.assessment.projection-gaps/1  assessment  verified
-             via supported_by
-  depth 2  @sys.policy.tandem-work/1          policy      active
+  depth 1  @sim.work.rewrite-projection/1      work        blocked
+             via depends_on   -> @sim.obs.projection-gaps/1
+  depth 1  @sys.assessment.projection-gaps/1   assessment  verified
+             via supported_by -> @sim.obs.projection-gaps/1
+  depth 2  @sys.policy.tandem-work/1           policy      active
              via supported_by -> @sys.assessment.projection-gaps/1
+                              -> @sim.obs.projection-gaps/1
 
 3 dependents, maximum depth 2
 
@@ -122,10 +113,7 @@ $ echo $?
 
 $ akr impact --git-diff deadbeef..HEAD
 
-error[AKR-G013]: unknown revision argument
-  --> --git-diff
-   |
-   = --git-diff: "deadbeef" is not a commit in this repository
+error[AKR-G013]: --git-diff: "deadbeef" is not a commit in this repository
 help: AKR takes full 40-hex commits, never abbreviations (D-008)
 
 1 error

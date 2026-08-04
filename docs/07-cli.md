@@ -16,6 +16,12 @@ this document does not describe.
 akr [GLOBAL FLAGS] <command> [COMMAND FLAGS] [ARGUMENTS]
 ```
 
+Global flags are also accepted **after** the command, so `akr check --format json` and
+`akr --format json check` are the same invocation. The grammar above is the canonical
+form and the one this document uses; no command flag shares a name with a global one, so
+accepting both costs nothing and refusing one would be enforcing punctuation rather than
+meaning.
+
 One binary, no daemon, no server, no state outside the workspace. Every command:
 
 1. Locates the workspace by walking up from `--dir` (default: the current directory)
@@ -60,7 +66,12 @@ argument is `AKR-C003`; a bad flag value is `AKR-C004`. All four exit 2.
 | **0** | Success | The command did what it was asked. Includes a `check` that found only build facts such as staleness. |
 | **1** | Diagnostics | One or more `AKR-*` diagnostics of effective severity `error` were produced. Under `--strict` that includes warnings. |
 | **2** | Usage | The invocation was malformed: `AKR-C001`–`AKR-C005`, `AKR-C041`. Nothing was read and nothing was written. |
-| **3** | Environment | The workspace or repository is unusable: `AKR-C011`, `AKR-C012`, `AKR-G001`, `AKR-G003`, `AKR-I003`. Not a ledger problem. |
+| **3** | Environment | The workspace or repository is unusable: `AKR-C011`, `AKR-C012`, `AKR-C042`, `AKR-G001`, `AKR-G003`, `AKR-I003`. Not a ledger problem. |
+
+`AKR-G013` — an unknown revision given to `--at` or to either end of `--git-diff` — is in
+neither list, and so exits **1**. The checkout is fine and the invocation is well-formed;
+the tool looked the revision up and it was not there, which is a finding about the
+repository's contents and is reported as a diagnostic like any other.
 
 The distinction between 1 and 3 is what makes CI logs readable: exit 1 means *fix the
 ledger*, exit 3 means *fix the checkout*.

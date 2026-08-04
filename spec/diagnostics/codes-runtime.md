@@ -175,6 +175,7 @@ resolving heads, so `AKR-R051` and `AKR-R052` belong to Writer A's resolve range
 | `AKR-C032` | write would modify a sealed revision | error | `{key}/{revision} is sealed ({state}); create a new revision with akr revise` | The command-line refusal that precedes the build-time check `AKR-R051` (D-015). |
 | `AKR-C033` | write target is not the head revision | error | `{key}/{revision} is not the head of {key}` | `akr revise` and friends operate on heads; editing history is a source-file operation done deliberately. |
 | `AKR-C041` | command has no JSON form | error | `{command} does not support --format json` | Exit status 2. Applies to `fmt` and `init`, whose output is a file-system effect rather than data. |
+| `AKR-C042` | workspace path not readable or not writable | error | `cannot {read\|write\|create} {path}: {reason}` | Exit status 3. The filesystem refused, so this is a checkout problem rather than a ledger problem — a read-only mount, a permission, a full disk. |
 
 ---
 
