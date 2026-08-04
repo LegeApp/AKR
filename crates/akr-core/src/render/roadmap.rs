@@ -69,6 +69,9 @@ fn milestone_blocks<'a>(cx: RenderContext<'a>, record: &'a Record) -> Vec<String
     if let Some(intent) = prose(record, ContentSlot::Intent) {
         blocks.push(intent);
     }
+    if let Some(note) = note_block(record) {
+        blocks.push(note);
+    }
 
     if let Some(plan) = plan_of_record(cx.model, record) {
         blocks.push(format!("**Plan of record:** {} `@{}`", link(plan), plan.id));
@@ -144,6 +147,9 @@ fn track_blocks<'a>(cx: RenderContext<'a>, record: &'a Record) -> Vec<String> {
     let mut blocks = vec![format!("### {}", record.title), metadata_line(cx, record)];
     if let Some(intent) = prose(record, ContentSlot::Intent) {
         blocks.push(intent);
+    }
+    if let Some(note) = note_block(record) {
+        blocks.push(note);
     }
     if let Some(line) = depends_on_line(cx, record) {
         blocks.push(line);
@@ -530,6 +536,27 @@ fn link(record: &Record) -> String {
         ),
         None => record.title.clone(),
     }
+}
+
+/// The `note` block quote a terminal planning record carries (D-026, §3).
+///
+/// Only in a terminal state. On a live record a note is working commentary that `intent`
+/// should be carrying instead; on a terminal one it is the last thing anybody wrote about
+/// the record, and the only place a reader finds out why the plan stopped.
+fn note_block(record: &Record) -> Option<String> {
+    if !record.is_terminal() {
+        return None;
+    }
+    let note = prose(record, ContentSlot::Note)?;
+    let text = note
+        .lines()
+        .map(str::trim_end)
+        .collect::<Vec<_>>()
+        .join(" ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    (!text.is_empty()).then(|| format!("> **Note:** {text}"))
 }
 
 /// A prose slot's text, or `None`.

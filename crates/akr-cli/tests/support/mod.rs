@@ -345,6 +345,46 @@ impl Example {
         }
     }
 
+    /// A digest of every source file under `.akr`, for atomicity assertions.
+    ///
+    /// `docs/07-cli.md` §4 promises that a refused write leaves the working tree
+    /// byte-identical. The only way to check a promise about *every* file is to hash every
+    /// file, so this returns the whole map rather than one file's hash.
+    pub fn sources(&self) -> Vec<(String, String)> {
+        fn walk(dir: &Path, base: &Path, out: &mut Vec<(String, String)>) {
+            let Ok(entries) = std::fs::read_dir(dir) else {
+                return;
+            };
+            for entry in entries {
+                let path = entry.expect("entry").path();
+                if path.is_dir() {
+                    walk(&path, base, out);
+                } else if let Ok(bytes) = std::fs::read(&path) {
+                    let name = path
+                        .strip_prefix(base)
+                        .unwrap_or(&path)
+                        .to_string_lossy()
+                        .into_owned();
+                    out.push((name, akr_core::hash::sha256_hex(&bytes)));
+                }
+            }
+        }
+        let mut out = Vec::new();
+        walk(&self.root.join(".akr"), &self.root, &mut out);
+        out.sort();
+        out
+    }
+
+    /// Overwrites a file inside the workspace, for tests that need a specific shape.
+    pub fn write_file(&self, relative: &str, contents: &str) {
+        write(&self.root.join(relative), contents);
+    }
+
+    /// Reads a file inside the workspace.
+    pub fn read_file(&self, relative: &str) -> String {
+        std::fs::read_to_string(self.root.join(relative)).expect("readable")
+    }
+
     /// Rewrites real hashes back to the manifest's, so a transcript stays readable.
     pub fn normalise(&self, text: &str) -> String {
         let mut out = text.to_owned();

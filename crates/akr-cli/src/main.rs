@@ -10,6 +10,7 @@ mod commands;
 mod fmt;
 mod init;
 mod session;
+mod write;
 
 use args::Invocation;
 use session::{EnvError, Exit, envelope, wants_json};

@@ -192,15 +192,12 @@ fn init_scaffolds_a_workspace_and_never_overwrites() {
 #[test]
 fn the_deferred_commands_say_which_phase_brings_them() {
     let example = Example::materialise("deferred");
+    // Two commands remain deferred after P6c: `search` needs the index (P7) and `import`
+    // needs the migration pipeline (P8). Both say so by code and by phase, so nobody has
+    // to guess whether they are broken or unbuilt.
     let cases: &[(&[&str], &str, &str)] = &[
         (&["search", "projection"], "AKR-I022", "P7"),
         (&["import", "docs/legacy.md"], "AKR-M002", "P8"),
-        (&["propose", "work", "sys.work.x"], "AKR-C001", "P6c"),
-        (&["revise", "@sys.work.m3-plan"], "AKR-C001", "P6c"),
-        (&["supersede", "@sys.work.m3-plan"], "AKR-C001", "P6c"),
-        (&["complete", "@sys.work.m3-plan"], "AKR-C001", "P6c"),
-        (&["abandon", "@sys.work.m3-plan"], "AKR-C001", "P6c"),
-        (&["evidence", "add"], "AKR-C001", "P6c"),
     ];
     for (args, code, phase) in cases {
         let run = example.run(args);

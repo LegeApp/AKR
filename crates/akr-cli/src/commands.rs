@@ -124,11 +124,12 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
         .help("use `akr get` for a known key, or `akr context` for a whole bundle")),
         Command::Import { .. } => Err(EnvError::new("AKR-M002", "import arrives with phase P8")
             .help("see docs/12-migration.md for the workflow it will implement")),
-        Command::Write { name } => Err(EnvError::new(
-            "AKR-C001",
-            format!("`akr {name}` arrives with phase P6c"),
-        )
-        .help("the write operations are landing in akr-core now; see docs/07-cli.md §4")),
+        Command::Propose { .. }
+        | Command::Revise { .. }
+        | Command::Supersede { .. }
+        | Command::Complete { .. }
+        | Command::Abandon { .. }
+        | Command::EvidenceAdd { .. } => crate::write::run(session, command),
         Command::Help | Command::Version | Command::Explain { .. } | Command::Init { .. } => {
             unreachable!("handled by run_standalone")
         }
@@ -278,6 +279,14 @@ fn counts_of(session: &Session, model: &akr_core::resolve::ResolvedModel<'_>) ->
             .filter(|v| v.verdict.is_satisfied())
             .count(),
     }
+}
+
+/// Whether a diagnostic is about the lock being out of date rather than about the ledger.
+fn is_lock_currency(diagnostic: &Diagnostic) -> bool {
+    matches!(
+        diagnostic.code.as_str(),
+        "AKR-R051" | "AKR-R052" | "AKR-R053"
+    )
 }
 
 fn summary_lines(session: &Session, model: &akr_core::resolve::ResolvedModel<'_>) -> String {
@@ -462,7 +471,19 @@ fn days_from_civil(date: Date) -> i64 {
 fn build(session: &mut Session) -> Result<Output, EnvError> {
     session.attach_lock();
     let model = session.resolve();
-    let diagnostics = session.diagnostics(&model);
+    // Lock-currency diagnostics are excluded from the halt decision, and only here.
+    //
+    // `AKR-R051` and `AKR-R052` say the committed lock disagrees with the sources. The
+    // lock is exactly what this command is about to rewrite, so halting on them would make
+    // `akr build` refuse to do the one thing that clears them — and every write stales the
+    // lock by construction (D-014), so the tool would deadlock after the first `akr
+    // revise`. `akr check` still reports them, which is where a stale lock ought to be
+    // caught.
+    let diagnostics: Vec<akr_core::diagnostics::Diagnostic> = session
+        .diagnostics(&model)
+        .into_iter()
+        .filter(|d| !is_lock_currency(d))
+        .collect();
     let fatal = diagnostics
         .iter()
         .filter(|d| is_fatal(d, session.global.profile))

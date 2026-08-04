@@ -641,3 +641,55 @@ fn every_emission_code_is_registered_in_the_runtime_registry() {
         );
     }
 }
+
+// -------------------------------------------------------------------------------------
+// D-026 — the note slot
+// -------------------------------------------------------------------------------------
+
+#[test]
+fn a_terminal_planning_record_renders_its_note_and_a_live_one_does_not() {
+    use akr_core::model::{ContentSlot, ContentValue, Ledger, State};
+
+    let workspace = example();
+    let with_note = |state: State| -> Ledger {
+        let mut ledger = Ledger::new(workspace.ledger.project.clone());
+        ledger.facts = workspace.ledger.facts.clone();
+        let records: Vec<_> = workspace
+            .ledger
+            .records()
+            .iter()
+            .map(|record| {
+                let mut copy = record.clone();
+                if copy.id.key.to_string() == "sys.track.lighting" {
+                    copy.state = state;
+                    copy.content.insert(
+                        ContentSlot::Note,
+                        ContentValue::prose("Standing work, paused while M3 lands."),
+                    );
+                }
+                copy
+            })
+            .collect();
+        ledger.extend(records);
+        ledger
+    };
+
+    // Live: the note is working commentary the record's own intent should carry, so no
+    // view shows it (docs/11 §3).
+    let live = with_note(State::Active);
+    let model = ResolvedModel::build(&live, &example_inputs(&workspace));
+    let freshness = Freshness::from_stale(&live, stale_set());
+    let rendered = render_roadmap(RenderContext::new(&model, &freshness));
+    assert!(!rendered.contains("**Note:**"), "{rendered}");
+
+    // Terminal: the note is the last thing anybody wrote about the record, and the only
+    // place a reader finds out why it stopped (D-026).
+    let done = with_note(State::Abandoned);
+    let model = ResolvedModel::build(&done, &example_inputs(&workspace));
+    let freshness = Freshness::from_stale(&done, stale_set());
+    let rendered = render_roadmap(RenderContext::new(&model, &freshness));
+    assert!(
+        rendered.contains("> **Note:** Standing work, paused while M3 lands."),
+        "{rendered}"
+    );
+}

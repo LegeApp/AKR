@@ -164,10 +164,77 @@ pub enum Command {
         /// The source document.
         path: PathBuf,
     },
-    /// A write command. Arrives with P6c.
-    Write {
-        /// Which one, for the message.
-        name: String,
+    /// `akr propose <key> --kind <kind>`.
+    Propose {
+        /// The new key.
+        key: String,
+        /// The record kind.
+        kind: String,
+        /// The title, when one is given.
+        title: Option<String>,
+        /// A file holding the record body.
+        from: Option<PathBuf>,
+        /// Open `$EDITOR` on a template.
+        edit: bool,
+    },
+    /// `akr revise <key>`.
+    Revise {
+        /// The key to revise.
+        key: String,
+        /// A file holding the replacement body.
+        from: Option<PathBuf>,
+        /// Open `$EDITOR` on the head.
+        edit: bool,
+        /// A new state for the revision.
+        state: Option<String>,
+        /// A new title.
+        title: Option<String>,
+        /// Edit a proposed head in place rather than creating revision n+1.
+        in_place: bool,
+        /// Dispositions, for a revise that retires a sealed planning head.
+        dispositions: Vec<String>,
+    },
+    /// `akr supersede <key>`.
+    Supersede {
+        /// The key whose head is retired.
+        key: String,
+        /// The superseding key, when it differs.
+        with: Option<String>,
+        /// `child=outcome[:into]` pairs.
+        dispositions: Vec<String>,
+    },
+    /// `akr complete <key>`.
+    Complete {
+        /// The planning key to complete.
+        key: String,
+        /// `check=@evidence` pairs.
+        checks: Vec<String>,
+    },
+    /// `akr abandon <key> --reason <text>`.
+    Abandon {
+        /// The planning key to abandon.
+        key: String,
+        /// Why, which lands in the D-026 `note` slot.
+        reason: Option<String>,
+        /// `child=outcome[:into]` pairs.
+        dispositions: Vec<String>,
+    },
+    /// `akr evidence add <key>`.
+    EvidenceAdd {
+        /// The evidence key.
+        key: String,
+        /// `pass`, `fail` or `inconclusive`.
+        result: Option<String>,
+        /// `manual`, `command` or `observation`.
+        method: Option<String>,
+        /// The command that was run.
+        command: Option<String>,
+        /// A path to the artefact.
+        artifact: Option<String>,
+        /// A one-line summary.
+        summary: Option<String>,
+        /// The commit it was observed at. Defaults to HEAD.
+        observed_at: Option<String>,
     },
 }
 
@@ -192,7 +259,12 @@ impl Command {
             Self::Context { .. } => "context".to_owned(),
             Self::Search { .. } => "search".to_owned(),
             Self::Import { .. } => "import".to_owned(),
-            Self::Write { name } => name.clone(),
+            Self::Propose { .. } => "propose".to_owned(),
+            Self::Revise { .. } => "revise".to_owned(),
+            Self::Supersede { .. } => "supersede".to_owned(),
+            Self::Complete { .. } => "complete".to_owned(),
+            Self::Abandon { .. } => "abandon".to_owned(),
+            Self::EvidenceAdd { .. } => "evidence add".to_owned(),
         }
     }
 
@@ -253,15 +325,6 @@ const COMMANDS: &[&str] = &[
     "review-queue",
     "import",
     "lock",
-];
-
-const WRITE_COMMANDS: &[&str] = &[
-    "propose",
-    "revise",
-    "supersede",
-    "complete",
-    "abandon",
-    "evidence",
 ];
 
 /// Parses an argument list, excluding the program name.
@@ -536,16 +599,88 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
                 path: PathBuf::from(need(0, "a source document")?),
             }
         }
-        other if WRITE_COMMANDS.contains(&other) => Command::Write {
-            name: if other == "evidence" {
-                format!(
-                    "evidence {}",
-                    positional.first().map_or("add", |s| s.as_str())
+        "propose" => {
+            known_flags(&["--kind", "--title", "--from", "--edit"])?;
+            Command::Propose {
+                key: need(0, "a key")?,
+                kind: option_value(tail, "--kind")
+                    .ok_or_else(|| UsageError::new("AKR-C003", "propose requires --kind <kind>"))?,
+                title: option_value(tail, "--title"),
+                from: option_value(tail, "--from").map(PathBuf::from),
+                edit: flag_set("--edit"),
+            }
+        }
+        "revise" => {
+            known_flags(&[
+                "--from",
+                "--edit",
+                "--state",
+                "--title",
+                "--in-place",
+                "--disposition",
+            ])?;
+            Command::Revise {
+                key: need(0, "a key")?,
+                from: option_value(tail, "--from").map(PathBuf::from),
+                edit: flag_set("--edit"),
+                state: option_value(tail, "--state"),
+                title: option_value(tail, "--title"),
+                in_place: flag_set("--in-place"),
+                dispositions: repeated(tail, "--disposition"),
+            }
+        }
+        "supersede" => {
+            known_flags(&["--with", "--disposition"])?;
+            Command::Supersede {
+                key: need(0, "a key")?,
+                with: option_value(tail, "--with"),
+                dispositions: repeated(tail, "--disposition"),
+            }
+        }
+        "complete" => {
+            known_flags(&["--check"])?;
+            Command::Complete {
+                key: need(0, "a key")?,
+                checks: repeated(tail, "--check"),
+            }
+        }
+        "abandon" => {
+            known_flags(&["--reason", "--disposition"])?;
+            Command::Abandon {
+                key: need(0, "a key")?,
+                reason: option_value(tail, "--reason"),
+                dispositions: repeated(tail, "--disposition"),
+            }
+        }
+        "evidence" => {
+            known_flags(&[
+                "--result",
+                "--method",
+                "--command",
+                "--artifact",
+                "--summary",
+                "--observed-at",
+            ])?;
+            // `evidence` has one subcommand and always will: evidence is created, never
+            // edited, because a revision of an observation is a new observation (D-015).
+            let sub = need(0, "the `add` subcommand")?;
+            if sub != "add" {
+                return Err(UsageError::new(
+                    "AKR-C001",
+                    format!("unknown subcommand {sub:?} for command \"evidence\""),
                 )
-            } else {
-                other.to_owned()
-            },
-        },
+                .with_help("the only subcommand is `akr evidence add`"));
+            }
+            Command::EvidenceAdd {
+                key: need(1, "a key")?,
+                result: option_value(tail, "--result"),
+                method: option_value(tail, "--method"),
+                command: option_value(tail, "--command"),
+                artifact: option_value(tail, "--artifact"),
+                summary: option_value(tail, "--summary"),
+                observed_at: option_value(tail, "--observed-at"),
+            }
+        }
         other => {
             let mut error = UsageError::new("AKR-C001", format!("unknown command {other:?}"));
             if let Some(nearest) = nearest(other) {
@@ -657,15 +792,24 @@ pub fn help() -> String {
         ("review-queue", "list the stale and at-risk records"),
         ("import", "import a legacy document (P8)"),
         ("lock", "verify or rewrite akr.lock"),
-        ("propose", "create a record (P6c)"),
-        ("revise", "create the next revision (P6c)"),
+        ("propose", "create a record; --kind, --title, --from"),
+        (
+            "revise",
+            "create the next revision; --from, --state, --title",
+        ),
         (
             "supersede",
-            "replace a record, disposing of its children (P6c)",
+            "replace a record; --disposition <child>=<outcome>[:<into>]",
         ),
-        ("complete", "finish a milestone or work item (P6c)"),
-        ("abandon", "abandon a planning record (P6c)"),
-        ("evidence add", "record what was observed (P6c)"),
+        (
+            "complete",
+            "finish a milestone; --check <id>=<evidence-ref>",
+        ),
+        ("abandon", "abandon a planning record; --reason is required"),
+        (
+            "evidence add",
+            "record what was observed; --result, --method",
+        ),
     ] {
         out.push_str(&format!("    {name:<16}{summary}\n"));
     }

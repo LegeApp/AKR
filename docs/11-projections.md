@@ -83,6 +83,25 @@ order is total ([`06-compiler-pipeline.md`](06-compiler-pipeline.md) §11).
 **Empty sections are printed with `_(none)_`.** A missing heading would be ambiguous
 between "nothing here" and "not generated".
 
+**A terminal planning record renders its `note` slot.** `work`, `milestone` and `track`
+carry an optional `note` (D-026): free-form operator commentary with no validation
+consequence, which is where `akr abandon --reason` puts the reason. When such a record is
+in a terminal state — `completed`, `abandoned`, `superseded` — the note is rendered as a
+block quote after the body, prefixed `**Note:**`:
+
+```markdown
+`abandoned` · `@sys.work.m3-plan/2` · target 2026-09-15
+
+> **Note:** The milestone was rescoped and this plan no longer describes it.
+```
+
+It appears wherever such a record appears — `ROADMAP.md`, `ACTIVE-WORK.md` and
+`DECISION-HISTORY.md` — and **only** in a terminal state. On a live record the note is
+working commentary that the record's own `intent` should be saying instead; on a terminal
+one it is the last thing anybody wrote about it, and the only place a reader will find out
+why the plan stopped. A comment could not do this job: comments are excluded from the seal
+hash by D-015 and no view renders them.
+
 ## 4. The banner
 
 Every generated file opens with exactly this, on line 1 (D-025):
