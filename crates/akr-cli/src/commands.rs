@@ -687,15 +687,177 @@ fn get(
         }
     }
 
-    let result = Value::object(vec![
+    // The JSON form is the record, not a summary of it: `docs/08-mcp.md` §3 shows scope,
+    // claims, relations, freshness and the canonical source text, and `knowledge.get`
+    // returns this object verbatim. An agent that had to make a second call for the body
+    // would be paying for a distinction between the two surfaces that should not exist.
+    let mut fields = vec![
         ("key", Value::string(record.id.key.to_string())),
         ("rev", Value::integer(i64::from(record.id.revision))),
         ("kind", Value::string(record.kind.name())),
+        ("class", Value::string(record.kind.class().name())),
         ("state", Value::string(record.state.name())),
-        ("title", Value::string(record.title.clone())),
         ("is_head", Value::bool(model.is_head(&record.id))),
-    ]);
-    Ok(Output::text(text).with_result(result))
+        ("title", Value::string(record.title.clone())),
+        (
+            "scope",
+            Value::array(record.scope.iter().map(scope_json).collect()),
+        ),
+    ];
+    if let Some(topic) = &record.topic {
+        fields.push(("topic", Value::string(topic.to_string())));
+    }
+    fields.push((
+        "slots",
+        Value::Object(
+            record
+                .content
+                .iter()
+                .map(|(slot, value)| (slot.name().to_owned(), content_json(value)))
+                .collect(),
+        ),
+    ));
+    fields.push((
+        "claims",
+        Value::array(
+            record
+                .claims
+                .iter()
+                .map(|claim| {
+                    Value::object(vec![
+                        ("anchor", Value::string(claim.anchor.to_string())),
+                        ("text", Value::string(claim.text.clone())),
+                        (
+                            "retired",
+                            Value::bool(record.retired_claims.contains(&claim.anchor)),
+                        ),
+                    ])
+                })
+                .collect(),
+        ),
+    ));
+    if relations {
+        fields.push(("relations", relations_json(session, record)));
+    }
+    fields.push(("freshness", freshness_json(&freshness, &record.id)));
+    if history {
+        fields.push((
+            "history",
+            Value::array(
+                ledger
+                    .revisions_of(&record.id.key)
+                    .iter()
+                    .map(|revision| {
+                        Value::object(vec![
+                            ("rev", Value::integer(i64::from(revision.id.revision))),
+                            ("state", Value::string(revision.state.name())),
+                            ("title", Value::string(revision.title.clone())),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ));
+    }
+    if let Some(source) = session.inputs.canonical_text.get(&record.id) {
+        fields.push(("source_text", Value::string(source.clone())));
+    }
+    Ok(Output::text(text).with_result(Value::object(fields)))
+}
+
+/// One scope term, in the object form of `docs/08-mcp.md` §3.
+fn scope_json(term: &akr_core::model::ScopeTerm) -> Value {
+    match term {
+        akr_core::model::ScopeTerm::All => Value::object(vec![("form", Value::string("all"))]),
+        akr_core::model::ScopeTerm::Path(glob) => Value::object(vec![
+            ("form", Value::string("path")),
+            ("glob", Value::string(glob.as_str())),
+        ]),
+        akr_core::model::ScopeTerm::Ref(reference) => Value::object(vec![
+            ("form", Value::string("ref")),
+            ("ref", Value::string(reference.to_string())),
+        ]),
+    }
+}
+
+/// A content slot's value, as JSON. Arrays stay arrays; everything else is a string.
+fn content_json(value: &akr_core::model::ContentValue) -> Value {
+    use akr_core::model::ContentValue;
+    match value {
+        ContentValue::Prose(text) | ContentValue::Text(text) => Value::string(text.clone()),
+        ContentValue::Date(date) => Value::string(date.to_string()),
+        ContentValue::Commit(commit) => Value::string(format!("git:{}", commit.as_str())),
+        ContentValue::Enum(word) => Value::string(word.to_string()),
+        ContentValue::Strings(items) => {
+            Value::array(items.iter().map(|s| Value::string(s.clone())).collect())
+        }
+        ContentValue::Globs(items) => {
+            Value::array(items.iter().map(|g| Value::string(g.as_str())).collect())
+        }
+        ContentValue::Refs(items) => {
+            Value::array(items.iter().map(|r| Value::string(r.to_string())).collect())
+        }
+    }
+}
+
+/// Outbound and inbound relations, both resolved.
+fn relations_json(session: &Session, record: &akr_core::model::Record) -> Value {
+    let ledger = &session.ledger;
+    let mut outbound = Vec::new();
+    for (relation, references) in &record.relations {
+        for target in references {
+            outbound.push(Value::object(vec![
+                ("relation", Value::string(relation.name())),
+                ("ref", Value::string(target.to_string())),
+            ]));
+        }
+    }
+    let mut inbound = Vec::new();
+    // Key order, so two runs agree (`docs/06-compiler-pipeline.md` §11).
+    let mut others: Vec<&akr_core::model::Record> = ledger.records().iter().collect();
+    others.sort_by(|a, b| a.id.cmp(&b.id));
+    for other in others {
+        for (relation, references) in &other.relations {
+            for reference in references {
+                if ledger
+                    .resolve(reference)
+                    .ok()
+                    .flatten()
+                    .is_some_and(|t| t.id == record.id)
+                {
+                    inbound.push(Value::object(vec![
+                        ("relation", Value::string(relation.name())),
+                        ("ref", Value::string(format!("@{}", other.id))),
+                    ]));
+                }
+            }
+        }
+    }
+    Value::object(vec![
+        ("outbound", Value::array(outbound)),
+        ("inbound", Value::array(inbound)),
+    ])
+}
+
+/// A record's freshness, as `docs/08-mcp.md` §3 shows it.
+fn freshness_json(freshness: &akr_core::render::Freshness, id: &RevisionId) -> Value {
+    let mut fields = vec![
+        ("stale", Value::bool(freshness.is_stale(id))),
+        ("at_risk", Value::bool(freshness.at_risk(id).is_some())),
+    ];
+    if let Some(entry) = freshness.at_risk(id) {
+        fields.push(("depth", Value::integer(entry.depth as i64)));
+        fields.push((
+            "path",
+            Value::array(
+                entry
+                    .path
+                    .iter()
+                    .map(|step| Value::string(format!("@{step}")))
+                    .collect(),
+            ),
+        ));
+    }
+    Value::object(fields)
 }
 
 fn why_current(session: &Session, reference: &str) -> Result<Output, EnvError> {

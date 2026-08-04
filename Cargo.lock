@@ -17,6 +17,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "akr-mcp"
+version = "0.1.0"
+dependencies = [
+ "akr-cli",
+ "akr-core",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"

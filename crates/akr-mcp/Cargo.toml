@@ -1,0 +1,28 @@
+[package]
+name = "akr-mcp"
+description = "The AKR MCP server: nine knowledge tools over akr-core, on stdio."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "akr-mcp"
+path = "src/main.rs"
+
+[lib]
+name = "akr_mcp"
+path = "src/lib.rs"
+
+# No runtime dependencies. The server speaks JSON-RPC over stdio, and both halves of that
+# — the framing and the JSON — are small enough to own outright
+# (`docs/13-implementation-roadmap.md` §4).
+[dependencies]
+akr-core = { path = "../akr-core" }
+# The command line, as a library. §1's invariant — one implementation, no MCP-specific
+# assembly — is structural rather than aspirational because of this line.
+akr-cli = { path = "../akr-cli" }

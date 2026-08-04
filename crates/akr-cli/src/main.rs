@@ -5,15 +5,9 @@
 //! and turn what it produced into either text or the JSON envelope. Every exit path goes
 //! through [`Exit`], so the four statuses of §3 are decided in one place.
 
-mod args;
-mod commands;
-mod fmt;
-mod init;
-mod session;
-mod write;
-
-use args::Invocation;
-use session::{EnvError, Exit, envelope, wants_json};
+use akr_cli::args::{self, Invocation};
+use akr_cli::commands;
+use akr_cli::session::{self, EnvError, Exit, envelope, wants_json};
 use std::io::Write as _;
 
 fn main() -> std::process::ExitCode {
