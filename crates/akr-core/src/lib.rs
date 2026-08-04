@@ -17,6 +17,9 @@
 //! - [`resolve`] — stages C and D: linking, heads, chains, and the resolved model.
 //! - [`lock`] — `akr.lock`: model, reader, writer, and verification.
 //! - [`render`] — stage F: generated views, the banner, and the views-current gate.
+//! - [`git`] — commits, ancestry, and changed paths, through the subprocess.
+//! - [`freshness`] — staleness, propagation, impact, and the review queue.
+//! - [`evidence`] — recording what was observed, and attaching it to a check.
 //!
 //! # Sources of truth
 //!
@@ -25,6 +28,9 @@
 //! for meaning, and `spec/diagnostics/codes-lang.md` for diagnostic codes.
 
 pub mod diagnostics;
+pub mod evidence;
+pub mod freshness;
+pub mod git;
 pub mod graph;
 pub mod hash;
 pub mod lock;

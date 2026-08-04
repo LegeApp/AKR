@@ -11,14 +11,18 @@
 //! - **Freshness at scale.** One observation goes stale against the synthetic history and
 //!   the doubt reaches four records along three relations, including a live policy.
 
+mod support;
+
 use akr_core::diagnostics::FileId;
+use akr_core::freshness::derive;
 use akr_core::graph::propagate_staleness;
-use akr_core::model::{Commit, Kind, RevisionId, State, key};
+use akr_core::model::{Commit, Date, Kind, Ledger, RevisionId, State, key};
 use akr_core::resolve::{BuildInputs, ResolvedModel, Workspace, load_workspace};
 use akr_core::syntax::{format, parse};
 use akr_core::validate;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
+use support::{Step, SyntheticHistory};
 
 fn example_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/sys-tandem")
@@ -235,44 +239,128 @@ fn m1_acceptance_was_narrowed_by_a_recorded_ruling() {
 // Freshness — the P5 scenario, encoded as data
 // -------------------------------------------------------------------------------------
 
-/// C5 touched `SYSEngine/crates/sys_game_bridge/**` after the channel-coverage
-/// observation was made at C3, and C4 touched `src/**` after the determinism observation.
-/// Both are `watches` matches, so both observations are stale (`MANIFEST.md` §3).
+/// The five commits of `MANIFEST.md` §2, materialised so the freshness computation has a
+/// real repository to ask.
 ///
-/// The set is declared here rather than derived. `freshness::derive` computes it from a
-/// `Repository`, and this example's history is synthetic, so wiring the two together
-/// needs P5's synthetic-repository support to be public. `MANIFEST.md` §2 is exactly the
-/// fixture that would drive it: when that support lands, this function becomes
-/// `freshness::derive(&ledger, &repo, &head, today).stale_set()` and the expectations
-/// below do not change.
-fn stale_set() -> BTreeSet<RevisionId> {
-    [
-        id("engine.obs.channel-coverage", 1),
-        id("simulator.obs.day-runs-deterministically", 1),
-    ]
-    .into()
+/// C3 is when the observations were made and C4 is when everything landed, which is the
+/// whole point: the document asserts a state of the world in §1 and then reports, in §7 of
+/// the same document, the work that changed it.
+const STEPS: &[(&str, &[(&str, &str)])] = &[
+    (
+        "C1 skeleton",
+        &[
+            ("src/lib.rs", "// the simulator\n"),
+            ("src/engine/mod.rs", "// simulator-side engine modules\n"),
+            (
+                "SYSEngine/crates/sys_game_bridge/src/lib.rs",
+                "// the seam\n",
+            ),
+            (
+                "SYSEngine/crates/sys_present/src/lib.rs",
+                "// presentation\n",
+            ),
+            ("SYSEngine/crates/sys_sound/src/lib.rs", "// sound\n"),
+            ("SYSEngine/docs/BUILD-STATUS.md", "# verified tree state\n"),
+            ("AGENTS.md", "# rulings\n"),
+        ],
+    ),
+    (
+        "C2 engine docs",
+        &[("SYSEngine/docs/RENDERING-NEXT.md", "# renderer boundary\n")],
+    ),
+    (
+        "C3 the assessment and the rulings",
+        &[
+            (
+                "SYSEngine/docs/2026-08-02-mid-engine-assessment.md",
+                "# the gap register\n",
+            ),
+            ("AGENTS.md", "# rulings, revised\n"),
+        ],
+    ),
+    (
+        "C4 M1-M5 land",
+        &[
+            ("src/lib.rs", "// the simulator, with the day close\n"),
+            (
+                "SYSEngine/crates/sys_present/src/lib.rs",
+                "// presentation, four more record families\n",
+            ),
+        ],
+    ),
+    (
+        "C5 a bridge follow-up",
+        &[(
+            "SYSEngine/crates/sys_game_bridge/src/lib.rs",
+            "// the seam, extended\n",
+        )],
+    ),
+];
+
+/// The manifest's invented hashes, paired with their position in §2's table.
+const MAPPING: &[(&str, usize)] = &[
+    ("a3f19d0c7b5e284610f8c2a94db3e0761fc58a29", 1),
+    ("4e82b6d1a09f37c5e28d4bf160a739c8b2e05d17", 2),
+    ("9d40e1b7c85a326f0b1de94738ca5602f81b7d4a", 3),
+    ("5cb1a4f0d2e79836ba4c17e05d3f96428a7bc10e", 4),
+    ("b7e3092d6a1f48c5039be2714da86f05c93e1b6d", 5),
+];
+
+fn history() -> SyntheticHistory {
+    let steps: Vec<Step<'_>> = STEPS
+        .iter()
+        .map(|(message, writes)| Step::new(message, writes))
+        .collect();
+    SyntheticHistory::build("sys-tandem-history", &steps)
+}
+
+/// "Today" — 2026-08-04, the day after the roadmap (`MANIFEST.md` §2). An input.
+fn today() -> Date {
+    Date::new(2026, 8, 4).expect("a valid date")
+}
+
+/// The stale set, **derived** from the materialised history rather than declared.
+///
+/// C5 touched `SYSEngine/crates/sys_game_bridge/**` after the channel-coverage observation
+/// was made at C3, and C4 touched `src/**` after the determinism observation. Both are
+/// `watches` matches, so both observations are stale (`MANIFEST.md` §3).
+fn stale_set(ledger: &Ledger, history: &SyntheticHistory) -> BTreeSet<RevisionId> {
+    let queue = derive(ledger, &history.git(), history.head(), today()).expect("derives");
+    assert!(
+        queue.diagnostics.is_empty(),
+        "the freshness inputs are sound: {:?}",
+        queue
+            .diagnostics
+            .iter()
+            .map(|d| (d.code.as_str(), d.message.clone()))
+            .collect::<Vec<_>>()
+    );
+    let stale: BTreeSet<String> = queue.stale.iter().map(|s| s.id.to_string()).collect();
+    assert_eq!(
+        stale,
+        [
+            "engine.obs.channel-coverage/1",
+            "simulator.obs.day-runs-deterministically/1",
+        ]
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect::<BTreeSet<_>>(),
+        "MANIFEST §3: two stale observations"
+    );
+    queue.stale_set()
 }
 
 #[test]
 fn staleness_reaches_the_policy_that_rests_on_it() {
     let workspace = workspace();
-    let at_risk = propagate_staleness(&workspace.ledger, &stale_set());
+    let history = history();
+    let ledger = history.remap(&workspace.ledger, MAPPING);
+    let at_risk = propagate_staleness(&ledger, &stale_set(&ledger, &history));
 
-    // `docs/02` §6 defines at_risk over **live** records: a superseded record rests on
-    // whatever it rested on, and nobody is relying on it. `propagate_staleness` does not
-    // apply that filter yet — it also flags `tandem.assessment.central-fact/1`, which is
-    // superseded — so the filter is applied here. Reported to Writer B; when the graph
-    // applies it, this line becomes a no-op rather than a wrong answer.
-    let flagged: BTreeSet<String> = at_risk
-        .iter()
-        .filter(|r| {
-            workspace
-                .ledger
-                .get(&r.id)
-                .is_some_and(akr_core::model::Record::is_live)
-        })
-        .map(|r| r.id.to_string())
-        .collect();
+    // `docs/02` §6 defines at_risk over **live** records, and the walk applies that: the
+    // superseded `tandem.assessment.central-fact/1` rests on whatever it rested on, and
+    // nobody is relying on it.
+    let flagged: BTreeSet<String> = at_risk.iter().map(|r| r.id.to_string()).collect();
     let expected: BTreeSet<String> = [
         "engine.assessment.castle-not-court/1",
         "tandem.assessment.central-fact/2",
@@ -306,7 +394,9 @@ fn staleness_reaches_the_policy_that_rests_on_it() {
 fn doubt_travels_only_along_the_three_relations_that_carry_it() {
     use akr_core::model::Relation;
     let workspace = workspace();
-    let at_risk = propagate_staleness(&workspace.ledger, &stale_set());
+    let history = history();
+    let ledger = history.remap(&workspace.ledger, MAPPING);
+    let at_risk = propagate_staleness(&ledger, &stale_set(&ledger, &history));
     assert!(!at_risk.is_empty());
     for flagged in &at_risk {
         assert!(

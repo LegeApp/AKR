@@ -117,18 +117,30 @@ answered; asking whether it is current is meaningless.
 ```
 1.  R  := live empirical revisions, in key order
 2.  W  := union of all watch globs across R
-3.  P  := paths touched by commits in (oldest observed_at in R, HEAD],
-          restricted to those matching some prefix in W        [ONE git query]
+3.  P  := paths touched by commits in (oldest observed_at in R, HEAD]  [ONE git query]
 4.  for each r in R:
-5.      if r.review_after is not null and r.review_after < today:
-6.          mark r stale, cause = review_after, detail = the date
-7.      for each glob g in r.watches:
-8.          for each (commit c, path p) in P where c is not reachable
-                                                  from r.observed_at:
-9.              if match(g, p):
-10.                 mark r stale, cause = watch, detail = (g, c, p)
-11.                 break
+5.      cause := none
+6.      for each glob g in r.watches, in authored order:
+7.          for each (commit c, path p) in P, in commit-then-path order,
+                     where c is not reachable from r.observed_at:
+8.              if match(g, p):
+9.                  cause := watch, detail = (g, c, p)
+10.                 break out of 6
+11.     if cause is none and r.review_after is not null
+                        and r.review_after < today:
+12.         cause := review_after, detail = the date
+13.     if cause is not none: mark r stale with cause
 ```
+
+**When both conditions hold, the watch cause is reported.** A moved path names the change
+to go and look at; a passed date only says the record is old. Reporting the date instead
+would replace the actionable answer with the vaguer one. The record is stale either way —
+this decides only what the queue tells you about it.
+
+**A record whose `observed_at` is not in the repository is not evaluated.** Its freshness
+is not computable, and guessing in either direction would be worse than silence.
+`AKR-G011` (V-101) reports the stranded commit, and the record appears in neither the
+stale set nor the fresh one. One unanswerable record never aborts the rest of the queue.
 
 Step 3 is why the stage is fast. The commit-range path query is issued **once**, for the
 union of every watch glob, rather than once per record; per-record work is then a set
@@ -176,6 +188,17 @@ Propagation is transitive, unbounded in depth, and cycle-safe: the traversal is 
 breadth-first walk from the set of stale records over the reversed three-relation graph,
 with a visited set, recording for each dependent the **shortest** path and its length.
 A record that is itself stale is not additionally marked at risk.
+
+**Only live records are flagged, and doubt does not travel through a terminal one.**
+`docs/02-data-model.md` §6 defines `at_risk` over live records, and the walk enforces it
+in both roles. A superseded, withdrawn or disproven record rests on whatever it rested on
+when it was settled; flagging it asks somebody to review a decision the project has
+already moved past, and a warning nobody can act on trains people to ignore the rest. The
+walk therefore stops at a terminal record rather than passing through it. The only
+relation that can point from a live record at a terminal one is `derived_from` — V-019
+forbids the others — and `derived_from` is provenance: a record derived from a retired
+finding was derived from what that finding said at the time, and a later change beneath
+the retired finding does not reach back through it.
 
 Neither flag ever changes a record's state, its content, or the truth value of any claim
 (D-003, D-024).

@@ -258,6 +258,19 @@ pub struct AtRisk {
 /// A record that is itself stale is never additionally marked at risk: it is already
 /// the thing to fix.
 ///
+/// # Only live records are flagged, and doubt does not travel through a terminal one
+///
+/// `docs/02-data-model.md` §6 defines `at_risk` over **live** records. A superseded,
+/// withdrawn or disproven record rests on whatever it rested on when it was settled;
+/// flagging it asks somebody to review a decision the project has already moved past,
+/// and a warning nobody can act on is a warning that trains people to ignore the rest.
+///
+/// The same reasoning stops the walk at a terminal record rather than passing through it.
+/// The one relation that can point from a live record at a terminal one is `derived_from`
+/// (V-019 forbids the others), and `derived_from` is provenance: a record derived from a
+/// retired finding was derived from what that finding said at the time, and a change
+/// beneath the retired finding does not reach back through it.
+///
 /// # Determinism
 ///
 /// The frontier is a sorted queue and adjacency is sorted, so two runs over the same
@@ -281,6 +294,10 @@ pub fn propagate_staleness(ledger: &Ledger, stale: &BTreeSet<RevisionId>) -> Vec
         for source in &frontier {
             for dependent in reverse.successors(source) {
                 if stale.contains(dependent) || flagged.contains_key(dependent) {
+                    continue;
+                }
+                // Live records only, both as a destination and as a route onward.
+                if !ledger.get(dependent).is_some_and(Record::is_live) {
                     continue;
                 }
                 let via = edge_relation(ledger, dependent, source).unwrap_or(Relation::DependsOn);
