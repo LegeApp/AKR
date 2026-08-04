@@ -1,0 +1,66 @@
+akr 0.1
+project sys-tandem
+
+record tandem.assessment.acceptance-gap/1 : assessment {
+    title "The implementation landed; acceptance did not complete"
+    state verified
+    scope [ ref @tandem.milestone.m5-one-playable-day ]
+    statement """
+        M1 through M5 landed as code on 2026-08-03, and every automated lane is green.
+        Acceptance is nonetheless incomplete: M5 requires a designer's native full-day
+        sign-off on three seeds, and no evidence records that it happened. Code cannot
+        self-certify that judgement.
+
+        The document's own STATUS banner reads LIVE (implementation landed; manual
+        sign-off pending), which states the same thing in a form nothing can check.
+        """
+    confidence high
+    as_of git:5cb1a4f0d2e79836ba4c17e05d3f96428a7bc10e
+    supported_by [ @engine.evidence.dawn-capture-review, @engine.evidence.lane-audits-green ]
+    created_at 2026-08-03
+}
+
+record tandem.assessment.central-fact/1 : assessment {
+    title "Most engine gaps are projection gaps, and the newest channels are idle"
+    state superseded
+    scope [ all ]
+    statement """
+        Most engine gaps are projection gaps: the simulator already computes the thing
+        and the bridge or present layer drops it. The two engine channels built most
+        recently — threshold murmurs and conversation formations — are proven idle
+        because the simulator never closes a door and never emits a two-party percept.
+        """
+    confidence high
+    as_of git:9d40e1b7c85a326f0b1de94738ca5602f81b7d4a
+    claim idle-channels-current {
+        text """
+            Threshold murmurs and conversation formations are idle now, because the
+            simulator never closes a door and never emits a two-party percept.
+            """
+    }
+    supported_by [ @engine.obs.channel-coverage#coverage-counts, @simulator.obs.idle-channels ]
+    created_at 2026-08-03
+}
+
+record tandem.assessment.central-fact/2 : assessment {
+    title "Projection gaps remain the shape of the work; the idle channels are closed"
+    state verified
+    scope [ all ]
+    statement """
+        Most engine gaps remain projection gaps: the simulator computes the thing and
+        the bridge or present layer drops it. The specific instance that named this
+        assessment — threshold murmurs and conversation formations idle for want of a
+        closed door and a two-party percept — was closed by M1 on 2026-08-03.
+
+        Revision 1 asserted the idle channels as current. The same document's section 7
+        records M1 landing, so the roadmap contradicted itself the day it was written.
+        This revision keeps the general claim, which is still what orders the work, and
+        retires the specific one.
+        """
+    confidence medium
+    as_of git:5cb1a4f0d2e79836ba4c17e05d3f96428a7bc10e
+    retired_claims [ idle-channels-current ]
+    supersedes [ @tandem.assessment.central-fact/1 ]
+    supported_by [ @engine.obs.channel-coverage#coverage-counts ]
+    created_at 2026-08-04
+}

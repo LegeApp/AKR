@@ -1,0 +1,246 @@
+akr 0.1
+project sys-tandem
+
+record tandem.milestone.m1-court-speaks/1 : milestone {
+    title "M1 — the court speaks"
+    state superseded
+    intent """
+        The two idle presentation channels come alive. Simulator-led: the engine is
+        already done, and the bridge drives the StageWorld door state and the
+        formation and murmur machinery that already exists.
+        """
+    acceptance {
+        check session-audits {
+            statement """
+                The new CourtSession audits from the closed-doors plan section A4 pass.
+                """
+            method command
+        }
+        check squelch-audit-both-assertions {
+            statement """
+                Both of the #[ignore]d assertions in
+                SYSEngine/crates/sys_game_bridge/tests/squelch_audit.rs are un-ignored
+                and pass.
+                """
+            method command
+            command "cargo test -p sys_game_bridge --test squelch_audit"
+        }
+    }
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "2026-08-02-closed-doors-and-court-conversation-plan.md"
+    }
+}
+
+record tandem.milestone.m1-court-speaks/2 : milestone {
+    title "M1 — the court speaks"
+    state completed
+    intent """
+        The two idle presentation channels come alive. Simulator-led: the engine is
+        already done, and the bridge drives the StageWorld door state and the
+        formation and murmur machinery that already exists.
+        """
+    acceptance {
+        check session-audits {
+            statement """
+                The new CourtSession audits from the closed-doors plan section A4 pass.
+                """
+            method command
+            verified_by [ @simulator.evidence.court-session-audits ]
+        }
+        check squelch-audit-calm-assertion {
+            statement """
+                The calm two-actor assertion in
+                SYSEngine/crates/sys_game_bridge/tests/squelch_audit.rs is un-ignored
+                and passes. The wild threshold assertion stays ignored by designer
+                ruling.
+                """
+            method command
+            command "cargo test -p sys_game_bridge --test squelch_audit"
+            verified_by [ @engine.evidence.squelch-audit-unignored ]
+        }
+    }
+    derived_from [ @simulator.decision.wild-threshold-ignored ]
+    supersedes [ @tandem.milestone.m1-court-speaks/1 ]
+    created_at 2026-08-03
+}
+
+record tandem.milestone.m2-castle-works/1 : milestone {
+    title "M2 — the castle works visibly"
+    state completed
+    intent """
+        The rota becomes legible without prose. Engine-led, with one simulator table:
+        queue pockets as compiled geometry, visible yield from precedence records,
+        workplace idle sets, and carried objects in hands.
+        """
+    acceptance {
+        check legibility-rows {
+            statement """
+                Legibility rows in the squelch-audit spirit pass.
+                """
+            method command
+            verified_by [ @engine.evidence.lane-audits-green ]
+        }
+        check prime-bell-fixture {
+            statement """
+                The Prime-bell-at-the-servery-door fixture from mid-engine-assessment
+                section 3 passes.
+                """
+            method command
+            verified_by [ @simulator.evidence.prime-bell-fixture ]
+        }
+    }
+    after [ @tandem.milestone.m1-court-speaks ]
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "SYSEngine/docs/plans/pathing.md"
+        excerpt """
+            pathing.md section 3, with mid-engine-assessment sections 3 and 8.
+            """
+    }
+}
+
+record tandem.milestone.m3-audible-day/1 : milestone {
+    title "M3 — the first audible day"
+    state completed
+    intent """
+        Engine-led. The sound plan's remaining build steps land: mixer core with cpal,
+        FDN reverbs and door continuity, speech-clarity rendering, and record-derived
+        ambience and bells. No simulator half is required: percepts and clarity
+        verdicts already exist.
+        """
+    acceptance {
+        check clarity-determinism {
+            statement """
+                Clarity is deterministic per seed, tick and pose.
+                """
+            method command
+            verified_by [ @engine.evidence.sound-contracts ]
+        }
+        check earshot-parity {
+            statement """
+                The GUI, the mixer and the simulator record show one verdict from one
+                call.
+                """
+            method command
+            verified_by [ @engine.evidence.sound-contracts ]
+        }
+        check studio-walk-golden {
+            statement """
+                The Studio walk test passes against golden clarity verdicts.
+                """
+            method command
+            verified_by [ @engine.evidence.sound-contracts ]
+        }
+    }
+    after [ @tandem.milestone.m2-castle-works ]
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "SYSEngine/docs/plans/sound.md"
+        excerpt """
+            sound.md section 9 build order; the section 8 contracts are the acceptance
+            instrument.
+            """
+    }
+}
+
+record tandem.milestone.m4-day-means-something/1 : milestone {
+    title "M4 — the day means something"
+    state completed
+    intent """
+        The biggest pair. The economy and the day-spine reach the screen and the day
+        gets its close: admission list, coherence contract, Orders of the Day, the
+        delta ledger, and four more record families projected through the bridge.
+        """
+    acceptance {
+        check close-screen-from-records {
+            statement """
+                A squelch-audit row proves the close screen derives only from records.
+                """
+            method command
+            verified_by [ @engine.evidence.lane-audits-green ]
+        }
+        check court-almanac-machine-audit {
+            statement """
+                The Court Almanac --machine-audit proves the day is live and not inert.
+                """
+            method command
+            command "cargo run --bin court_almanac -- --machine-audit --seed 1042"
+            verified_by [
+                @simulator.evidence.court-almanac-seed-1042,
+                @simulator.evidence.court-almanac-seed-1735,
+                @simulator.evidence.court-almanac-seed-2901
+            ]
+        }
+        check normal-day-without-hitch {
+            statement """
+                A normal day runs without a hitch, per the normal-day plan section 3.
+                """
+            method observation
+            verified_by [
+                @simulator.evidence.court-almanac-seed-1042,
+                @simulator.evidence.court-almanac-seed-1735,
+                @simulator.evidence.court-almanac-seed-2901
+            ]
+        }
+    }
+    after [ @tandem.milestone.m3-audible-day ]
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "2026-07-19-normal-day-plan.md"
+        excerpt """
+            N3 remainder and N4; with nice-version-plan-3.md for the close and
+            mid-engine-assessment section 7 for the engine half.
+            """
+    }
+}
+
+record tandem.milestone.m5-one-playable-day/1 : milestone {
+    title "M5 — one playable day"
+    state active
+    intent """
+        Productisation. The client shell hardens: production input bindings,
+        persistence via DayLegacy, font shaping, accessibility adapters, costume and
+        insignia geometry, and the animation social channel. The simulator half is
+        bug-fix only.
+        """
+    target 2026-08-31
+    acceptance {
+        check good-day-surface-audits-green {
+            statement """
+                The good-day surface audits are green.
+                """
+            method command
+            verified_by [ @engine.evidence.lane-audits-green ]
+        }
+        check squelch-audit-green {
+            statement """
+                The squelch audit is green.
+                """
+            method command
+            verified_by [ @engine.evidence.lane-audits-green ]
+        }
+        check three-seed-designer-signoff {
+            statement """
+                A designer performs a full-day native play session on three seeds and
+                signs off. Code cannot self-certify this judgement.
+                """
+            method manual
+        }
+    }
+    after [ @tandem.milestone.m4-day-means-something ]
+    depends_on [ @tandem.term.playable-day ]
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "SYSEngine/docs/BUILD-STATUS.md"
+        excerpt """
+            The Deliberately incomplete list, plus
+            currently-canonical/PLAYABILITY_FIX_LIST.txt for the simulator triage.
+            """
+    }
+}

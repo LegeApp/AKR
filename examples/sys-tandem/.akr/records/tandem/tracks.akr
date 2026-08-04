@@ -1,0 +1,51 @@
+akr 0.1
+project sys-tandem
+
+record tandem.track.defect-retirement/1 : track {
+    title "Defect retirement"
+    state active
+    scope [ path "src/**" ]
+    intent """
+        Retire the open entries in currently-canonical/redesign-ledger.md as capacity
+        allows, scheduled against the milestones they touch rather than as a milestone
+        of their own.
+        """
+    cadence "continuous, scheduled against the milestone each defect touches"
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "currently-canonical/redesign-ledger.md"
+    }
+}
+
+record tandem.track.doc-discipline/1 : track {
+    title "Doc discipline"
+    state active
+    scope [ path "SYSEngine/docs/**", path "llm-docs/**" ]
+    intent """
+        Keep the banners and the gap register honest: every slice flips the affected
+        banners and updates BUILD-STATUS.md and the mid-engine gap register in the same
+        change. tests/doc_audit.rs enforces the root and canonical banners.
+        """
+    cadence "every slice"
+    depends_on [ @tandem.policy.same-change-audit ]
+    created_at 2026-08-03
+}
+
+record tandem.track.lighting/1 : track {
+    title "Lighting"
+    state active
+    scope [ path "SYSEngine/crates/sys_render/**", path "SYSEngine/docs/plans/lighting.md" ]
+    intent """
+        The lighting ladder in lighting.md sections 9 and 10 — global surface atlas,
+        retire the sun depth pass, body blob and capsule shadows, beam prisms, ambient
+        probes — proceeds whenever engine capacity exists. No milestone blocks on it.
+        This is the standing exception to the tandem rule.
+        """
+    cadence "whenever engine capacity exists"
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "SYSEngine/docs/plans/lighting.md"
+    }
+}

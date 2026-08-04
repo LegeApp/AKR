@@ -1,0 +1,37 @@
+akr 0.1
+project sys-tandem
+
+record simulator.obs.day-runs-deterministically/1 : observation {
+    title "The day runs deterministically without a player"
+    state verified
+    scope [ path "src/**" ]
+    statement """
+        The simulator runs a full day with no player attached: muster, rota,
+        metabolism, the measurement-report-consultation-audit chain, suits,
+        hospitality and the ledger all advance and settle.
+        """
+    observed_at git:9d40e1b7c85a326f0b1de94738ca5602f81b7d4a
+    method command
+    watches [ "src/**" ]
+    review_after 2026-10-01
+    created_at 2026-08-02
+    source {
+        kind legacy
+        path "2026-07-19-normal-day-plan.md"
+    }
+}
+
+record simulator.obs.idle-channels/1 : observation {
+    title "The two newest engine channels are idle for want of simulator events"
+    state disproven
+    scope [ path "SYSEngine/crates/sys_game_bridge/**", path "src/**" ]
+    statement """
+        Threshold murmurs and conversation formations are proven idle: the simulator
+        never closes a door and never emits a two-party percept, so both channels have
+        nothing to carry. The engine machinery for both already exists.
+        """
+    observed_at git:9d40e1b7c85a326f0b1de94738ca5602f81b7d4a
+    method instrumented
+    watches [ "src/**" ]
+    created_at 2026-08-02
+}

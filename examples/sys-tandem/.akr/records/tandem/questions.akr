@@ -1,0 +1,21 @@
+akr 0.1
+project sys-tandem
+
+record tandem.question.step-6-polish/1 : question {
+    title "When does sound step-6 polish land?"
+    state open
+    question """
+        Decoded line assets and SoundFont PCM routing remain step-6 polish, and music
+        routing is scheduled whenever convenient after. Neither blocks a milestone.
+        When do they land, and against what capacity?
+        """
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "SYSEngine/docs/plans/sound.md"
+        excerpt """
+            sound.md section 9 build order, step 6 (music routing) whenever convenient
+            after.
+            """
+    }
+}

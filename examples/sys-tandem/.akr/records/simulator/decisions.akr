@@ -1,0 +1,28 @@
+akr 0.1
+project sys-tandem
+
+record simulator.decision.wild-threshold-ignored/1 : decision {
+    title "The wild threshold assertion stays ignored"
+    state active
+    scope [ path "SYSEngine/crates/sys_game_bridge/tests/**" ]
+    topic wild-threshold-assertion
+    decision """
+        The wild threshold assertion in squelch_audit.rs remains #[ignore]d. M1's
+        acceptance is met by the calm two-actor assertion alone.
+        """
+    context """
+        M1's acceptance as first written required both ignored assertions to be
+        un-ignored. Satisfying the wild one would require ordinary generation to
+        schedule a nearby qualifying council, which it need not do.
+        """
+    consequences """
+        M1's acceptance had to be revised rather than merely met: revision 2 of the
+        milestone names one assertion where revision 1 named two. The roadmap's prose
+        records the ruling but not the revision, which is why the milestone reads as
+        simply passed there.
+        """
+    depends_on [ @tandem.constraint.no-new-features ]
+    resolves [ @simulator.question.wild-threshold ]
+    author "designer ruling 2026-08-03"
+    created_at 2026-08-03
+}

@@ -1,0 +1,79 @@
+akr 0.1
+project sys-tandem
+
+record engine.work.citadel-openings/1 : work {
+    title "Authored openings and fixtures for the grammar-grown citadel"
+    state ready
+    intent """
+        The sun currently has real windows only where authoring passes provided them.
+        Authored openings and fixtures for the grammar-grown citadel should land by M4
+        so the working castle is lit like one. This is the single coupling between the
+        lighting track and the milestone sequence.
+        """
+    part_of [ @tandem.track.lighting ]
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "SYSEngine/docs/plans/world-building.md"
+    }
+}
+
+record engine.work.client-shell-hardening/1 : work {
+    title "Harden the native client shell"
+    state active
+    intent """
+        Production input bindings, persistence via DayLegacy save and resume, font
+        shaping, accessibility adapters, costume and insignia geometry for the semantic
+        selections already in CharacterVisualRecord, and the animation social channel
+        of bow depth, gait urgency and gaze.
+        """
+    implements [ @engine.req.no-debug-surfaces ]
+    part_of [ @tandem.milestone.m5-one-playable-day ]
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "SYSEngine/docs/BUILD-STATUS.md"
+        excerpt """
+            The Deliberately incomplete list.
+            """
+    }
+}
+
+record engine.work.four-record-families/1 : work {
+    title "Project flows, work packets, occasions and the ledger"
+    state completed
+    intent """
+        Project four more record families through the bridge: carts at the gate and
+        meals in the hall from FlowCause, day-spine occasions as formations so the
+        duke's ear finally looks scarce, and the end-of-day position surface carrying
+        the ledger's prose, the delta and tomorrow's Orders.
+        """
+    implements [ @tandem.req.bridge-invents-nothing ]
+    part_of [ @tandem.milestone.m4-day-means-something ]
+    created_at 2026-08-03
+}
+
+record engine.work.mixer-core/1 : work {
+    title "Mixer core, room response and clarity rendering"
+    state completed
+    intent """
+        CPAL callback and mixer buses, FDN room response with smooth door continuity,
+        one-verdict clarity rendering, and record-derived work, weather and bell
+        sources.
+        """
+    part_of [ @tandem.milestone.m3-audible-day ]
+    created_at 2026-08-03
+}
+
+record engine.work.queue-pockets/1 : work {
+    title "Queue pockets, visible yield, idle sets and carried objects"
+    state completed
+    intent """
+        Queue pockets as compiled geometry from the data already flowing in
+        SpatialBinding, visible yield from precedence records, workplace idle sets, and
+        carried objects in hands. The report a carrier bears is the game's core object
+        and rendered as nothing.
+        """
+    part_of [ @tandem.milestone.m2-castle-works ]
+    created_at 2026-08-03
+}

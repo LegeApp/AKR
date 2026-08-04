@@ -1,0 +1,61 @@
+akr 0.1
+project sys-tandem
+
+record engine.evidence.dawn-capture-review/1 : evidence {
+    title "The native dawn capture passed visual review"
+    state verified
+    result pass
+    method observation
+    observed_at git:5cb1a4f0d2e79836ba4c17e05d3f96428a7bc10e
+    artifact "SYSEngine/captures/2026-08-03-native-dawn.png"
+    summary """
+        A native capture of the dawn scene, reviewed and accepted. This is a visual
+        review of one frame, not a play session.
+        """
+    created_at 2026-08-03
+}
+
+record engine.evidence.lane-audits-green/1 : evidence {
+    title "Every automated acceptance lane is green"
+    state verified
+    result pass
+    method command
+    observed_at git:5cb1a4f0d2e79836ba4c17e05d3f96428a7bc10e
+    command "cargo test --workspace"
+    summary """
+        The good-day vocabulary, document, checker, focused audio, perception,
+        animation, costume, client, render and presentation, and squelch lanes are all
+        green.
+        """
+    created_at 2026-08-03
+}
+
+record engine.evidence.sound-contracts/1 : evidence {
+    title "The sound contracts hold"
+    state verified
+    result pass
+    method command
+    observed_at git:5cb1a4f0d2e79836ba4c17e05d3f96428a7bc10e
+    command "cargo test -p sys_sound --test contracts"
+    summary """
+        Earshot parity, determinism per seed, tick and pose, and the Studio walk test
+        against golden clarity verdicts. A hearing-capability result alone no longer
+        fabricates a voice.
+        """
+    created_at 2026-08-03
+}
+
+record engine.evidence.squelch-audit-unignored/1 : evidence {
+    title "The calm two-actor squelch assertion is un-ignored and passes"
+    state verified
+    result pass
+    method command
+    observed_at git:5cb1a4f0d2e79836ba4c17e05d3f96428a7bc10e
+    command "cargo test -p sys_game_bridge --test squelch_audit"
+    summary """
+        Calm two-actor percepts activate the conversation formations. The wild
+        threshold assertion is still ignored by designer ruling, so this evidence
+        satisfies one of the two assertions M1 originally named.
+        """
+    created_at 2026-08-03
+}

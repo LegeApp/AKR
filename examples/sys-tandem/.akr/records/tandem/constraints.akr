@@ -1,0 +1,86 @@
+akr 0.1
+project sys-tandem
+
+record tandem.constraint.deferred-tool-suite/1 : constraint {
+    title "The tool suite is deferred until there is a visible day to direct"
+    state active
+    scope [ all ]
+    statement """
+        The deferred tool suite — Day/Occasion Director, Office Designer, Journey
+        Board, Crowd Stager, Semantic Presentation Studio — is not scheduled. Revisit
+        after M4, when there is a visible day to direct.
+        """
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "game-tool-design.md"
+    }
+}
+
+record tandem.constraint.no-identifier-renames/1 : constraint {
+    title "Code identifiers are not renamed for the nomenclature ruling"
+    state active
+    scope [ path "SYSEngine/**", path "src/**" ]
+    statement """
+        The SIMULATOR/ENGINE ruling is a prose and planning vocabulary. Code
+        identifiers are not being renamed for it: src/engine/ keeps its path.
+        """
+    rationale """
+        The same shape as the time-versus-ticks ruling in AGENTS.md. A vocabulary
+        ruling that forces a rename costs a tree-wide change and buys nothing a reader
+        of prose needed.
+        """
+    created_at 2026-08-03
+}
+
+record tandem.constraint.no-new-features/1 : constraint {
+    title "This roadmap orders existing plans and schedules no new features"
+    state active
+    scope [ all ]
+    statement """
+        New features of any kind are out of scope. This roadmap orders existing plans
+        only.
+        """
+    created_at 2026-08-03
+}
+
+record tandem.constraint.no-runtime-tts/1 : constraint {
+    title "No text-to-speech crate enters the runtime dependency tree"
+    state active
+    scope [ path "SYSEngine/crates/sys_sound/**" ]
+    statement """
+        Placeholder voices are generated offline into ordinary voice-asset files by a
+        build or bake tool. The runtime engine decodes those assets through the
+        existing symphonia path. If a runtime TTS dependency ever looks preferable, it
+        needs explicit designer approval first.
+        """
+    measure "zero TTS crates in the runtime dependency tree"
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "AGENTS.md"
+        excerpt """
+            AGENTS.md section 1 dependency rule.
+            """
+    }
+}
+
+record tandem.constraint.out-of-scope-systems/1 : constraint {
+    title "War dials, the 30k city and multiplayer are out of scope"
+    state active
+    scope [ all ]
+    statement """
+        Nothing in do-not-implement-not-canonical-save-for-later/ is scheduled, nor the
+        war and wrongness dials, the 30k city, or multiplayer. The courtier-practice
+        extension professions beyond the landed program are held for later.
+        """
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "AGENTS.md"
+        excerpt """
+            AGENTS.md sections 2.6 to 2.7; courtier-work-dev-area/ holds the extension
+            profession plans for later.
+            """
+    }
+}

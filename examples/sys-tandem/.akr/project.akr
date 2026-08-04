@@ -1,0 +1,11 @@
+akr 0.1
+project sys-tandem
+
+namespace tandem "Project-wide: the roadmap's own rulings, milestones, tracks and plan."
+namespace simulator "The backend court simulation: the deterministic world, records and rules."
+namespace engine "The SYS presentation engine: graphics, GUI and sound."
+
+defaults {
+    review_after_days 60
+    view_output "docs/generated"
+}

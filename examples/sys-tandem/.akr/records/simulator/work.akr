@@ -1,0 +1,99 @@
+akr 0.1
+project sys-tandem
+
+record simulator.work.a5-a7-a8-defects/1 : work {
+    title "Redesign-ledger defects A5, A7 and A8"
+    state ready
+    intent """
+        Three open redesign-ledger entries that touch the day's close.
+        """
+    part_of [ @tandem.work.defect-retirement-plan/1 ]
+    created_at 2026-07-31
+}
+
+record simulator.work.classic-play-debug-split/1 : work {
+    title "Fix the classic Play/Debug split"
+    state ready
+    intent """
+        Separate the classic surface's Play and Debug modes, an open redesign-ledger
+        entry from before the TUI-divergence ruling.
+        """
+    part_of [ @tandem.work.defect-retirement-plan/1 ]
+    created_at 2026-07-31
+}
+
+record simulator.work.court-session-records/1 : work {
+    title "Mint CourtSession and emit two-actor percepts"
+    state completed
+    intent """
+        Mint CourtSession from the existing convene points, derive door state from it,
+        and emit two-actor events at the calm-day interaction sites.
+        """
+    part_of [ @tandem.milestone.m1-court-speaks ]
+    created_at 2026-08-02
+}
+
+record simulator.work.day-close/1 : work {
+    title "The day's close: admission list, coherence contract, Orders and delta"
+    state completed
+    intent """
+        Finish N3's admission list and N4's coherence contract so that every decision
+        traces to a precedent, then build the nice-version-3 close: Orders of the Day
+        generated and delivered at night, and the delta ledger of what rose, slipped
+        and went unresolved, on top of the existing DayLegacy compile.
+        """
+    part_of [ @tandem.milestone.m4-day-means-something ]
+    created_at 2026-08-03
+}
+
+record simulator.work.delete-phase-enum/1 : work {
+    title "Delete the Phase enum"
+    state ready
+    intent """
+        Remove the Phase enum per the archived consolidation table. Scheduled S3, any
+        time; nothing sequences it.
+        """
+    part_of [ @tandem.work.defect-retirement-plan/1 ]
+    created_at 2026-07-31
+}
+
+record simulator.work.playability-triage/1 : work {
+    title "Triage the remaining playability fixes"
+    state active
+    intent """
+        The simulator half of M5 is bug-fix only. Triage the playable-surface items
+        still open in the playability fix list.
+        """
+    part_of [ @tandem.milestone.m5-one-playable-day ]
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "currently-canonical/PLAYABILITY_FIX_LIST.txt"
+    }
+}
+
+record simulator.work.rebase-digest-pins/1 : work {
+    title "Re-base the four fast digest pins on a chosen day length"
+    state ready
+    intent """
+        Re-base the four fast digest pins on a deliberately chosen day length.
+        Scheduled S3, before M4 lands, since M4 deliberately changes the product day
+        and must be caught by pins that watch it.
+        """
+    part_of [ @tandem.work.defect-retirement-plan/1 ]
+    created_at 2026-07-31
+}
+
+record simulator.work.room-activity-table/1 : work {
+    title "The RoomActivityKind to work-packet mapping table"
+    state completed
+    intent """
+        Author the designer table mapping RoomActivityKind to work packets, and route
+        submit_workbench into the practice systems instead of the dead-end Vec. The
+        table retires the bridge's infer_activity_kind and emotional_tone
+        re-derivation defect at the source.
+        """
+    implements [ @tandem.req.bridge-invents-nothing ]
+    part_of [ @tandem.milestone.m2-castle-works ]
+    created_at 2026-08-03
+}

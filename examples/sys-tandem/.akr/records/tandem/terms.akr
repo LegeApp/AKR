@@ -1,0 +1,71 @@
+akr 0.1
+project sys-tandem
+
+record tandem.term.bridge/1 : term {
+    title "Bridge"
+    state active
+    scope [ all ]
+    definition """
+        The seam between the simulator and the engine, living in
+        SYSEngine/crates/sys_game_bridge. It reads simulator records and drives the
+        engine. It invents nothing.
+        """
+    aliases [ "the seam", "sys_game_bridge" ]
+    claim invents-nothing {
+        text """
+            The bridge may read simulator records and drive the engine. It may not
+            derive, infer or re-compute anything the simulator did not already state.
+            """
+    }
+    author "designer ruling 2026-08-03"
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "examples/sys-tandem/legacy/2026-08-03-engine-simulator-tandem-roadmap.md"
+        excerpt """
+            The seam between them is the bridge (SYSEngine/crates/sys_game_bridge),
+            which reads simulator records and drives the engine; it invents nothing
+            (show-dont-tell.md).
+            """
+    }
+}
+
+record tandem.term.engine/1 : term {
+    title "ENGINE"
+    state active
+    scope [ all ]
+    definition """
+        The SYS presentation engine: graphics, GUI and sound. Everything the player
+        sees and hears. Lives in the SYSEngine/ workspace.
+        """
+    aliases [ "the engine", "presentation engine" ]
+    author "designer ruling 2026-08-03"
+    created_at 2026-08-03
+}
+
+record tandem.term.playable-day/1 : term {
+    title "Playable day"
+    state active
+    scope [ all ]
+    definition """
+        A person sits at the native SYS client and plays the seeded 900/1020-tick
+        product day from bedside wake to the Compline close, seeing and hearing the
+        court, with nothing reading as debug.
+        """
+    author "designer ruling 2026-08-03"
+    created_at 2026-08-03
+}
+
+record tandem.term.simulator/1 : term {
+    title "SIMULATOR"
+    state active
+    scope [ all ]
+    definition """
+        The backend court simulation: the deterministic world, records and rules. The
+        save_your_skin root crate, including its src/engine/ modules. Lives at repo
+        root src/.
+        """
+    aliases [ "the simulator", "the backend" ]
+    author "designer ruling 2026-08-03"
+    created_at 2026-08-03
+}

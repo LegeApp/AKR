@@ -1,0 +1,44 @@
+akr 0.1
+project sys-tandem
+
+record tandem.decision.nomenclature/1 : decision {
+    title "Planning prose uses exactly two nouns for the two halves"
+    state active
+    scope [ all ]
+    topic nomenclature
+    decision """
+        From 2026-08-03, planning prose uses exactly two nouns: SIMULATOR for the
+        backend court simulation, and ENGINE for the SYS presentation engine. The seam
+        between them is the bridge.
+        """
+    context """
+        Everything is Rust-side now, so the old engine/frontend words are ambiguous:
+        src/engine/ is part of the SIMULATOR, which reads as a contradiction until the
+        vocabulary is fixed.
+        """
+    consequences """
+        Every planning document written after this date is unreadable under the old
+        vocabulary, and every one written before it needs the reader to translate.
+        """
+    depends_on [ @tandem.constraint.no-identifier-renames ]
+    author "designer ruling 2026-08-03"
+    created_at 2026-08-03
+}
+
+record tandem.decision.tui-divergence/1 : decision {
+    title "The classic Play/Debug split is deprioritised"
+    state active
+    scope [ path "src/bin/**", path "src/tui/**" ]
+    topic classic-surface-priority
+    decision """
+        The classic Play/Debug split is deprioritised. The classic surface is a test
+        harness now, not a product surface.
+        """
+    context """
+        Follows the 2026-08-02 TUI-divergence ruling. The redesign ledger still carried
+        the split as an open defect.
+        """
+    implements [ @tandem.policy.test-surfaces-only ]
+    author "designer ruling 2026-08-02"
+    created_at 2026-08-02
+}
