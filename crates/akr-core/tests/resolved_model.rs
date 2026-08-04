@@ -375,6 +375,7 @@ fn to_lock_carries_the_build_metadata_and_the_source_graph() {
         path: ".akr/project.akr".to_owned(),
         hash: akr_core::hash::source_file_hash(b"akr 0.1\n"),
         records: 0,
+        byte_len: 8,
     }];
     let model = ResolvedModel::build(&ledger, &with_sources);
     let lock = model.to_lock();

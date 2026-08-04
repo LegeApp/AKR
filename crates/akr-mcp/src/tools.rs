@@ -62,8 +62,26 @@ fn search(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
         root,
         &Command::Search {
             query: query.to_owned(),
+            kinds: string_list(arguments, "kinds"),
+            states: string_list(arguments, "states"),
+            limit: arguments
+                .get("limit")
+                .and_then(Value::as_integer)
+                .and_then(|n| usize::try_from(n).ok()),
         },
     )
+}
+
+/// A JSON array of strings, or nothing.
+fn string_list(arguments: &Value, field: &str) -> Vec<String> {
+    arguments
+        .get(field)
+        .and_then(Value::as_array)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(Value::as_str)
+        .map(ToOwned::to_owned)
+        .collect()
 }
 
 fn get(root: &Path, arguments: &Value) -> Result<Value, ToolError> {

@@ -117,11 +117,12 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
             paths,
             budget,
         } => context(session, goal, paths, *budget),
-        Command::Search { .. } => Err(EnvError::new(
-            "AKR-I022",
-            "search requires the full-text index, which arrives with phase P7",
-        )
-        .help("use `akr get` for a known key, or `akr context` for a whole bundle")),
+        Command::Search {
+            query,
+            kinds,
+            states,
+            limit,
+        } => search(session, query, kinds, states, *limit),
         Command::Import { .. } => Err(EnvError::new("AKR-M002", "import arrives with phase P8")
             .help("see docs/12-migration.md for the workflow it will implement")),
         Command::Propose { .. }
@@ -536,13 +537,57 @@ fn build(session: &mut Session) -> Result<Output, EnvError> {
         "akr.lock unchanged\n"
     });
 
+    // Stage E, last: the cache is derived from everything above it, so a build that failed
+    // earlier never gets as far as writing one (`docs/06-compiler-pipeline.md` §7).
+    let index = index_build(session, &model, &queue, &diagnostics)?;
+    match index {
+        Some(stats) if stats.rebuilt => text.push_str(&format!(
+            "indexed {} revisions ({} full-text)\n",
+            stats.revisions, stats.indexed
+        )),
+        Some(_) => text.push_str("index cache current\n"),
+        None => text.push_str("index cache not written (--no-rebuild)\n"),
+    }
+
     let result = Value::object(vec![
         ("views_written", Value::integer(written.len() as i64)),
         ("lock_changed", Value::bool(lock_changed)),
         ("stale", Value::integer(queue.stale.len() as i64)),
         ("at_risk", Value::integer(queue.at_risk.len() as i64)),
+        (
+            "indexed",
+            Value::integer(index.map_or(0, |s| s.revisions as i64)),
+        ),
     ]);
     Ok(Output::text(text).with_result(result))
+}
+
+/// Runs stage E, honouring `--no-rebuild`.
+///
+/// `--no-rebuild` exists for read-only checkouts, where writing a cache is not merely
+/// unwanted but impossible. It suppresses the write rather than failing the build: on
+/// `akr build` the flag is a contradiction in terms, and `AKR-I031` belongs to the read
+/// command that needed a rebuild it was not allowed to do.
+fn index_build(
+    session: &Session,
+    model: &akr_core::resolve::ResolvedModel,
+    queue: &akr_core::freshness::ReviewQueue,
+    diagnostics: &[akr_core::diagnostics::Diagnostic],
+) -> Result<Option<akr_core::store::IndexStats>, EnvError> {
+    if session.global.no_rebuild {
+        return Ok(None);
+    }
+    let inputs = akr_core::store::IndexInputs {
+        model,
+        queue,
+        spans: &session.spans,
+        diagnostics,
+        today: &session.today.to_string(),
+    };
+    let path = akr_core::store::cache_path(&session.akr_dir);
+    akr_core::store::build(&path, &inputs)
+        .map(Some)
+        .map_err(|error| EnvError::new(error.code.as_str(), error.message))
 }
 
 // -------------------------------------------------------------------------------------
@@ -1536,6 +1581,97 @@ fn lock(session: &mut Session, check_only: bool) -> Result<Output, EnvError> {
             Value::integer(diagnostics.len() as i64),
         )]))
         .with_diagnostics(diagnostics, exit))
+}
+
+/// `akr search` — the one command that reads the index cache.
+///
+/// **Search ranks; it never authorises** (`docs/09-context-assembly.md` §1). Nothing here
+/// feeds `akr context`: this is a navigation aid for somebody who already knows roughly
+/// what they are looking for, and the separation is structural — the assembler does not
+/// call this function and could not, because ranking lives in the store module and
+/// assembly does not import it.
+///
+/// Exit 0 even with zero results. An empty result set is an answer.
+#[cfg(feature = "fts5")]
+fn search(
+    session: &Session,
+    query: &str,
+    kinds: &[String],
+    states: &[String],
+    limit: Option<usize>,
+) -> Result<Output, EnvError> {
+    let request = akr_core::store::Request {
+        query: query.to_owned(),
+        kinds: kinds.to_vec(),
+        states: states.to_vec(),
+        limit,
+    };
+    let path = akr_core::store::cache_path(&session.akr_dir);
+    let hits = akr_core::store::search(&path, &request)
+        .map_err(|error| EnvError::new(error.code.as_str(), error.message))?;
+
+    // Columns are padded to the widest cell, as `docs/07-cli.md` §6 shows them. Results are
+    // read down the page rather than across, and ragged columns make that work.
+    let reference: Vec<String> = hits
+        .iter()
+        .map(|hit| format!("{}/{}", hit.key, hit.rev))
+        .collect();
+    let widest = |cells: &[String]| cells.iter().map(String::len).max().unwrap_or(0);
+    let kinds: Vec<String> = hits.iter().map(|hit| hit.kind.clone()).collect();
+    let states: Vec<String> = hits.iter().map(|hit| hit.state.clone()).collect();
+    let (key_width, kind_width, state_width) =
+        (widest(&reference), widest(&kinds), widest(&states));
+
+    let mut text = String::new();
+    for (index, hit) in hits.iter().enumerate() {
+        text.push_str(&format!(
+            "  {:.2}  {:key_width$}  {:kind_width$} {:state_width$}  {}\n",
+            hit.score, reference[index], kinds[index], states[index], hit.title
+        ));
+    }
+    text.push_str(&format!(
+        "{} result{}\n",
+        hits.len(),
+        if hits.len() == 1 { "" } else { "s" }
+    ));
+
+    let results: Vec<Value> = hits
+        .iter()
+        .map(|hit| {
+            Value::object(vec![
+                ("key", Value::string(hit.key.clone())),
+                ("rev", Value::integer(i64::from(hit.rev))),
+                ("kind", Value::string(hit.kind.clone())),
+                ("state", Value::string(hit.state.clone())),
+                ("title", Value::string(hit.title.clone())),
+            ])
+        })
+        .collect();
+    Ok(Output::text(text).with_result(Value::object(vec![
+        ("query", Value::string(query.to_owned())),
+        ("results", Value::array(results)),
+        ("count", Value::integer(hits.len() as i64)),
+    ])))
+}
+
+/// The same command in a binary built without FTS5.
+///
+/// P7 exit criterion 4: the failure is `AKR-I022` and it affects nothing else. Every other
+/// command in this file is reachable and correct in this configuration, because none of
+/// them reads the index.
+#[cfg(not(feature = "fts5"))]
+fn search(
+    _session: &Session,
+    _query: &str,
+    _kinds: &[String],
+    _states: &[String],
+    _limit: Option<usize>,
+) -> Result<Output, EnvError> {
+    Err(EnvError::new(
+        "AKR-I022",
+        "search requires a full-text index; this cache was built without FTS5",
+    )
+    .help("use `akr get` for a known key, or `akr context` for a whole bundle"))
 }
 
 fn context(

@@ -1,0 +1,26 @@
+//! The one way a schema change could go wrong quietly.
+//!
+//! `meta.schema_version` drives invalidation: a cache whose recorded version differs from
+//! the tool's is dropped and rebuilt. That works only if the version actually moves when
+//! the schema does. Nothing in the compiler enforces that — the DDL is a string — so this
+//! pins the DDL's hash and fails when it changes, which is the moment to decide whether
+//! the version needs bumping.
+//!
+//! **When this fails**: read the diff to `spec/schema/index.sql`, bump
+//! [`akr_core::store::SCHEMA_VERSION`] if the shape changed at all, and paste the new hash
+//! below. A comment-only edit needs the hash updated and the version left alone.
+
+use akr_core::store::{SCHEMA_SQL, SCHEMA_VERSION};
+
+/// SHA-256 of `spec/schema/index.sql`, as `akr_core::hash::sha256` renders it.
+const DDL_HASH: &str = "44c6b65c93e42b322796eb37769e8f9ad533fc8a7af12ed5da7f9369b25f3b4e";
+
+#[test]
+fn the_ddl_has_not_changed_without_a_decision_about_the_schema_version() {
+    let actual = akr_core::hash::sha256(SCHEMA_SQL.as_bytes()).to_hex();
+    assert_eq!(
+        actual, DDL_HASH,
+        "spec/schema/index.sql changed. Decide whether SCHEMA_VERSION (currently \
+         {SCHEMA_VERSION}) needs a bump, then update DDL_HASH in this test to {actual}"
+    );
+}

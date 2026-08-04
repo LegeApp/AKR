@@ -154,10 +154,16 @@ pub enum Command {
         /// Token ceiling.
         budget: Option<usize>,
     },
-    /// Full-text search. Arrives with P7.
+    /// `akr search <query> [--kind ...] [--state ...] [--limit n]`.
     Search {
-        /// The query.
+        /// The query, in the full-text engine's syntax.
         query: String,
+        /// Restrict to these kinds. Applied before ranking.
+        kinds: Vec<String>,
+        /// Restrict to these states. Applied before ranking.
+        states: Vec<String>,
+        /// Maximum results.
+        limit: Option<usize>,
     },
     /// Legacy import. Arrives with P8.
     Import {
@@ -589,8 +595,20 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
         }
         "search" => {
             known_flags(&["--kind", "--state", "--limit"])?;
+            let limit = match option_value(tail, "--limit") {
+                Some(text) => Some(text.parse().map_err(|_| {
+                    UsageError::new(
+                        "AKR-C004",
+                        format!("--limit: {text:?} is not a positive integer"),
+                    )
+                })?),
+                None => None,
+            };
             Command::Search {
                 query: need(0, "a query")?,
+                kinds: repeated(tail, "--kind"),
+                states: repeated(tail, "--state"),
+                limit,
             }
         }
         "import" => {

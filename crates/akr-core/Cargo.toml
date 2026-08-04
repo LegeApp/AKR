@@ -10,9 +10,29 @@ publish.workspace = true
 [lints]
 workspace = true
 
-# P1 has no runtime dependencies. The model must compile with no parser and no
-# serialisation library (docs/13 P1 exit criterion 4).
+# The model, the parser, the validator and the resolver have no runtime dependencies, and
+# that is a requirement rather than an accident (docs/13 P1 exit criterion 4). Stage E is
+# the one exception `docs/13` §4 sanctions: it materialises the resolved model into a
+# SQLite cache with an FTS5 index, and neither a SQL engine nor a BM25 ranker is a
+# reasonable thing to own.
+#
+# `bundled` compiles SQLite from vendored C rather than linking whatever the machine
+# happens to provide, so a build is reproducible and FTS5 is present by construction
+# instead of by hope.
 [dependencies]
+rusqlite = { version = "0.40", features = ["bundled"] }
+
+[features]
+default = ["fts5"]
+# Stage E's `records_fts` table and `akr search`.
+#
+# The bundled SQLite is compiled with `-DSQLITE_ENABLE_FTS5`, so the extension is always
+# *available*; this feature decides whether stage E builds a full-text table with it. Off,
+# the cache is built without one and `akr search` fails with `AKR-I022` while every other
+# command is unaffected — P7 exit criterion 4, which would otherwise be a claim no test
+# could reach.
+fts5 = []
 
 [dev-dependencies]
 serde_json = "1"
+rusqlite = { version = "0.40", features = ["bundled"] }

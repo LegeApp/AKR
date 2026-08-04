@@ -59,6 +59,12 @@ pub struct SourceFile {
     pub hash: ContentHash,
     /// How many record revisions it contains.
     pub records: u32,
+    /// Size in bytes on disk, for `sources.byte_len` in the stage E cache.
+    ///
+    /// Not part of any hash and not written to the lock: the file hash already settles
+    /// whether a file changed. This is here because the index records it, and recording it
+    /// is cheaper than reopening every source file to find out.
+    pub byte_len: u64,
 }
 
 /// Everything a build knows that the ledger itself does not.
@@ -302,31 +308,15 @@ pub fn acceptance_verdicts(ledger: &Ledger) -> Vec<CheckVerdict> {
                     verdict = Verdict::Unresolved;
                     continue;
                 };
-                let result = evidence
-                    .get(ContentSlot::Result)
-                    .and_then(ContentValue::as_enum)
-                    .and_then(|e| EvidenceResult::from_name(e.as_str()));
-                if result != Some(EvidenceResult::Pass) {
+                let facts = citation_facts(ledger, &record.id, evidence);
+                if facts.result != Some(EvidenceResult::Pass) {
                     verdict = Verdict::Failing {
                         by: evidence.id.clone(),
-                        result,
+                        result: facts.result,
                     };
                     continue;
                 }
-                let observed_at = evidence
-                    .get(ContentSlot::ObservedAt)
-                    .and_then(ContentValue::as_commit)
-                    .cloned();
-                let last_change = ledger.facts.last_change.get(&record.id).cloned();
-                let descends = match (&observed_at, &last_change) {
-                    (Some(observed), Some(changed)) => ledger
-                        .facts
-                        .ancestry
-                        .is_descendant(observed, changed)
-                        .unwrap_or(true),
-                    _ => true,
-                };
-                match (descends, observed_at, last_change) {
+                match (facts.descends, facts.observed_at, facts.last_change) {
                     (true, Some(observed_at), last_change) => {
                         verdict = Verdict::Satisfied {
                             by: evidence.id.clone(),
@@ -352,6 +342,115 @@ pub fn acceptance_verdicts(ledger: &Ledger) -> Vec<CheckVerdict> {
                 check: check.id.clone(),
                 verdict,
             });
+        }
+    }
+    out
+}
+
+/// What one citation of a check says, before any selection between citations.
+///
+/// Split out so that [`acceptance_verdicts`] — which picks *one* citation per check — and
+/// [`evidence_links`] — which records *every* citation — cannot disagree about what a
+/// citation means. The selection differs; the facts must not.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CitationFacts {
+    /// What the evidence reported, where it reported anything.
+    pub result: Option<EvidenceResult>,
+    /// The commit the evidence was observed at.
+    pub observed_at: Option<Commit>,
+    /// The last commit that changed the verified record, when the facts supply one.
+    pub last_change: Option<Commit>,
+    /// Whether `observed_at` descends from `last_change`.
+    ///
+    /// True when either is unknown, which is what V-020 does: absent git facts, evidence
+    /// is taken at its word rather than accused of being stale.
+    pub descends: bool,
+}
+
+/// Evaluates one citation of one check (D-016).
+#[must_use]
+pub fn citation_facts(ledger: &Ledger, owner: &RevisionId, evidence: &Record) -> CitationFacts {
+    let result = evidence
+        .get(ContentSlot::Result)
+        .and_then(ContentValue::as_enum)
+        .and_then(|e| EvidenceResult::from_name(e.as_str()));
+    let observed_at = evidence
+        .get(ContentSlot::ObservedAt)
+        .and_then(ContentValue::as_commit)
+        .cloned();
+    let last_change = ledger.facts.last_change.get(owner).cloned();
+    let descends = match (&observed_at, &last_change) {
+        (Some(observed), Some(changed)) => ledger
+            .facts
+            .ancestry
+            .is_descendant(observed, changed)
+            .unwrap_or(true),
+        _ => true,
+    };
+    CitationFacts {
+        result,
+        observed_at,
+        last_change,
+        descends,
+    }
+}
+
+/// One `check -> evidence` citation, evaluated, as `evidence_links` records it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EvidenceLink {
+    /// The verified record.
+    pub owner: RevisionId,
+    /// Which check of it.
+    pub check: Segment,
+    /// The evidence cited.
+    pub evidence: RevisionId,
+    /// What the evidence reported.
+    pub result: EvidenceResult,
+    /// Where it was observed.
+    pub observed_at: Commit,
+    /// The last commit that changed the verified content.
+    pub last_change: Commit,
+    /// Whether `observed_at` descends from `last_change`.
+    pub descends: bool,
+    /// `result = pass AND descends`, which is what satisfies a check.
+    pub satisfies: bool,
+}
+
+/// Every citation the ledger makes, in canonical order.
+///
+/// Only citations whose result, observation commit and last-change commit are all known
+/// appear: the row exists to record the descendant verdict, and without those three there
+/// is no verdict to record. A build with no git facts therefore produces none, which is
+/// the same condition under which V-020 declines to judge.
+#[must_use]
+pub fn evidence_links(ledger: &Ledger) -> Vec<EvidenceLink> {
+    let mut out = Vec::new();
+    for record in sorted_records(ledger) {
+        let Some(acceptance) = &record.acceptance else {
+            continue;
+        };
+        for check in &acceptance.checks {
+            for reference in &check.verified_by {
+                let Some(evidence) = ledger.resolve(reference).ok().flatten() else {
+                    continue;
+                };
+                let facts = citation_facts(ledger, &record.id, evidence);
+                let (Some(result), Some(observed_at), Some(last_change)) =
+                    (facts.result, facts.observed_at, facts.last_change)
+                else {
+                    continue;
+                };
+                out.push(EvidenceLink {
+                    owner: record.id.clone(),
+                    check: check.id.clone(),
+                    evidence: evidence.id.clone(),
+                    result,
+                    observed_at,
+                    last_change,
+                    descends: facts.descends,
+                    satisfies: result == EvidenceResult::Pass && facts.descends,
+                });
+            }
         }
     }
     out

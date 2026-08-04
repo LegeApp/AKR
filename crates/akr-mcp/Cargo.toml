@@ -22,7 +22,11 @@ path = "src/lib.rs"
 # — the framing and the JSON — are small enough to own outright
 # (`docs/13-implementation-roadmap.md` §4).
 [dependencies]
-akr-core = { path = "../akr-core" }
+akr-core = { path = "../akr-core", default-features = false }
 # The command line, as a library. §1's invariant — one implementation, no MCP-specific
 # assembly — is structural rather than aspirational because of this line.
-akr-cli = { path = "../akr-cli" }
+akr-cli = { path = "../akr-cli", default-features = false }
+
+[features]
+default = ["fts5"]
+fts5 = ["akr-core/fts5", "akr-cli/fts5"]

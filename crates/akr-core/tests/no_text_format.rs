@@ -5,8 +5,20 @@
 //! than a promise in a document — if someone adds a runtime dependency to reach for a
 //! serialisation library, it fails here.
 
+/// The dependency list, kept to exactly what `docs/13` §4 sanctions.
+///
+/// One entry, added by P7. Stage E materialises the resolved model into a SQLite cache
+/// with an FTS5 index, and neither a SQL engine nor a BM25 ranker is a reasonable thing to
+/// own — which is why §4 named SQLite in the short list of permitted dependencies while
+/// the SHA-256, JSON, glob and argument-parsing entries beside it were all written in
+/// house instead.
+///
+/// The allowance is a list rather than a hole: a second entry fails this test, and the
+/// conversation about whether it belongs happens here rather than in review.
+const PERMITTED: &[&str] = &["rusqlite"];
+
 #[test]
-fn the_crate_has_no_runtime_dependencies() {
+fn the_crate_has_no_runtime_dependencies_beyond_the_sanctioned_one() {
     let manifest = include_str!("../Cargo.toml");
     let after = manifest
         .split_once("\n[dependencies]")
@@ -17,10 +29,27 @@ fn the_crate_has_no_runtime_dependencies() {
         .lines()
         .map(str::trim)
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .filter(|line| {
+            let name = line.split(['=', ' ']).next().unwrap_or(line);
+            !PERMITTED.contains(&name)
+        })
         .collect();
     assert!(
         entries.is_empty(),
-        "P1 must build with no runtime dependencies, found {entries:?}"
+        "akr-core takes only the dependencies docs/13 §4 sanctions, found {entries:?}"
+    );
+}
+
+#[test]
+fn the_model_still_compiles_without_the_index() {
+    // P1's actual claim, which survives P7: the semantics do not depend on the cache. If
+    // this file's crate builds under `--no-default-features` the model, the parser, the
+    // validator and the resolver are all still free of the full-text index — and the
+    // `fts5` feature being additive is what keeps that true.
+    let manifest = include_str!("../Cargo.toml");
+    assert!(
+        manifest.contains("default = [\"fts5\"]"),
+        "fts5 must be a feature, so the model can be built without it"
     );
 }
 

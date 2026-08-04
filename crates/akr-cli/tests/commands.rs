@@ -192,19 +192,25 @@ fn init_scaffolds_a_workspace_and_never_overwrites() {
 #[test]
 fn the_deferred_commands_say_which_phase_brings_them() {
     let example = Example::materialise("deferred");
-    // Two commands remain deferred after P6c: `search` needs the index (P7) and `import`
-    // needs the migration pipeline (P8). Both say so by code and by phase, so nobody has
-    // to guess whether they are broken or unbuilt.
-    let cases: &[(&[&str], &str, &str)] = &[
-        (&["search", "projection"], "AKR-I022", "P7"),
-        (&["import", "docs/legacy.md"], "AKR-M002", "P8"),
-    ];
+    // One command remains deferred after P7: `import` needs the migration pipeline (P8).
+    // It says so by code and by phase, so nobody has to guess whether it is broken or
+    // unbuilt. `search` was the other, and P7 delivered it — `tests/search.rs` now holds
+    // the exit criteria that replaced this line.
+    let cases: &[(&[&str], &str, &str)] = &[(&["import", "docs/legacy.md"], "AKR-M002", "P8")];
     for (args, code, phase) in cases {
         let run = example.run(args);
         assert_eq!(run.code, 3, "akr {}: {}", args.join(" "), run.output());
         let text = run.output();
         assert!(text.contains(code), "akr {}: {text}", args.join(" "));
         assert!(text.contains(phase), "akr {}: {text}", args.join(" "));
+    }
+
+    // And `search` is no longer among them — in a binary that has a ranker at all.
+    #[cfg(feature = "fts5")]
+    {
+        assert_eq!(example.run(&["build"]).code, 0);
+        let search = example.run(&["search", "projection"]);
+        assert_eq!(search.code, 0, "{}", search.output());
     }
 }
 

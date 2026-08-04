@@ -145,6 +145,7 @@ pub fn load_workspace(root: &Path, akr_dir: &Path) -> io::Result<Workspace> {
             path: relative,
             hash: source_file_hash(&bytes),
             records,
+            byte_len: bytes.len() as u64,
         });
     }
 

@@ -43,5 +43,6 @@ pub mod model;
 pub mod ops;
 pub mod render;
 pub mod resolve;
+pub mod store;
 pub mod syntax;
 pub mod validate;

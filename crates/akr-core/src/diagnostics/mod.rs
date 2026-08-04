@@ -498,4 +498,48 @@ pub mod codes {
         /// Every CLI-stage code this crate raises.
         pub const ALL: &[Code] = &[C012, C031, C032, C033];
     }
+
+    /// Codes stage E raises (`docs/06-compiler-pipeline.md` §7).
+    ///
+    /// Registered in `spec/diagnostics/codes-runtime.md`, and separate from [`ALL`] for
+    /// the same reason [`cli`] is: these are facts about the environment or about an
+    /// internal invariant, never about the ledger. Routine invalidation raises none of
+    /// them — a cache that *had* to be rebuilt is not a problem, and saying so would train
+    /// operators to ignore the ones that are.
+    pub mod index {
+        use super::super::Code;
+
+        /// The cache file exists and cannot be opened.
+        pub const I001: Code = Code::new("AKR-I001");
+        /// The populate transaction could not commit.
+        pub const I002: Code = Code::new("AKR-I002");
+        /// `.akr/cache/` is missing and cannot be created, or is read-only.
+        pub const I003: Code = Code::new("AKR-I003");
+        /// Some other SQLite database sits at the cache path.
+        pub const I004: Code = Code::new("AKR-I004");
+        /// `PRAGMA integrity_check` did not return `ok`.
+        pub const I011: Code = Code::new("AKR-I011");
+        /// A resolved head has no `resolutions` row.
+        pub const I012: Code = Code::new("AKR-I012");
+        /// A row count disagrees with the resolved model.
+        pub const I013: Code = Code::new("AKR-I013");
+        /// `records_fts` could not be built.
+        pub const I021: Code = Code::new("AKR-I021");
+        /// A full-text query against a cache built without FTS5.
+        pub const I022: Code = Code::new("AKR-I022");
+        /// A rebuild was needed while `--no-rebuild` was in force.
+        pub const I031: Code = Code::new("AKR-I031");
+        /// Another process holds the cache lock.
+        pub const I032: Code = Code::new("AKR-I032");
+
+        /// The search query could not be parsed by the full-text engine.
+        pub const X031: Code = Code::new("AKR-X031");
+        /// A configured ranker could not be reached.
+        pub const X032: Code = Code::new("AKR-X032");
+
+        /// Every stage E code this crate raises.
+        pub const ALL: &[Code] = &[
+            I001, I002, I003, I004, I011, I012, I013, I021, I022, I031, I032, X031, X032,
+        ];
+    }
 }

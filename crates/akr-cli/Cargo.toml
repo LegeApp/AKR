@@ -18,8 +18,19 @@ path = "src/lib.rs"
 name = "akr"
 path = "src/main.rs"
 
-# No runtime dependencies. Argument parsing and JSON writing are both small enough to
-# own outright, and `docs/13-implementation-roadmap.md` §4 keeps the dependency list
-# short deliberately.
+# No runtime dependencies of its own. Argument parsing and JSON writing are both small
+# enough to own outright, and `docs/13-implementation-roadmap.md` §4 keeps the dependency
+# list short deliberately. SQLite arrives through `akr-core`'s stage E, not through here.
 [dependencies]
-akr-core = { path = "../akr-core" }
+akr-core = { path = "../akr-core", default-features = false }
+
+[features]
+default = ["fts5"]
+# Passed through so `--no-default-features` reaches stage E from the binary a test runs.
+fts5 = ["akr-core/fts5"]
+
+# `tests/index.rs` opens the cache the way an operator debugging a build would. Nothing in
+# `src/` links SQLite directly — the boundary of D-019 is that the cache is reached through
+# `akr-core`'s store module, and a dev-dependency cannot weaken it.
+[dev-dependencies]
+rusqlite = { version = "0.40", features = ["bundled"] }

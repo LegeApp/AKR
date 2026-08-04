@@ -206,25 +206,57 @@ fn knowledge_validate_agrees_with_akr_check() {
     );
 }
 
+#[cfg(feature = "fts5")]
 #[test]
-fn knowledge_search_is_deferred_on_both_surfaces() {
+fn knowledge_search_and_akr_search_agree() {
     let example = Example::materialise("differential-search");
-    // The one read tool with no answer yet, and the two surfaces must be honest about it
-    // in the same way: the CLI exits 3, the tool returns an `environment` error.
+    assert_eq!(example.run(&["build"]).code, 0);
+
+    let tool = call(&example, "knowledge.search", r#"{"query":"projection"}"#);
+    let cli = cli_result(&example, &["search", "projection"]);
+    assert_eq!(tool.to_pretty(), cli.to_pretty());
+    assert!(
+        tool.get("results")
+            .and_then(Value::as_array)
+            .is_some_and(|results| !results.is_empty()),
+        "two empty result sets agree trivially: {}",
+        tool.to_pretty()
+    );
+
+    // Filters travel through the tool the same way they travel through the flags, which is
+    // the part an agent would notice first if it drifted.
+    let tool = call(
+        &example,
+        "knowledge.search",
+        r#"{"query":"day","kinds":["milestone"],"limit":3}"#,
+    );
+    let cli = cli_result(
+        &example,
+        &["search", "day", "--kind", "milestone", "--limit", "3"],
+    );
+    assert_eq!(tool.to_pretty(), cli.to_pretty());
+}
+
+#[test]
+fn a_cache_without_a_ranker_fails_the_same_way_on_both_surfaces() {
+    // P7 exit criterion 4 reaches the tool surface too: an agent must learn that search is
+    // unavailable, not that the ledger is empty.
+    let example = Example::materialise("differential-search-degraded");
+    assert_eq!(example.run(&["build"]).code, 0);
+
+    // No cache at all is the condition both surfaces have to survive, and it is reachable
+    // in either build: the binary without FTS5 never had a ranker, and the one with FTS5
+    // just lost the file its ranker lived in.
+    std::fs::remove_dir_all(example.root().join(".akr/cache")).expect("the cache goes");
+
     let run = example.run(&["search", "projection"]);
     assert_eq!(run.code, 3, "{}", run.output());
-    assert!(run.output().contains("AKR-I022"), "{}", run.output());
 
     let payload = call(&example, "knowledge.search", r#"{"query":"projection"}"#);
     let error = payload.get("error").expect("an error payload");
     assert_eq!(
         error.get("class").and_then(Value::as_str),
         Some("environment")
-    );
-    assert!(
-        error.to_pretty().contains("AKR-I022"),
-        "{}",
-        error.to_pretty()
     );
 }
 

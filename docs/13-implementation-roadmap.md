@@ -370,6 +370,19 @@ envelope, and a glob matcher (or a hand-written one for the D-008 subset, which 
 enough to be worth owning). Git is invoked as a subprocess or through a library; either
 is fine, and the subprocess route is one fewer build-time dependency.
 
+**What was actually taken, as of P7.** One: `rusqlite`, with the `bundled` feature, for
+stage E. Everything else on that list was written in house — SHA-256, the JSON writer and
+reader, the argument parser, the glob matcher — and git is the subprocess. SQLite is the
+one entry that could not go the same way, because the cost is not a SQL engine but an FTS5
+tokeniser and a BM25 ranker beside it, and owning those buys nothing the design wants.
+
+`bundled` compiles SQLite from vendored C rather than linking the machine's, which costs a
+C toolchain at build time and buys a build that behaves the same everywhere and an FTS5
+that is present by construction. The `fts5` cargo feature is therefore about what stage E
+*builds*, not about what SQLite *has*: without it the cache carries no full-text table and
+`akr search` fails with `AKR-I022`, which is how P7's fourth exit criterion is reachable
+by a test rather than only by an unlucky operator.
+
 ## 5. Testing strategy
 
 | Kind | Where | What it protects |
