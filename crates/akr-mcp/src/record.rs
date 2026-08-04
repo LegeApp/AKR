@@ -1,0 +1,287 @@
+//! Turning a `knowledge.propose` or `knowledge.revise` payload into a record.
+//!
+//! # Why this emits AKR source rather than building a `Record`
+//!
+//! Every content slot has a type — `observed_at` is a commit, `watches` is an array of
+//! globs, `review_after` is a date, `method` is an enum member — and that table already
+//! exists, in the lowering pass of `akr_core::syntax`. Building a `Record` field by field
+//! from JSON would be a second copy of it, and the two would drift the first time a slot
+//! was added.
+//!
+//! So this writes the record out in AKR's own syntax and hands it to the parser. The
+//! grammar stays the single source of truth for what a slot means, and a payload that
+//! names a slot the kind does not have fails with the same `AKR-T***` diagnostic an
+//! author would get — which is what §5's `schema` class is for.
+
+use akr_core::json::Value;
+use akr_core::model::{ContentSlot, Kind, LogicalKey, Record, Relation};
+
+use crate::errors::ToolError;
+
+/// Renders a tool payload as AKR source for one record.
+///
+/// # Errors
+/// [`ToolError`] of class `usage` when a field is the wrong JSON shape — an object where
+/// an array was needed, a slot name that is not a slot at all.
+pub fn to_source(
+    project: &str,
+    key: &LogicalKey,
+    revision: u32,
+    kind: Kind,
+    title: &str,
+    state: Option<&str>,
+    payload: &Value,
+) -> Result<String, ToolError> {
+    let mut out = format!("akr 0.1\nproject {project}\n\n");
+    out.push_str(&format!("record {key}/{revision} : {} {{\n", kind.name()));
+    out.push_str(&format!("    title {}\n", quote(title)));
+    if let Some(state) = state {
+        out.push_str(&format!("    state {state}\n"));
+    }
+
+    if let Some(scope) = payload.get("scope") {
+        out.push_str(&format!("    scope [ {} ]\n", scope_terms(scope)?));
+    }
+    if let Some(topic) = payload.get("topic").and_then(Value::as_str) {
+        out.push_str(&format!("    topic {topic}\n"));
+    }
+
+    // Slots in the kind's declared order, so the emitted text is close to canonical before
+    // the formatter ever sees it. The formatter is authoritative; this only keeps the
+    // intermediate readable when a diagnostic points into it.
+    if let Some(Value::Object(slots)) = payload.get("slots") {
+        for spec in kind.content_slots() {
+            let name = spec.slot.name();
+            if let Some((_, value)) = slots.iter().find(|(k, _)| k == name) {
+                out.push_str(&slot_line(spec.slot, value)?);
+            }
+        }
+        for (name, _) in slots {
+            if ContentSlot::from_name(name).is_none_or(|slot| {
+                !kind.content_slots().iter().any(|spec| spec.slot == slot)
+            }) {
+                return Err(ToolError::new(
+                    "AKR-T002",
+                    format!("`{name}` is not a slot of kind `{}`", kind.name()),
+                ));
+            }
+        }
+    }
+
+    if let Some(Value::Array(claims)) = payload.get("claims") {
+        for claim in claims {
+            let anchor = claim
+                .get("anchor")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ToolError::new("AKR-C004", "each claim needs an `anchor`"))?;
+            let text = claim
+                .get("text")
+                .and_then(Value::as_str)
+                .ok_or_else(|| ToolError::new("AKR-C004", "each claim needs a `text`"))?;
+            out.push_str(&format!("    claim {anchor} {{\n"));
+            out.push_str(&format!("        text {}\n", prose(text, 8)));
+            out.push_str("    }\n");
+        }
+    }
+    if let Some(Value::Array(retired)) = payload.get("retired_claims") {
+        let anchors: Vec<String> = retired
+            .iter()
+            .filter_map(Value::as_str)
+            .map(ToOwned::to_owned)
+            .collect();
+        if !anchors.is_empty() {
+            out.push_str(&format!("    retired_claims [ {} ]\n", anchors.join(", ")));
+        }
+    }
+
+    if let Some(Value::Object(relations)) = payload.get("relations") {
+        for (name, targets) in relations {
+            let relation = Relation::from_name(name).ok_or_else(|| {
+                ToolError::new("AKR-C004", format!("`{name}` is not a relation"))
+            })?;
+            let refs: Vec<String> = targets
+                .as_array()
+                .unwrap_or_default()
+                .iter()
+                .filter_map(Value::as_str)
+                .map(reference)
+                .collect();
+            if !refs.is_empty() {
+                out.push_str(&format!("    {} [ {} ]\n", relation.name(), refs.join(", ")));
+            }
+        }
+    }
+
+    if let Some(author) = payload.get("author").and_then(Value::as_str) {
+        out.push_str(&format!("    author {}\n", quote(author)));
+    }
+    if let Some(created) = payload.get("created_at").and_then(Value::as_str) {
+        out.push_str(&format!("    created_at {created}\n"));
+    }
+    out.push_str("}\n");
+    Ok(out)
+}
+
+/// Parses the emitted source back into a record.
+///
+/// # Errors
+/// [`ToolError`] of class `schema` when the payload does not describe a legal record.
+pub fn parse(source: &str, key: &LogicalKey) -> Result<Record, ToolError> {
+    let mut sources = akr_core::diagnostics::SourceMap::new();
+    let file = sources.add("<tool payload>", source);
+    let parsed = akr_core::syntax::parse(source, file);
+    let Some(tree) = parsed.file else {
+        return Err(schema_error(&parsed.diagnostics));
+    };
+    let (ledger, lowered) =
+        akr_core::syntax::lower::lower_all(&[("<tool payload>".to_owned(), tree)]);
+    let all: Vec<_> = parsed.diagnostics.into_iter().chain(lowered).collect();
+    if all
+        .iter()
+        .any(|d| d.severity == akr_core::diagnostics::Severity::Error)
+    {
+        return Err(schema_error(&all));
+    }
+    ledger
+        .records()
+        .iter()
+        .find(|record| record.id.key == *key)
+        .cloned()
+        .ok_or_else(|| ToolError::new("AKR-T002", "the payload describes no record"))
+}
+
+fn schema_error(diagnostics: &[akr_core::diagnostics::Diagnostic]) -> ToolError {
+    let first = diagnostics
+        .iter()
+        .find(|d| d.severity == akr_core::diagnostics::Severity::Error);
+    let (code, message) = first.map_or(
+        ("AKR-T002", "the payload does not describe a record".to_owned()),
+        |d| (d.code.as_str(), d.message.clone()),
+    );
+    ToolError::new(code, message).with_diagnostics(
+        diagnostics
+            .iter()
+            .map(|d| {
+                Value::object(vec![
+                    ("code", Value::string(d.code.as_str())),
+                    ("severity", Value::string("error")),
+                    ("message", Value::string(d.message.clone())),
+                ])
+            })
+            .collect(),
+    )
+}
+
+// -------------------------------------------------------------------------------------
+// slot rendering
+// -------------------------------------------------------------------------------------
+
+/// One `    <slot> <value>` line, typed as the lowering pass types it.
+fn slot_line(slot: ContentSlot, value: &Value) -> Result<String, ToolError> {
+    let name = slot.name();
+    let rendered = match slot {
+        // Commits and dates are bare tokens, never quoted strings.
+        ContentSlot::ObservedAt | ContentSlot::AsOf => {
+            let text = string(value, name)?;
+            let hash = text.strip_prefix("git:").unwrap_or(&text);
+            format!("git:{hash}")
+        }
+        ContentSlot::ReviewAfter | ContentSlot::Target => string(value, name)?,
+        // Enum members are bare words.
+        ContentSlot::Method | ContentSlot::Result | ContentSlot::Confidence => {
+            string(value, name)?
+        }
+        ContentSlot::Watches | ContentSlot::Aliases => {
+            let items: Vec<String> = array(value, name)?
+                .iter()
+                .filter_map(Value::as_str)
+                .map(quote)
+                .collect();
+            format!("[ {} ]", items.join(", "))
+        }
+        ContentSlot::Exceptions => {
+            let items: Vec<String> = array(value, name)?
+                .iter()
+                .filter_map(Value::as_str)
+                .map(reference)
+                .collect();
+            format!("[ {} ]", items.join(", "))
+        }
+        _ => {
+            let text = string(value, name)?;
+            if text.contains('\n') || text.len() > 60 {
+                prose(&text, 4)
+            } else {
+                quote(&text)
+            }
+        }
+    };
+    Ok(format!("    {name} {rendered}\n"))
+}
+
+fn string(value: &Value, slot: &str) -> Result<String, ToolError> {
+    value.as_str().map(ToOwned::to_owned).ok_or_else(|| {
+        ToolError::new("AKR-C004", format!("slot `{slot}` expects a string"))
+    })
+}
+
+fn array<'a>(value: &'a Value, slot: &str) -> Result<&'a [Value], ToolError> {
+    value
+        .as_array()
+        .ok_or_else(|| ToolError::new("AKR-C004", format!("slot `{slot}` expects an array")))
+}
+
+fn scope_terms(value: &Value) -> Result<String, ToolError> {
+    let items = value
+        .as_array()
+        .ok_or_else(|| ToolError::new("AKR-C004", "`scope` expects an array"))?;
+    let mut terms = Vec::new();
+    for item in items {
+        // Both the object form of §3 (`{"form": "all"}`) and the plain string form an
+        // agent will reach for first.
+        let term = match item {
+            Value::String(text) if text == "all" => "all".to_owned(),
+            Value::String(text) if text.starts_with('@') => format!("ref {text}"),
+            Value::String(text) => format!("path {}", quote(text)),
+            Value::Object(_) => match item.get("form").and_then(Value::as_str) {
+                Some("all") => "all".to_owned(),
+                Some("path") => format!(
+                    "path {}",
+                    quote(item.get("glob").and_then(Value::as_str).unwrap_or_default())
+                ),
+                Some("ref") => format!(
+                    "ref {}",
+                    reference(item.get("ref").and_then(Value::as_str).unwrap_or_default())
+                ),
+                _ => return Err(ToolError::new("AKR-C004", "unknown scope form")),
+            },
+            _ => return Err(ToolError::new("AKR-C004", "unknown scope term")),
+        };
+        terms.push(term);
+    }
+    Ok(terms.join(", "))
+}
+
+fn reference(text: &str) -> String {
+    if text.starts_with('@') {
+        text.to_owned()
+    } else {
+        format!("@{text}")
+    }
+}
+
+fn quote(text: &str) -> String {
+    let escaped = text.replace('\\', "\\\\").replace('"', "\\\"");
+    format!("\"{escaped}\"")
+}
+
+/// A triple-quoted prose block, indented to `indent`.
+fn prose(text: &str, indent: usize) -> String {
+    let pad = " ".repeat(indent + 4);
+    let mut out = String::from("\"\"\"\n");
+    for line in text.lines() {
+        out.push_str(&format!("{pad}{}\n", line.trim_end()));
+    }
+    out.push_str(&format!("{}\"\"\"", " ".repeat(indent + 4)));
+    out
+}
