@@ -762,3 +762,47 @@ rule self-enforcing.
 
 **Honored by.** `docs/11-projections.md`, `docs/06-compiler-pipeline.md`,
 `docs/07-cli.md`, `examples/save-your-skin/docs/generated/`.
+
+---
+
+## D-026 — Planning kinds carry an optional `note` slot
+
+*Amendment, 2026-08-04. Lead decision, taken on the P6a report; see the rationale below
+for what prompted it. Unlike D-001..D-025 this entry postdates the spine's freezing, and
+it landed with its implementation rather than in a commit of its own.*
+
+**Question.** `docs/07` §6 said `akr abandon --reason` "lands in a `note`". No kind had a
+`note` slot — only `disposition` blocks did — so the reason had nowhere to go. The P6
+implementation wrote it as a leading comment, which works and is unsatisfying.
+
+**Resolution.** `work`, `milestone` and `track` gain an optional `note` prose slot:
+free-form operator commentary, informational only, with **no validation consequence**. No
+rule reads it, nothing is required to set it, and nothing fails if it is absent or
+nonsense. Views render it for records in terminal states, so an abandonment reason
+appears in `DECISION-HISTORY.md` and the work projections rather than sitting in a
+comment nobody renders.
+
+`akr abandon --reason` writes it. Other operations may set it through an ordinary edit.
+
+In canonical order it is the **last content slot of its kind** — `intent`, `target`,
+`note` for milestones and work; `intent`, `cadence`, `note` for tracks — which puts it at
+the end of the content group, immediately before claims and acceptance. That is as close
+to the metadata group as a kind-specific slot can sit without inventing a new ordering
+rank in D-012, and it reads correctly: the commentary comes after the thing commented on.
+
+**Rationale.** A comment was the wrong home for two reasons. It is excluded from the seal
+hash by D-015 — which is right for commentary and wrong for a reason somebody will later
+need — and it is invisible to every generated view, so the operator who abandons a plan
+on Tuesday leaves nothing the Thursday reader of `ACTIVE-WORK.md` can see. An
+abandonment reason is durable knowledge and deserves a rendered slot.
+
+Scoping it to the planning kinds is deliberate. Normative and empirical records already
+have a place for every kind of prose they should carry — `rationale`, `context`,
+`consequences`, `summary` — and a general-purpose commentary slot on them would become
+the metadata bag `docs/02` §12 refuses to have. Planning records are the ones that get
+abandoned, carried forward and re-scheduled by operators mid-flight, and that is the
+commentary this slot is for.
+
+**Honored by.** `spec/tables/vocabulary.json`, `docs/02-data-model.md` §4.9–§4.11,
+`crates/akr-core/src/model/kind.rs`, `crates/akr-core/src/ops`, `docs/07-cli.md` §6
+(Writer B, P6c), `docs/11-projections.md`.

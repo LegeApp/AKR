@@ -242,7 +242,9 @@
       "purpose": "A named point at which a defined set of acceptance checks passes.",
       "content_slots": [
         {"name": "intent", "type": "prose", "required": true},
-        {"name": "target", "type": "date", "required": false}
+        {"name": "target", "type": "date", "required": false},
+        {"name": "note", "type": "prose", "required": false,
+         "doc": "Free-form operator commentary. Informational only; no validation consequence. Rendered by views for records in terminal states (D-026)."}
       ],
       "required_blocks": ["acceptance"]
     },
@@ -251,7 +253,9 @@
       "purpose": "A unit of intended change. A work record designated plan_of_record is a plan (D-001).",
       "content_slots": [
         {"name": "intent", "type": "prose", "required": true},
-        {"name": "target", "type": "date", "required": false}
+        {"name": "target", "type": "date", "required": false},
+        {"name": "note", "type": "prose", "required": false,
+         "doc": "Free-form operator commentary. Informational only; no validation consequence. Rendered by views for records in terminal states (D-026)."}
       ],
       "optional_blocks": ["acceptance", "disposition"]
     },
@@ -260,7 +264,9 @@
       "purpose": "Standing, non-terminating work that milestones do not contain.",
       "content_slots": [
         {"name": "intent", "type": "prose", "required": true},
-        {"name": "cadence", "type": "string", "required": false}
+        {"name": "cadence", "type": "string", "required": false},
+        {"name": "note", "type": "prose", "required": false,
+         "doc": "Free-form operator commentary. Informational only; no validation consequence. Rendered by views for records in terminal states (D-026)."}
       ]
     },
     "question": {

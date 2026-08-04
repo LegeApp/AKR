@@ -477,7 +477,7 @@ fn abandon_demands_a_disposition_for_every_unfinished_child() {
 }
 
 #[test]
-fn abandon_records_the_reason_as_a_comment() {
+fn abandon_records_the_reason_in_the_note_slot() {
     let sandbox = Sandbox::save_your_skin();
     let context = WriteContext::new(sandbox.akr_dir());
     let target = key("lege.work.extract-render-graph");
@@ -498,16 +498,37 @@ fn abandon_records_the_reason_as_a_comment() {
     ));
 
     let after = sandbox.ledger();
+    let head = after.head(&target).expect("the head");
+    assert_eq!(head.state, State::Abandoned);
+    // D-026: the reason is a rendered slot, not a comment. A comment is excluded from the
+    // seal hash and invisible to views; an abandonment reason is durable knowledge.
     assert_eq!(
-        after.head(&target).expect("the head").state,
-        State::Abandoned
+        head.get(ContentSlot::Note),
+        Some(&ContentValue::prose("superseded by the snapshot boundary")),
+        "the reason must land in `note`"
     );
     let text = sandbox.read(&applied.files[0]);
     assert!(
-        text.contains("# abandoned: superseded by the snapshot boundary"),
-        "the reason must survive as a comment:\n{text}"
+        text.contains("note \"\"\""),
+        "the note must be a prose slot:\n{text}"
     );
     sandbox.assert_canonical();
+}
+
+/// `note` is a planning-kind slot. Setting it on anything else is V-008's business.
+#[test]
+fn the_note_slot_belongs_to_planning_kinds_only() {
+    for kind in Kind::ALL {
+        let has_note = kind
+            .content_slots()
+            .iter()
+            .any(|s| s.slot == ContentSlot::Note);
+        assert_eq!(
+            has_note,
+            kind.class() == Class::Planning,
+            "{kind}: note is planning-only (D-026)"
+        );
+    }
 }
 
 // -------------------------------------------------------------------------------------

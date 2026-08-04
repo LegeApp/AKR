@@ -30,6 +30,14 @@
 //! check` reports `AKR-R052` (lock stale). That is correct and expected; see the note in
 //! the P6 report about `docs/04` §8.3.
 
+// `Refused` is a large `Err` variant, and deliberately so: it carries the structured
+// refusal data the CLI and the MCP surface render — the unfinished children, the
+// unsatisfied checks, the diagnostics and the help line. Boxing it to satisfy
+// `result_large_err` would put a `Box` in the contract Writer B wires against, and add a
+// dereference to a path that is not exceptional here. Refusing *is* a feature of these
+// operations, not an error case to be made cheap.
+#![allow(clippy::result_large_err)]
+
 mod stage;
 
 use crate::diagnostics::codes::cli;
@@ -542,10 +550,10 @@ pub fn complete(
     let mut record = head.clone();
     if let Some(acceptance) = &mut record.acceptance {
         for (id, reference) in check_evidence {
-            if let Some(check) = acceptance.checks.iter_mut().find(|c| c.id.as_str() == id) {
-                if !check.verified_by.contains(reference) {
-                    check.verified_by.push(reference.clone());
-                }
+            if let Some(check) = acceptance.checks.iter_mut().find(|c| c.id.as_str() == id)
+                && !check.verified_by.contains(reference)
+            {
+                check.verified_by.push(reference.clone());
             }
         }
     }
@@ -603,10 +611,10 @@ pub fn complete(
 /// Moves a planning record to `abandoned`, demanding a disposition for every unfinished
 /// child.
 ///
-/// The reason is recorded as a leading comment on the record. There is no `note` slot in
-/// the vocabulary, and comments are excluded from the seal hash (D-015), so this is the
-/// one place a reason can land without changing what the record says. See the P6 report:
-/// `docs/07` §6 says the reason "lands in a `note`", which does not exist.
+/// The reason is written to the `note` slot, which D-026 added to the planning kinds for
+/// exactly this. An earlier implementation used a leading comment; comments are excluded
+/// from the seal hash and invisible to views, and an abandonment reason is durable
+/// knowledge that belongs on the record.
 ///
 /// # Errors
 /// Refuses on an unknown key, a non-planning kind, a missing disposition, or a resulting
@@ -666,14 +674,18 @@ pub fn abandon(
 
     let mut record = head.clone();
     record.state = State::Abandoned;
+    record.content.insert(
+        crate::model::ContentSlot::Note,
+        crate::model::ContentValue::prose(reason.trim()),
+    );
     if !dispositions.is_empty() {
         record.dispositions = dispositions.iter().map(build_disposition).collect();
         record.dispositions.sort_by(|a, b| a.target.cmp(&b.target));
     }
 
-    apply_with_comment(
+    apply(
         context,
-        &mut staged,
+        staged_mut(&mut staged),
         Operation::Abandon,
         &file,
         &record,
@@ -681,7 +693,6 @@ pub fn abandon(
             from: head.state,
             to: State::Abandoned,
         },
-        Some(format!("abandoned: {}", reason.trim())),
     )
 }
 
@@ -734,31 +745,13 @@ fn apply(
     )
 }
 
-fn apply_with_comment(
-    context: &WriteContext,
-    staged: &mut Staged,
-    operation: Operation,
-    file: &Path,
-    record: &Record,
-    change: ChangeKind,
-    comment: Option<String>,
-) -> WriteResult {
-    apply_inner(
-        context,
-        staged,
-        operation,
-        &[(file.to_path_buf(), record.clone(), change)],
-        comment,
-    )
-}
-
 fn apply_many(
     context: &WriteContext,
     staged: &mut Staged,
     operation: Operation,
     edits: &[(PathBuf, Record, ChangeKind)],
 ) -> WriteResult {
-    apply_inner(context, staged, operation, edits, None)
+    apply_inner(context, staged, operation, edits)
 }
 
 /// Steps 2 through 5 of `docs/07` §4.
@@ -767,7 +760,6 @@ fn apply_inner(
     staged: &mut Staged,
     operation: Operation,
     edits: &[(PathBuf, Record, ChangeKind)],
-    comment: Option<String>,
 ) -> WriteResult {
     let project = staged.project.clone();
     let mut touched: Vec<PathBuf> = Vec::new();
@@ -787,7 +779,7 @@ fn apply_inner(
             .get(file)
             .cloned()
             .unwrap_or_else(|| empty_file(&project));
-        splice(&mut tree, node, comment.as_deref());
+        splice(&mut tree, node);
         staged.set_tree(file, &tree);
         if !touched.contains(file) {
             touched.push(file.clone());
@@ -845,7 +837,7 @@ fn apply_inner(
 /// Record-level trivia and slot-level comments whose slot survives the edit are carried
 /// over. Comments on a slot the edit removed are lost, which is the honest cost of
 /// regenerating a record from the model.
-fn splice(tree: &mut cst::File, mut node: cst::Record, comment: Option<&str>) {
+fn splice(tree: &mut cst::File, mut node: cst::Record) {
     let existing = tree
         .items
         .iter()
@@ -869,17 +861,6 @@ fn splice(tree: &mut cst::File, mut node: cst::Record, comment: Option<&str>) {
                     cst::BodyItem::Block(block) => block.trivia = trivia,
                 }
             }
-        }
-    }
-
-    if let Some(text) = comment {
-        let already = node.trivia.leading.iter().any(|c| c.text == text);
-        if !already {
-            node.trivia.leading.push(cst::Comment {
-                text: text.to_owned(),
-                span: node.span,
-                blank_before: false,
-            });
         }
     }
 

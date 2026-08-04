@@ -1,0 +1,32 @@
+akr 0.1
+project fixtures
+
+record fx.work.dropped/1 : work {
+    title "A work item somebody abandoned"
+    state abandoned
+    intent """
+        Ambient audio beds for the four day phases.
+        """
+    target 2026-09-15
+    note """
+        Dropped from the milestone on 2026-08-04: ambient audio is not part of a playable
+        day as the term defines it, and nothing else is waiting on it.
+
+        `note` is free-form operator commentary (D-026). No rule reads it, nothing
+        requires it, and views render it for records in terminal states — which is why an
+        abandonment reason belongs here rather than in a comment.
+        """
+}
+
+record fx.track.standing/1 : track {
+    title "A standing track carrying a note"
+    state active
+    intent """
+        Standing work that no milestone contains.
+        """
+    cadence "one pass per milestone"
+    note """
+        `note` is the last content slot of its kind, after `cadence` here and after
+        `target` on milestones and work.
+        """
+}
