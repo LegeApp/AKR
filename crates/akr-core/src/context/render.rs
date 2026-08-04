@@ -186,6 +186,14 @@ fn render_records(
         if let Some(body) = body_of(record) {
             out.push_str(&indent(body, 2));
         }
+        // D-026: operator commentary on a planning record. Informational only, and shown
+        // because the reason somebody abandoned or re-scoped a plan is exactly what the
+        // next agent to touch it needs and cannot reconstruct.
+        if let Some(ContentValue::Prose(note) | ContentValue::Text(note)) =
+            record.get(ContentSlot::Note)
+        {
+            out.push_str(&format!("  note\n{}", indent(note, 4)));
+        }
         if section == Section::WorkItems {
             // Step 3: "Blocked items are rendered with the live `blocks` edges that hold
             // them, so the reason is adjacent to the fact."
