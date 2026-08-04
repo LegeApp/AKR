@@ -81,7 +81,7 @@ nothing else. `HEAD` is C5.
 
 | Id | Commit | Parent | Touched paths |
 | --- | --- | --- | --- |
-| C1 | `git:3f0a1c9d5b7e2648a0d4f1b8c36e9752ad014b6f` | — | `sim/src/**`, `lege/src/**` (initial skeleton) |
+| C1 | `git:3f0a1c9d5b7e2648a0d4f1b8c36e9752ad014b6f` | — | `sim/src/**`, `lege/src/**` (initial skeleton), `docs/legacy/ROADMAP.md` (the pre-AKR pile) |
 | C2 | `git:7c41d0ba92e6f37518a3cd406b5e2f91d8074a63` | C1 | `sim/src/project/**`, `sim/src/step.rs` |
 | C3 | `git:b2e58f1406c7a9d3e41b60258fa3d7c6195e0b48` | C2 | `lege/src/**`, `sim/src/step.rs` |
 | C4 | `git:5d9c2a70e31f8b46c07d5924ab6e3f1074c9d285` | C3 | `sim/src/project/**`, `sim/tests/determinism.rs` |

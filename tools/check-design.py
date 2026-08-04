@@ -131,10 +131,23 @@ def planned_paths():
     return out
 
 
+def is_legacy_fixture(path):
+    """A synthetic pre-AKR document under an example's `legacy/` directory.
+
+    These fixtures exist to *be* an unmigrated Markdown pile — the raw material `akr
+    import` reads and the migration audit reasons about (`docs/12-migration.md`). Their
+    dead links are deliberate: `examples/save-your-skin/docs/legacy/ROADMAP.md` points at
+    a `PLAN-v1.md` that is gone on purpose, which is the very condition `AKR-M022` names.
+    They are content, not part of the design set's cross-reference graph, so the link
+    check skips them rather than flagging fiction as incoherence."""
+    parts = os.path.relpath(path, ROOT).split(os.sep)
+    return "examples" in parts and "legacy" in parts
+
+
 def check_links():
     anchor_cache = {}
     planned = planned_paths()
-    md_files = [p for p in walk(ROOT, {".md"})]
+    md_files = [p for p in walk(ROOT, {".md"}) if not is_legacy_fixture(p)]
     checked = 0
     for path in md_files:
         in_fence = False

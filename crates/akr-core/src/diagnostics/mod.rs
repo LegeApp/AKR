@@ -542,4 +542,43 @@ pub mod codes {
             I001, I002, I003, I004, I011, I012, I013, I021, I022, I031, I032, X031, X032,
         ];
     }
+
+    /// Codes the migration workflow raises (`docs/12-migration.md` §9).
+    ///
+    /// Registered in `spec/diagnostics/codes-runtime.md`, and separate from [`ALL`] for
+    /// the same reason [`cli`] is. Migration raises no rule identifiers of its own: the
+    /// invariants it relies on — V-020 for completion, V-002 for namespaces — are the
+    /// ordinary ones, and these codes cover only what is specific to moving legacy prose
+    /// into the ledger.
+    pub mod migration {
+        use super::super::Code;
+
+        /// The import source does not exist.
+        pub const M001: Code = Code::new("AKR-M001");
+        /// The import source is not Markdown or plain text.
+        pub const M002: Code = Code::new("AKR-M002");
+        /// No durable claim was extracted (warning).
+        pub const M011: Code = Code::new("AKR-M011");
+        /// An imported key collides with an existing key.
+        pub const M012: Code = Code::new("AKR-M012");
+        /// An imported key's namespace is not declared in `project.akr`.
+        pub const M013: Code = Code::new("AKR-M013");
+        /// An imported record has no `source { kind legacy }` block.
+        pub const M021: Code = Code::new("AKR-M021");
+        /// A legacy source path does not exist at HEAD (warning).
+        pub const M022: Code = Code::new("AKR-M022");
+        /// An imported document has no tracking work record.
+        pub const M031: Code = Code::new("AKR-M031");
+        /// A legacy document was archived while its tracking record is incomplete.
+        pub const M032: Code = Code::new("AKR-M032");
+        /// Import produced warnings under the strict profile.
+        pub const M041: Code = Code::new("AKR-M041");
+        /// An imported record is not in `proposed` state.
+        pub const M042: Code = Code::new("AKR-M042");
+
+        /// Every migration code this crate raises.
+        pub const ALL: &[Code] = &[
+            M001, M002, M011, M012, M013, M021, M022, M031, M032, M041, M042,
+        ];
+    }
 }

@@ -276,6 +276,17 @@ impl Session {
     pub fn diagnostics(&self, model: &ResolvedModel<'_>) -> Vec<Diagnostic> {
         let mut out = self.parse_diagnostics.clone();
         out.extend(model.diagnostics.clone());
+        // The migration audit (docs/12 §3-§4): a *migrated* document whose provenance
+        // has decayed — the document gone (AKR-M022), or archived before its tracking
+        // record completed (AKR-M032). Bare `source { kind legacy }` citations with no
+        // tracking record are left alone; see `akr_core::import::audit`.
+        let head = self
+            .commit
+            .as_ref()
+            .map_or_else(|| "HEAD".to_owned(), |c| c.as_str()[..8].to_owned());
+        out.extend(akr_core::import::audit(&self.ledger, &head, &|path| {
+            self.root.join(path).exists()
+        }));
         self.spans.attach_all(&mut out);
         out.sort_by_key(Diagnostic::sort_key);
         out

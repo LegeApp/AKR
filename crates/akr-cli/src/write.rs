@@ -273,7 +273,7 @@ fn evidence_add(
 // argument conversion
 // -------------------------------------------------------------------------------------
 
-fn context_of(session: &Session) -> WriteContext {
+pub(crate) fn context_of(session: &Session) -> WriteContext {
     let mut context = WriteContext::new(&session.akr_dir);
     context.strict = session.global.profile == crate::args::Profile::Strict;
     // The author is whatever git thinks, because AKR is not an identity system (D-005)
@@ -298,7 +298,7 @@ fn git_author(session: &Session) -> Option<String> {
     (!name.is_empty()).then_some(name)
 }
 
-fn parse_key(text: &str) -> Result<LogicalKey, EnvError> {
+pub(crate) fn parse_key(text: &str) -> Result<LogicalKey, EnvError> {
     let trimmed = text.strip_prefix('@').unwrap_or(text);
     LogicalKey::parse(trimmed)
         .map_err(|e| EnvError::new("AKR-C004", format!("{text:?} is not a key: {e}")))
@@ -445,7 +445,7 @@ fn body_template(
 // rendering
 // -------------------------------------------------------------------------------------
 
-fn render(session: &Session, result: WriteResult) -> Result<Output, EnvError> {
+pub(crate) fn render(session: &Session, result: WriteResult) -> Result<Output, EnvError> {
     match result {
         Ok(applied) => Ok(render_applied(session, &applied)),
         Err(refused) => Ok(render_refused(session, &refused)),

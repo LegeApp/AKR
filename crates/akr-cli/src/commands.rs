@@ -44,12 +44,17 @@ impl Output {
         }
     }
 
+    /// Text plus a JSON `result`, for sibling modules.
+    pub(crate) fn plain(text: impl Into<String>, result: Value) -> Self {
+        Self::text(text).with_result(result)
+    }
+
     fn with_result(mut self, result: Value) -> Self {
         self.result = result;
         self
     }
 
-    fn with_diagnostics(mut self, diagnostics: Vec<Diagnostic>, exit: Exit) -> Self {
+    pub(crate) fn with_diagnostics(mut self, diagnostics: Vec<Diagnostic>, exit: Exit) -> Self {
         self.diagnostics = diagnostics;
         self.exit = exit;
         self
@@ -123,8 +128,18 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
             states,
             limit,
         } => search(session, query, kinds, states, *limit),
-        Command::Import { .. } => Err(EnvError::new("AKR-M002", "import arrives with phase P8")
-            .help("see docs/12-migration.md for the workflow it will implement")),
+        Command::Import {
+            path,
+            namespace,
+            tracking,
+            dry_run,
+        } => crate::import::run(
+            session,
+            path,
+            namespace.as_deref(),
+            tracking.as_deref(),
+            *dry_run,
+        ),
         Command::Propose { .. }
         | Command::Revise { .. }
         | Command::Supersede { .. }

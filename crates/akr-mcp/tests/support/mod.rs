@@ -69,6 +69,18 @@ const SYS_TANDEM_STEPS: &[(&str, &[(&str, &str)])] = &[
             ("SYSEngine/crates/sys_sound/src/lib.rs", "// sound\n"),
             ("SYSEngine/docs/BUILD-STATUS.md", "# verified tree state\n"),
             ("AGENTS.md", "# rulings\n"),
+            // The one legacy document this project actually holds (`MANIFEST.md` §4,
+            // committed verbatim). `tandem.work.roadmap-import` tracks its disposition
+            // with `source { kind legacy }`, so the migration audit checks it exists at
+            // HEAD — which, until the tracking record completes and it is archived, it
+            // does. The plan documents of §6 are cited but deliberately absent (§8), and
+            // the tracker-anchored audit leaves those bare citations alone.
+            (
+                "examples/sys-tandem/legacy/2026-08-03-engine-simulator-tandem-roadmap.md",
+                include_str!(
+                    "../../../../examples/sys-tandem/legacy/2026-08-03-engine-simulator-tandem-roadmap.md"
+                ),
+            ),
         ],
     ),
     (
@@ -126,6 +138,13 @@ const SAVE_YOUR_SKIN_STEPS: &[(&str, &[(&str, &str)])] = &[
             ("lege/src/light/mod.rs", "// lighting\n"),
             ("content/day/light/dawn.toml", "# dawn keys\n"),
             ("tools/audit.rs", "// asset audit\n"),
+            // The pre-AKR pile. `sys.work.legacy-roadmap-import` cites it with
+            // `source { kind legacy }`, and the migration audit (AKR-M022) checks it
+            // exists — in the fiction it does, until step 6 of `docs/12` archives it.
+            (
+                "docs/legacy/ROADMAP.md",
+                include_str!("../../../../examples/save-your-skin/docs/legacy/ROADMAP.md"),
+            ),
         ],
     ),
     (

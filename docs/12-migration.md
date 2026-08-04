@@ -111,6 +111,11 @@ Everything lands in `proposed` state (`AKR-M042` if not), which matters for two 
 `proposed` revisions are not sealed and may be edited freely during review (D-015), and a
 `proposed` record cannot be mistaken for something the project has actually agreed to.
 
+One exception is forced by the model, and it is benign: the inquiry class has no
+`proposed` state, so an imported `question` lands `open` — its only initial state. An
+open question asserts nothing normative, and §8 already says why importing one open is
+right: it is the single most valuable thing in a legacy pile *because* it is open.
+
 Keys are proposed, never invented silently: the namespace comes from `--namespace` or
 from the document's location, and a key whose namespace is not declared in `project.akr`
 is `AKR-M013`. A key that already exists is `AKR-M012` — import only ever adds new keys.
@@ -143,9 +148,12 @@ When every check on the tracking record is satisfied, `akr complete` moves it to
 `completed` — which V-020 permits only if every check really is satisfied — and the legacy
 document is moved to `docs/legacy/archive/` or deleted.
 
-Archiving a document whose tracking record is not `completed` is `AKR-M032`. A legacy
-document referenced by a `source` block that no longer exists at HEAD is `AKR-M022`, a
-warning: the excerpt is now unverifiable, which a reader of the record should know.
+Archiving a document whose tracking record is not `completed` is `AKR-M032`. A migrated
+document — one a tracking record still points at — that no longer exists at HEAD is
+`AKR-M022`, a warning: the excerpt is now unverifiable, which a reader of the record
+should know. Both checks are *anchored on the tracking record*; a bare `source { kind
+legacy }` citation with no tracker is §2 provenance, not a migration, and the audit
+leaves it alone (see §4).
 
 ## 4. The tracking record pattern
 
@@ -170,9 +178,17 @@ Why acceptance checks rather than a checklist in prose:
 - **They are reviewable in a diff**, one line per claim, at the moment the claim is
   dispositioned.
 
-A tracking record is required: imported records with no tracking record for their source
-document are `AKR-M031`, and an imported record with no `source { kind legacy }` block at
-all is `AKR-M021`.
+A tracking record is required for a *migration*: `akr import` always writes one, so a set
+of imported records with no tracker for their document is `AKR-M031` at the moment of
+import, and an imported record with no `source { kind legacy }` block at all is
+`AKR-M021`. This is an import-time guarantee, not a standing check over the ledger: once
+records are in force, a `source { kind legacy }` block is ordinary provenance (§2),
+repeatable on any record, and a mature ledger cites the documents its knowledge came from
+without a tracker for each — the deliberate steady state of
+[`../examples/sys-tandem/MANIFEST.md`](../examples/sys-tandem/MANIFEST.md) §8. The
+check-time audit therefore cannot tell an unfinished import from a permanent citation, so
+it does not re-derive `AKR-M031`; it reasons only about documents a tracking record still
+claims (the `AKR-M022` and `AKR-M032` of §3).
 
 ## 5. `akr import`
 

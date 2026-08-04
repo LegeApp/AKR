@@ -165,10 +165,16 @@ pub enum Command {
         /// Maximum results.
         limit: Option<usize>,
     },
-    /// Legacy import. Arrives with P8.
+    /// `akr import <path> [--namespace <ns>] [--tracking <key>] [--dry-run]`.
     Import {
         /// The source document.
         path: PathBuf,
+        /// Namespace for proposed keys. Defaults to the document's first path segment.
+        namespace: Option<String>,
+        /// The tracking `work` record. Created if absent.
+        tracking: Option<String>,
+        /// Print what would be written and write nothing.
+        dry_run: bool,
     },
     /// `akr propose <key> --kind <kind>`.
     Propose {
@@ -615,6 +621,9 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
             known_flags(&["--namespace", "--tracking", "--dry-run"])?;
             Command::Import {
                 path: PathBuf::from(need(0, "a source document")?),
+                namespace: option_value(tail, "--namespace"),
+                tracking: option_value(tail, "--tracking"),
+                dry_run: flag_set("--dry-run"),
             }
         }
         "propose" => {
@@ -808,7 +817,7 @@ pub fn help() -> String {
         ),
         ("explain", "print a registry entry for a code or a rule"),
         ("review-queue", "list the stale and at-risk records"),
-        ("import", "import a legacy document (P8)"),
+        ("import", "draft proposed records from a legacy document"),
         ("lock", "verify or rewrite akr.lock"),
         ("propose", "create a record; --kind, --title, --from"),
         (

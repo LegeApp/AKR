@@ -200,7 +200,7 @@ import profile.
 | `AKR-M031` | no tracking record for an imported document | error | `{path} has imported records but no tracking work record` | D-022 requires one `work` record per migrated document, with one acceptance check per durable claim. |
 | `AKR-M032` | legacy document archived while tracking incomplete | error | `{path} is archived but {key}/{revision} is in state {state}` | The archive step waits for `completed`, which by V-020 waits for every check to be satisfied. |
 | `AKR-M041` | import produced warnings under the strict profile | error | `import produced {n} warnings; rerun with --lenient after reviewing them` | `--lenient` is the only place warnings are downgraded (D-013), and it is opt-in per invocation. |
-| `AKR-M042` | imported record is not proposed | error | `{key}/{revision} was produced by import in state {state}; imports land as proposed` | Everything an importer writes is a proposal for human review. |
+| `AKR-M042` | imported record is not proposed | error | `{key}/{revision} was produced by import in state {state}; imports land as proposed` | Everything an importer writes is a proposal for human review. Questions land `open`, the inquiry class's only initial state (`docs/12` §3). |
 
 ---
 

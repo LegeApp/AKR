@@ -37,6 +37,7 @@ pub mod freshness;
 pub mod git;
 pub mod graph;
 pub mod hash;
+pub mod import;
 pub mod json;
 pub mod lock;
 pub mod model;

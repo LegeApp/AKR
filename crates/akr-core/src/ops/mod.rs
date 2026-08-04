@@ -70,6 +70,8 @@ pub enum Operation {
     Complete,
     /// A planning record moved to `abandoned`.
     Abandon,
+    /// Legacy claims drafted into `proposed` records with a tracking record (P8).
+    Import,
 }
 
 impl Operation {
@@ -82,6 +84,7 @@ impl Operation {
             Self::Supersede => "supersede",
             Self::Complete => "complete",
             Self::Abandon => "abandon",
+            Self::Import => "import",
         }
     }
 }
@@ -694,6 +697,267 @@ pub fn abandon(
             to: State::Abandoned,
         },
     )
+}
+
+// -------------------------------------------------------------------------------------
+// import
+// -------------------------------------------------------------------------------------
+
+/// One record drafted from a legacy document (`docs/12-migration.md` §3).
+#[derive(Debug, Clone)]
+pub struct ImportedRecord {
+    /// The proposed key.
+    pub key: LogicalKey,
+    /// The proposed kind.
+    pub kind: Kind,
+    /// The proposed title.
+    pub title: String,
+    /// Text for the kind's first required content slot.
+    pub body: String,
+    /// The verbatim passage, for the `source` block's excerpt.
+    pub excerpt: String,
+    /// The identifier of this claim's check on the tracking record.
+    pub check_id: crate::model::Segment,
+}
+
+/// Everything one `akr import` invocation writes.
+#[derive(Debug, Clone)]
+pub struct ImportRequest {
+    /// The legacy document, repo-relative — every `source` block's `path`.
+    pub document: String,
+    /// The drafted records, one per durable claim.
+    pub records: Vec<ImportedRecord>,
+    /// The tracking `work` record (D-022). Created if absent.
+    pub tracking: LogicalKey,
+}
+
+/// Drafts every record of a legacy document and its tracking record in one write.
+///
+/// The whole import is one [`apply_many`]: one validation of the resulting ledger, one
+/// atomic write. Either every drafted record, the tracking record and its checks land
+/// together, or nothing does — a half-imported document would be exactly the untracked
+/// state `AKR-M031` exists to flag.
+///
+/// Everything lands `proposed` with a `source { kind legacy }` block. Those are
+/// construction invariants here, but they are also *checked* here (`AKR-M042`,
+/// `AKR-M021`): the workflow's audit trail rests on them, so a future refactor that
+/// broke one should fail loudly rather than import quietly.
+///
+/// # Errors
+/// Refuses on an undeclared namespace (`AKR-M013`), a colliding key (`AKR-M012`), a
+/// tracking key that is not a `work` record, or a resulting ledger that does not
+/// validate.
+pub fn import(context: &WriteContext, request: &ImportRequest) -> WriteResult {
+    use crate::diagnostics::codes::migration;
+    use crate::model::{Acceptance, Check, CheckMethod, Source, SourceKind};
+
+    let mut staged = load(context, Operation::Import)?;
+    let namespaces = &staged.ledger.project.namespaces;
+
+    for key in request
+        .records
+        .iter()
+        .map(|r| &r.key)
+        .chain(std::iter::once(&request.tracking))
+    {
+        if !namespaces.contains(key.namespace()) {
+            return Err(Refused::new(
+                Operation::Import,
+                migration::M013,
+                format!(
+                    "{key}: namespace {} is not declared in project.akr",
+                    key.namespace()
+                ),
+            )
+            .with_help("declare the namespace, or rerun with --namespace <ns>"));
+        }
+    }
+    for record in &request.records {
+        if !staged.ledger.revisions_of(&record.key).is_empty() {
+            return Err(Refused::new(
+                Operation::Import,
+                migration::M012,
+                format!(
+                    "{} already exists; imported records may not overwrite ledger records",
+                    record.key
+                ),
+            )
+            .with_help(format!(
+                "revise it deliberately instead: `akr revise {}`",
+                record.key
+            )));
+        }
+    }
+
+    let source_block = |excerpt: &str| Source {
+        kind: SourceKind::Legacy,
+        path: Some(request.document.clone()),
+        url: None,
+        excerpt: Some(excerpt.to_owned()),
+    };
+
+    let mut edits: Vec<(PathBuf, Record, ChangeKind)> = Vec::new();
+    for imported in &request.records {
+        let id = RevisionId::new(imported.key.clone(), 1);
+        let mut record = blank(&id, imported.kind);
+        record.title.clone_from(&imported.title);
+        if let Some(slot) = imported.kind.content_slots().iter().find(|s| s.required) {
+            record.content.insert(
+                slot.slot,
+                crate::model::ContentValue::prose(imported.body.trim_end()),
+            );
+        }
+        record.sources.push(source_block(&imported.excerpt));
+        record.author.clone_from(&context.author);
+
+        // The M042/M021 self-check. Unreachable by construction today; load-bearing the
+        // day someone changes the construction. Inquiry is the one class with no
+        // `proposed` state — a question lands `open`, its only initial state, which is
+        // the closest thing it has (`docs/12` §3).
+        let expected = if imported.kind.class() == Class::Inquiry {
+            State::Open
+        } else {
+            State::Proposed
+        };
+        if record.state != expected {
+            return Err(Refused::new(
+                Operation::Import,
+                migration::M042,
+                format!(
+                    "{id} was produced by import in state {}; imports land as proposed",
+                    record.state
+                ),
+            ));
+        }
+        if !record.sources.iter().any(|s| s.kind == SourceKind::Legacy) {
+            return Err(Refused::new(
+                Operation::Import,
+                migration::M021,
+                format!("{id} was produced by import but has no source block with kind legacy"),
+            ));
+        }
+
+        edits.push((
+            conventional_file(&imported.key, imported.kind),
+            record,
+            ChangeKind::Created,
+        ));
+    }
+
+    let checks: Vec<Check> = request
+        .records
+        .iter()
+        .map(|imported| Check {
+            id: imported.check_id.clone(),
+            statement: format!(
+                "\"{}\" is dispositioned: promoted as {} or declined with evidence",
+                imported.title, imported.key
+            ),
+            method: CheckMethod::Manual,
+            command: None,
+            verified_by: Vec::new(),
+        })
+        .collect();
+
+    if staged.ledger.revisions_of(&request.tracking).is_empty() {
+        let id = RevisionId::new(request.tracking.clone(), 1);
+        let mut record = blank(&id, Kind::Work);
+        record.title = format!("Import {}", request.document);
+        record.content.insert(
+            crate::model::ContentSlot::Intent,
+            crate::model::ContentValue::prose(&format!(
+                "Disposition every durable claim of {} (docs/12-migration.md).",
+                request.document
+            )),
+        );
+        record.acceptance = Some(Acceptance { checks });
+        record.sources.push(source_block(""));
+        if let Some(source) = record.sources.last_mut() {
+            source.excerpt = None;
+        }
+        record.author.clone_from(&context.author);
+        edits.push((
+            conventional_file(&request.tracking, Kind::Work),
+            record,
+            ChangeKind::Created,
+        ));
+    } else {
+        let head = head_of(&staged, &request.tracking, Operation::Import)?.clone();
+        if head.kind != Kind::Work {
+            return Err(Refused::new(
+                Operation::Import,
+                codes::T011,
+                format!(
+                    "{} is a {}; a tracking record is work (D-022)",
+                    head.id, head.kind
+                ),
+            ));
+        }
+        let file = file_of(&staged, &head.id, Operation::Import)?;
+        let mut record = head.clone();
+        let acceptance = record.acceptance.get_or_insert_with(Acceptance::default);
+        let existing: BTreeSet<String> = acceptance
+            .checks
+            .iter()
+            .map(|c| c.id.as_str().to_owned())
+            .collect();
+        acceptance.checks.extend(
+            checks
+                .into_iter()
+                .filter(|c| !existing.contains(c.id.as_str())),
+        );
+        acceptance.checks.sort_by(|a, b| a.id.cmp(&b.id));
+        if !record
+            .sources
+            .iter()
+            .any(|s| s.kind == SourceKind::Legacy && s.path.as_deref() == Some(&request.document))
+        {
+            let mut source = source_block("");
+            source.excerpt = None;
+            record.sources.push(source);
+        }
+
+        if head.is_sealed() {
+            // The same shape as `retire_and_replace`, inlined so the whole import stays
+            // one write. A sealed tracking head gains revision n+1; D-017 still holds.
+            let children = unfinished_children(&staged, &head.id);
+            if !children.is_empty() {
+                let mut refusal = Refused::new(
+                    Operation::Import,
+                    codes::R014,
+                    format!("{} unfinished children of {}", children.len(), head.id),
+                );
+                refusal.unfinished_children = children;
+                return Err(refusal.with_help(
+                    "disposition the children with `akr supersede`, then rerun the import",
+                ));
+            }
+            record.id = RevisionId::new(request.tracking.clone(), head.id.revision + 1);
+            record.state = head.kind.class().initial()[0];
+            record.relations.insert(
+                Relation::Supersedes,
+                vec![Reference::pinned(
+                    request.tracking.clone(),
+                    head.id.revision,
+                )],
+            );
+            let mut retired = head.clone();
+            retired.state = State::Superseded;
+            edits.push((
+                file.clone(),
+                retired,
+                ChangeKind::StateChanged {
+                    from: head.state,
+                    to: State::Superseded,
+                },
+            ));
+            edits.push((file, record, ChangeKind::Created));
+        } else {
+            edits.push((file, record, ChangeKind::Edited));
+        }
+    }
+
+    apply_many(context, staged_mut(&mut staged), Operation::Import, &edits)
 }
 
 // -------------------------------------------------------------------------------------

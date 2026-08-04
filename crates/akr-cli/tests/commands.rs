@@ -190,22 +190,23 @@ fn init_scaffolds_a_workspace_and_never_overwrites() {
 }
 
 #[test]
-fn the_deferred_commands_say_which_phase_brings_them() {
+fn no_command_is_deferred_any_longer() {
     let example = Example::materialise("deferred");
-    // One command remains deferred after P7: `import` needs the migration pipeline (P8).
-    // It says so by code and by phase, so nobody has to guess whether it is broken or
-    // unbuilt. `search` was the other, and P7 delivered it — `tests/search.rs` now holds
-    // the exit criteria that replaced this line.
-    let cases: &[(&[&str], &str, &str)] = &[(&["import", "docs/legacy.md"], "AKR-M002", "P8")];
-    for (args, code, phase) in cases {
-        let run = example.run(args);
-        assert_eq!(run.code, 3, "akr {}: {}", args.join(" "), run.output());
-        let text = run.output();
-        assert!(text.contains(code), "akr {}: {text}", args.join(" "));
-        assert!(text.contains(phase), "akr {}: {text}", args.join(" "));
-    }
+    // Nothing remains deferred: P7 delivered `search` and P8 delivered `import`, so the
+    // whole command surface of `docs/07-cli.md` is now wired. `import` in particular no
+    // longer reports itself unbuilt (the old `AKR-M002 … arrives with P8`); it runs, and
+    // a missing document is an ordinary ledger diagnostic — exit 1, `AKR-M001` — not the
+    // environment failure a deferred command used to raise.
+    let deferred = example.run(&["import", "docs/legacy.md"]);
+    assert_eq!(deferred.code, 1, "{}", deferred.output());
+    let text = deferred.output();
+    assert!(text.contains("AKR-M001"), "{text}");
+    assert!(
+        !text.contains("arrives with"),
+        "import is no longer deferred: {text}"
+    );
 
-    // And `search` is no longer among them — in a binary that has a ranker at all.
+    // And `search` is delivered too, in a binary that has a ranker at all.
     #[cfg(feature = "fts5")]
     {
         assert_eq!(example.run(&["build"]).code, 0);
