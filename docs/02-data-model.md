@@ -612,8 +612,17 @@ it.
 It is not the same as `resolved`, and conflating them is how a project forgets that it
 never actually found out.
 
-*Common mistakes.* Recording a question with no `blocks` edge, so it never surfaces
-anywhere it matters. Deleting questions once answered instead of resolving them.
+A question that blocks nothing is still worth recording. Give it a `blocks` edge when
+something really is waiting on the answer, and leave it bare when nothing is: an
+unscheduled question surfaces in `OPEN-QUESTIONS.md` either way. Two real examples from
+`examples/sys-tandem/`: `engine.question.voice-direction` is deferred with no scheduled
+milestone, and `tandem.question.step-6-polish` is explicitly not a milestone blocker.
+Inventing a `blocks` edge for either would be asserting a dependency the project does not
+have.
+
+*Common mistakes.* Adding a `blocks` edge the project does not actually have, so that a
+milestone reads as stalled on a question nobody is waiting for. Deleting questions once
+answered instead of resolving them.
 
 ---
 
