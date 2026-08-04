@@ -30,6 +30,11 @@ Two invariants make the surface trustworthy:
   cannot skip validation, cannot write an unformatted record, and cannot read anything an
   operator could not read by running a command.
 
+The framing is the stdio transport's: one JSON-RPC message per line, and therefore no
+line break *inside* a message. A pretty-printed request is not a request — it is several
+malformed ones, and the server answers each fragment with its own parse error rather than
+guessing where the message was meant to end.
+
 ## 2. Tool catalogue
 
 | Tool | Kind | CLI equivalent | Idempotent |
@@ -202,11 +207,24 @@ completely rather than partially. A rejected write leaves the working tree byte-
   "sources": [ { "kind": "internal", "path": "sim/src/project/mod.rs" } ] }
 // output
 { "key": "…", "rev": 1, "state": "verified", "path": ".akr/records/sim/observations.akr",
-  "written": true, "content_hash": "sha256:…" }
+  "written": true, "lock_stale": true, "content_hash": "sha256:…" }
 ```
 
 Creates revision 1 of a **new** key, in its class's initial state. An existing key is an
 error — the tool will not silently turn a proposal into a revision.
+
+All four writes return this payload, and three of its fields describe the write rather
+than the request:
+
+- `rev` is the revision the write **produced**, not the one it started from. A revision
+  and a supersession each touch two revisions of the key — the retired head and its
+  successor — and it is the successor an agent's next `base_rev` has to name.
+- `state` and `content_hash` describe the record as it landed on disk, read back after
+  the write rather than predicted from the request. For a lifecycle move they are the
+  only way the agent learns the move took.
+- `lock_stale` is `true` after every write, because no write operation may invent a build
+  (D-014). Saying so here is the difference between an expected `AKR-R052` on the next
+  `knowledge.validate` and a confusing one.
 
 ### `knowledge.revise`
 

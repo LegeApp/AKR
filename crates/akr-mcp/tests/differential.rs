@@ -82,7 +82,11 @@ fn cli_result(example: &Example, args: &[&str]) -> Value {
     full.extend_from_slice(args);
     let run = example.run(&full);
     let document = parse(&run.stdout).unwrap_or_else(|error| {
-        panic!("akr {} produced no JSON: {error}\n{}", args.join(" "), run.output())
+        panic!(
+            "akr {} produced no JSON: {error}\n{}",
+            args.join(" "),
+            run.output()
+        )
     });
     document.get("result").cloned().unwrap_or(Value::Null)
 }
@@ -218,9 +222,7 @@ fn knowledge_search_is_deferred_on_both_surfaces() {
         Some("environment")
     );
     assert!(
-        error
-            .to_pretty()
-            .contains("AKR-I022"),
+        error.to_pretty().contains("AKR-I022"),
         "{}",
         error.to_pretty()
     );
@@ -246,6 +248,67 @@ fn read_tools_are_byte_identical_across_calls_and_touch_nothing() {
     );
     assert_eq!(first.to_pretty(), second.to_pretty());
     assert_eq!(before, example.sources(), "a read tool wrote something");
+}
+
+/// The same agreement, on the other worked example.
+///
+/// `save-your-skin` is where every other test here lives, and a differential property that
+/// held on exactly one ledger would be evidence about that ledger rather than about the
+/// adapters. `sys-tandem` is shaped differently — three source roots, a superseded
+/// assessment, five milestones — so a bundle that agrees across both surfaces on it too is
+/// §1's invariant rather than a coincidence of one example's shape.
+#[test]
+fn both_surfaces_agree_on_the_other_example_too() {
+    let example = Example::of(&support::SYS_TANDEM, "differential-sys-tandem");
+
+    let tool = call(
+        &example,
+        "knowledge.context",
+        r#"{"goal":"tandem.milestone.m5-one-playable-day"}"#,
+    );
+    let cli = cli_result(
+        &example,
+        &["context", "--goal", "tandem.milestone.m5-one-playable-day"],
+    );
+    assert_eq!(tool.to_pretty(), cli.to_pretty());
+    assert!(tool.get("sections").is_some(), "{}", tool.to_pretty());
+
+    // A key whose head is a supersession, which `save-your-skin` does not exercise through
+    // `knowledge.get`: the tool has to agree with the CLI about *which* revision is head.
+    for reference in [
+        "@tandem.assessment.central-fact",
+        "@simulator.question.wild-threshold",
+        "@engine.req.no-debug-surfaces",
+    ] {
+        let tool = call(
+            &example,
+            "knowledge.get",
+            &format!("{{\"ref\":\"{reference}\"}}"),
+        );
+        let cli = cli_result(&example, &["get", reference, "--relations"]);
+        assert_eq!(tool.to_pretty(), cli.to_pretty(), "for {reference}");
+        // Two surfaces that both failed would also "agree", so the record has to be here.
+        assert!(
+            tool.get("key").and_then(Value::as_str).is_some(),
+            "no record came back for {reference}: {}",
+            tool.to_pretty()
+        );
+    }
+
+    let tool = call(
+        &example,
+        "knowledge.impact",
+        r#"{"ref":"@tandem.assessment.central-fact"}"#,
+    );
+    let cli = cli_result(&example, &["impact", "@tandem.assessment.central-fact"]);
+    assert_eq!(tool.to_pretty(), cli.to_pretty());
+    assert!(
+        tool.get("dependents")
+            .and_then(Value::as_array)
+            .is_some_and(|dependents| !dependents.is_empty()),
+        "an impact query with nothing downstream would agree trivially: {}",
+        tool.to_pretty()
+    );
 }
 
 #[test]

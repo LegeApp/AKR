@@ -184,11 +184,7 @@ fn content(payload: &Value, is_error: bool) -> Value {
 /// Any I/O failure on either stream. A malformed line is answered with a JSON-RPC parse
 /// error rather than ending the session: one bad message should not take down a server an
 /// agent is mid-task with.
-pub fn serve(
-    server: &Server,
-    input: impl BufRead,
-    mut output: impl Write,
-) -> std::io::Result<()> {
+pub fn serve(server: &Server, input: impl BufRead, mut output: impl Write) -> std::io::Result<()> {
     for line in input.lines() {
         let line = line?;
         if line.trim().is_empty() {

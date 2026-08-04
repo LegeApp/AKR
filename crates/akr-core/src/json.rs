@@ -491,11 +491,11 @@ mod tests {
 
     #[test]
     fn unicode_escapes_and_surrogate_pairs() {
-        assert_eq!(
-            parse(r#""Aé😀""#).expect("parses"),
-            Value::string("Aé😀")
+        assert_eq!(parse(r#""Aé😀""#).expect("parses"), Value::string("Aé😀"));
+        assert!(
+            parse(r#""\ud83d""#).is_err(),
+            "a lone surrogate is an error"
         );
-        assert!(parse(r#""\ud83d""#).is_err(), "a lone surrogate is an error");
     }
 
     #[test]

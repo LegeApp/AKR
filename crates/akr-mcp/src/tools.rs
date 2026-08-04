@@ -15,7 +15,7 @@ use akr_cli::args::{Command, Format, Global, Profile};
 use akr_cli::commands::{self, Output};
 use akr_cli::session::{EnvError, Exit, Session};
 use akr_core::json::Value;
-use akr_core::model::Glob;
+use akr_core::model::{Glob, LogicalKey};
 use std::path::{Path, PathBuf};
 
 use crate::errors::{Class, ToolError, class_of, first_error_code};
@@ -169,9 +169,8 @@ fn propose(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
     let key = required_str(arguments, "key")?;
     let kind_name = required_str(arguments, "kind")?;
     let title = required_str(arguments, "title")?;
-    let kind = akr_core::model::Kind::from_name(kind_name).ok_or_else(|| {
-        ToolError::new("AKR-C004", format!("`{kind_name}` is not a record kind"))
-    })?;
+    let kind = akr_core::model::Kind::from_name(kind_name)
+        .ok_or_else(|| ToolError::new("AKR-C004", format!("`{kind_name}` is not a record kind")))?;
     let parsed = key_of(key)?;
 
     let source = record::to_source(
@@ -187,6 +186,7 @@ fn propose(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
     let context = write_context(&session);
     write_result(
         &session,
+        &parsed,
         akr_core::ops::propose(&context, &parsed, kind, title, Some(template)),
     )
 }
@@ -241,12 +241,8 @@ fn revise(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
     let context = write_context(&session);
     write_result(
         &session,
-        akr_core::ops::revise(
-            &context,
-            &parsed,
-            akr_core::ops::ReviseMode::Auto,
-            &edits,
-        ),
+        &parsed,
+        akr_core::ops::revise(&context, &parsed, akr_core::ops::ReviseMode::Auto, &edits),
     )
 }
 
@@ -266,6 +262,7 @@ fn supersede(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
     let context = write_context(&session);
     write_result(
         &session,
+        &parsed,
         akr_core::ops::supersede(&context, &parsed, &dispositions),
     )
 }
@@ -281,7 +278,10 @@ fn complete(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
                 ToolError::new("AKR-C004", format!("check `{id}` needs a reference"))
             })?;
             let reference = akr_core::model::Reference::parse(text).map_err(|e| {
-                ToolError::new("AKR-C004", format!("check `{id}`: {text:?} is not a reference: {e}"))
+                ToolError::new(
+                    "AKR-C004",
+                    format!("check `{id}`: {text:?} is not a reference: {e}"),
+                )
             })?;
             checks.push((id.clone(), reference));
         }
@@ -289,6 +289,7 @@ fn complete(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
     let context = write_context(&session);
     write_result(
         &session,
+        &parsed,
         akr_core::ops::complete(&context, &parsed, &checks),
     )
 }
@@ -323,7 +324,9 @@ fn finish(session: &Session, output: Output) -> Result<Value, ToolError> {
         return Ok(output.result);
     }
     let diagnostics = commands::diagnostics_json(&output.diagnostics, &session.sources);
-    let code = first_error_code(&diagnostics).unwrap_or("AKR-R001").to_owned();
+    let code = first_error_code(&diagnostics)
+        .unwrap_or("AKR-R001")
+        .to_owned();
     let summary = output
         .diagnostics
         .first()
@@ -341,13 +344,25 @@ fn write_context(session: &Session) -> akr_core::ops::WriteContext {
 }
 
 /// Renders an `ops` outcome as §4's payload, or as §5's refusal.
+///
+/// `target` is the key the tool was asked about. A revision or a supersession touches two
+/// revisions of it — the retired head and its successor — and `Applied::changes` is in key
+/// order, so the successor is the *last* of them, not the first. The payload names the
+/// revision the write produced, because that is the one the agent's next `base_rev` has to
+/// be.
 fn write_result(
     session: &Session,
+    target: &LogicalKey,
     result: akr_core::ops::WriteResult,
 ) -> Result<Value, ToolError> {
     match result {
         Ok(applied) => {
-            let first = applied.changes.first();
+            let first = applied
+                .changes
+                .iter()
+                .filter(|change| &change.id.key == target)
+                .max_by_key(|change| change.id.revision)
+                .or_else(|| applied.changes.first());
             let path = applied
                 .files
                 .first()
@@ -371,10 +386,20 @@ fn write_result(
                 ("written", Value::bool(true)),
                 ("lock_stale", Value::bool(applied.lock_stale)),
             ];
+            // §4's `state` and `content_hash` describe the revision that just landed, so
+            // they have to come from a workspace read *after* the write. `session` is the
+            // snapshot the write was planned against: it does not know the new revision at
+            // all, and for a state move it still holds the state the record left.
             if let Some(change) = first
-                && let Some(record) = session.ledger.get(&change.id)
+                && let Ok(written) = Session::open(&session.global)
             {
-                fields.insert(2, ("state", Value::string(record.state.name())));
+                if let Some(record) = written.ledger.get(&change.id) {
+                    fields.insert(2, ("state", Value::string(record.state.name())));
+                }
+                if let Some(text) = written.inputs.canonical_text.get(&change.id) {
+                    let hash = akr_core::hash::content_hash(text);
+                    fields.push(("content_hash", Value::string(hash.to_string())));
+                }
             }
             Ok(Value::object(fields))
         }
@@ -393,7 +418,10 @@ fn write_result(
                 error.diagnostics.push(Value::object(vec![
                     ("code", Value::string(refused.code.as_str())),
                     ("severity", Value::string("error")),
-                    ("message", Value::string("unfinished children need a disposition")),
+                    (
+                        "message",
+                        Value::string("unfinished children need a disposition"),
+                    ),
                     (
                         "unfinished_children",
                         Value::array(
@@ -415,7 +443,10 @@ fn write_result(
                 error.diagnostics.push(Value::object(vec![
                     ("code", Value::string(refused.code.as_str())),
                     ("severity", Value::string("error")),
-                    ("message", Value::string("acceptance checks are not satisfied")),
+                    (
+                        "message",
+                        Value::string("acceptance checks are not satisfied"),
+                    ),
                     (
                         "unsatisfied_checks",
                         Value::array(
@@ -464,9 +495,7 @@ fn environment(error: EnvError) -> ToolError {
     mapped
 }
 
-fn dispositions(
-    arguments: &Value,
-) -> Result<Vec<akr_core::ops::DispositionRequest>, ToolError> {
+fn dispositions(arguments: &Value) -> Result<Vec<akr_core::ops::DispositionRequest>, ToolError> {
     let mut out = Vec::new();
     for item in arguments
         .get("dispositions")
@@ -522,15 +551,15 @@ fn merged(arguments: &Value, head: &akr_core::model::Record) -> Value {
             akr_core::model::ContentValue::Date(date) => Value::string(date.to_string()),
             akr_core::model::ContentValue::Commit(commit) => Value::string(commit.as_str()),
             akr_core::model::ContentValue::Enum(word) => Value::string(word.to_string()),
-            akr_core::model::ContentValue::Strings(items) => Value::array(
-                items.iter().map(|s| Value::string(s.clone())).collect(),
-            ),
-            akr_core::model::ContentValue::Globs(items) => Value::array(
-                items.iter().map(|g| Value::string(g.as_str())).collect(),
-            ),
-            akr_core::model::ContentValue::Refs(items) => Value::array(
-                items.iter().map(|r| Value::string(r.to_string())).collect(),
-            ),
+            akr_core::model::ContentValue::Strings(items) => {
+                Value::array(items.iter().map(|s| Value::string(s.clone())).collect())
+            }
+            akr_core::model::ContentValue::Globs(items) => {
+                Value::array(items.iter().map(|g| Value::string(g.as_str())).collect())
+            }
+            akr_core::model::ContentValue::Refs(items) => {
+                Value::array(items.iter().map(|r| Value::string(r.to_string())).collect())
+            }
         };
         slots.push((slot.name().to_owned(), rendered));
     }

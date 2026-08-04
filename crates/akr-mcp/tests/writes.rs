@@ -7,13 +7,14 @@
 mod support;
 
 use akr_core::json::{Value, parse};
-use support::{Example, mcp_binary};
+use support::{Example, mcp_binary, one_line};
 
 /// One `tools/call`, returning `(payload, is_error)`.
 fn call(example: &Example, tool: &str, arguments: &str) -> (Value, bool) {
     use std::io::Write as _;
     use std::process::{Command, Stdio};
 
+    let arguments = one_line(arguments);
     let request = format!(
         "{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\
          \"params\":{{\"name\":\"{tool}\",\"arguments\":{arguments}}}}}\n"
@@ -35,7 +36,10 @@ fn call(example: &Example, tool: &str, arguments: &str) -> (Value, bool) {
     let output = child.wait_with_output().expect("akr-mcp exits");
     let line = String::from_utf8_lossy(&output.stdout);
     let response = parse(line.trim()).unwrap_or_else(|error| {
-        panic!("no JSON-RPC response: {error}\n{line}\n{}", String::from_utf8_lossy(&output.stderr))
+        panic!(
+            "no JSON-RPC response: {error}\n{line}\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        )
     });
     let result = response.get("result").expect("a result").clone();
     let is_error = result
@@ -80,15 +84,29 @@ fn propose_creates_a_record_and_refuses_the_same_key_twice() {
         Some("sys.term.day-loop")
     );
     assert_eq!(payload.get("rev").and_then(Value::as_integer), Some(1));
-    assert_eq!(
-        payload.get("written").and_then(Value::as_bool),
-        Some(true)
-    );
+    assert_eq!(payload.get("written").and_then(Value::as_bool), Some(true));
     // Every write stales the lock, and the payload says so rather than leaving the agent
     // to discover it from the next `knowledge.validate` (D-014).
     assert_eq!(
         payload.get("lock_stale").and_then(Value::as_bool),
         Some(true)
+    );
+    // §4's remaining two fields describe the revision as it landed, not as it was planned,
+    // so they are worth asserting: an agent that read a stale `state` back would think its
+    // lifecycle move had not taken.
+    assert_eq!(
+        payload.get("state").and_then(Value::as_str),
+        Some("active"),
+        "{}",
+        error_text(&payload)
+    );
+    assert!(
+        payload
+            .get("content_hash")
+            .and_then(Value::as_str)
+            .is_some_and(|hash| hash.starts_with("sha256:")),
+        "{}",
+        error_text(&payload)
     );
     assert!(
         example
@@ -102,8 +120,17 @@ fn propose_creates_a_record_and_refuses_the_same_key_twice() {
     let before = example.sources();
     let (payload, is_error) = call(&example, "knowledge.propose", arguments);
     assert!(is_error);
-    assert_eq!(error_class(&payload), Some("invariant"), "{}", error_text(&payload));
-    assert_eq!(before, example.sources(), "a refused write left something behind");
+    assert_eq!(
+        error_class(&payload),
+        Some("invariant"),
+        "{}",
+        error_text(&payload)
+    );
+    assert_eq!(
+        before,
+        example.sources(),
+        "a refused write left something behind"
+    );
 }
 
 #[test]
@@ -119,7 +146,12 @@ fn a_malformed_payload_is_a_schema_error_and_writes_nothing() {
             "slots":{"observed_at":"git:0000000000000000000000000000000000000000"}}"#,
     );
     assert!(is_error);
-    assert_eq!(error_class(&payload), Some("schema"), "{}", error_text(&payload));
+    assert_eq!(
+        error_class(&payload),
+        Some("schema"),
+        "{}",
+        error_text(&payload)
+    );
     assert_eq!(before, example.sources());
 
     // And a record with no body at all: `docs/07-cli.md` §6 says a body source is
@@ -131,7 +163,11 @@ fn a_malformed_payload_is_a_schema_error_and_writes_nothing() {
     );
     assert!(is_error);
     assert_eq!(before, example.sources());
-    assert!(error_text(&payload).contains("definition"), "{}", error_text(&payload));
+    assert!(
+        error_text(&payload).contains("definition"),
+        "{}",
+        error_text(&payload)
+    );
 }
 
 #[test]
@@ -146,7 +182,12 @@ fn revise_requires_base_rev_and_rejects_a_stale_one() {
         r#"{"key":"sys.term.playable-day"}"#,
     );
     assert!(is_error);
-    assert_eq!(error_class(&payload), Some("usage"), "{}", error_text(&payload));
+    assert_eq!(
+        error_class(&payload),
+        Some("usage"),
+        "{}",
+        error_text(&payload)
+    );
 
     // Present but stale: the head is at revision 1, so 7 is a claim about a ledger that
     // does not exist. §7 calls this the only concurrency control the surface has, and it
@@ -157,7 +198,12 @@ fn revise_requires_base_rev_and_rejects_a_stale_one() {
         r#"{"key":"sys.term.playable-day","base_rev":7}"#,
     );
     assert!(is_error);
-    assert_eq!(error_class(&payload), Some("conflict"), "{}", error_text(&payload));
+    assert_eq!(
+        error_class(&payload),
+        Some("conflict"),
+        "{}",
+        error_text(&payload)
+    );
     assert_eq!(
         payload
             .get("error")
@@ -182,7 +228,10 @@ fn revise_keeps_the_slots_the_payload_does_not_mention() {
     assert_eq!(payload.get("rev").and_then(Value::as_integer), Some(2));
 
     let source = example.read_file(".akr/records/sys/policies.akr");
-    assert!(source.contains("Rewritten after the M3 replan."), "{source}");
+    assert!(
+        source.contains("Rewritten after the M3 replan."),
+        "{source}"
+    );
     // An agent that had to resend every slot would eventually drop one, and a dropped
     // claim is knowledge lost silently. The unmentioned ones survive.
     assert!(source.contains("claim lag-bound"), "{source}");
@@ -212,7 +261,12 @@ fn supersede_lists_the_unfinished_children_in_the_error_payload() {
         r#"{"old_key":"sys.milestone.m3-playable-day"}"#,
     );
     assert!(is_error);
-    assert_eq!(error_class(&payload), Some("invariant"), "{}", error_text(&payload));
+    assert_eq!(
+        error_class(&payload),
+        Some("invariant"),
+        "{}",
+        error_text(&payload)
+    );
     assert_eq!(
         payload
             .get("error")
@@ -268,7 +322,12 @@ fn complete_names_the_unsatisfied_checks_in_the_error_payload() {
         r#"{"key":"sys.milestone.m3-playable-day"}"#,
     );
     assert!(is_error);
-    assert_eq!(error_class(&payload), Some("invariant"), "{}", error_text(&payload));
+    assert_eq!(
+        error_class(&payload),
+        Some("invariant"),
+        "{}",
+        error_text(&payload)
+    );
     assert_eq!(before, example.sources());
 
     let checks = payload

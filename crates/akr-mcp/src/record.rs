@@ -57,9 +57,9 @@ pub fn to_source(
             }
         }
         for (name, _) in slots {
-            if ContentSlot::from_name(name).is_none_or(|slot| {
-                !kind.content_slots().iter().any(|spec| spec.slot == slot)
-            }) {
+            if ContentSlot::from_name(name)
+                .is_none_or(|slot| !kind.content_slots().iter().any(|spec| spec.slot == slot))
+            {
                 return Err(ToolError::new(
                     "AKR-T002",
                     format!("`{name}` is not a slot of kind `{}`", kind.name()),
@@ -96,9 +96,8 @@ pub fn to_source(
 
     if let Some(Value::Object(relations)) = payload.get("relations") {
         for (name, targets) in relations {
-            let relation = Relation::from_name(name).ok_or_else(|| {
-                ToolError::new("AKR-C004", format!("`{name}` is not a relation"))
-            })?;
+            let relation = Relation::from_name(name)
+                .ok_or_else(|| ToolError::new("AKR-C004", format!("`{name}` is not a relation")))?;
             let refs: Vec<String> = targets
                 .as_array()
                 .unwrap_or_default()
@@ -107,7 +106,11 @@ pub fn to_source(
                 .map(reference)
                 .collect();
             if !refs.is_empty() {
-                out.push_str(&format!("    {} [ {} ]\n", relation.name(), refs.join(", ")));
+                out.push_str(&format!(
+                    "    {} [ {} ]\n",
+                    relation.name(),
+                    refs.join(", ")
+                ));
             }
         }
     }
@@ -155,7 +158,10 @@ fn schema_error(diagnostics: &[akr_core::diagnostics::Diagnostic]) -> ToolError 
         .iter()
         .find(|d| d.severity == akr_core::diagnostics::Severity::Error);
     let (code, message) = first.map_or(
-        ("AKR-T002", "the payload does not describe a record".to_owned()),
+        (
+            "AKR-T002",
+            "the payload does not describe a record".to_owned(),
+        ),
         |d| (d.code.as_str(), d.message.clone()),
     );
     ToolError::new(code, message).with_diagnostics(
@@ -188,9 +194,7 @@ fn slot_line(slot: ContentSlot, value: &Value) -> Result<String, ToolError> {
         }
         ContentSlot::ReviewAfter | ContentSlot::Target => string(value, name)?,
         // Enum members are bare words.
-        ContentSlot::Method | ContentSlot::Result | ContentSlot::Confidence => {
-            string(value, name)?
-        }
+        ContentSlot::Method | ContentSlot::Result | ContentSlot::Confidence => string(value, name)?,
         ContentSlot::Watches | ContentSlot::Aliases => {
             let items: Vec<String> = array(value, name)?
                 .iter()
@@ -220,9 +224,10 @@ fn slot_line(slot: ContentSlot, value: &Value) -> Result<String, ToolError> {
 }
 
 fn string(value: &Value, slot: &str) -> Result<String, ToolError> {
-    value.as_str().map(ToOwned::to_owned).ok_or_else(|| {
-        ToolError::new("AKR-C004", format!("slot `{slot}` expects a string"))
-    })
+    value
+        .as_str()
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| ToolError::new("AKR-C004", format!("slot `{slot}` expects a string")))
 }
 
 fn array<'a>(value: &'a Value, slot: &str) -> Result<&'a [Value], ToolError> {

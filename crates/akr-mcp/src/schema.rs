@@ -85,15 +85,24 @@ pub fn input_schema(name: &str) -> Option<Value> {
                 ("query", string("What to search for.")),
                 ("kinds", string_array("Restrict to these record kinds.")),
                 ("states", string_array("Restrict to these states.")),
-                ("limit", integer("Maximum results. Default 20, maximum 100.")),
+                (
+                    "limit",
+                    integer("Maximum results. Default 20, maximum 100."),
+                ),
             ],
             &["query"],
         ),
         "knowledge.get" => object(
             vec![
-                ("ref", string("A reference in any of the four forms of D-009.")),
+                (
+                    "ref",
+                    string("A reference in any of the four forms of D-009."),
+                ),
                 ("history", boolean("Include every revision of the key.")),
-                ("relations", boolean("Include inbound and outbound relations.")),
+                (
+                    "relations",
+                    boolean("Include inbound and outbound relations."),
+                ),
             ],
             &["ref"],
         ),
@@ -111,12 +120,18 @@ pub fn input_schema(name: &str) -> Option<Value> {
         ),
         "knowledge.impact" => object(
             vec![
-                ("ref", string("A record reference. Exclusive with git_diff.")),
+                (
+                    "ref",
+                    string("A record reference. Exclusive with git_diff."),
+                ),
                 (
                     "git_diff",
                     string("A commit range `A..B`, full 40-hex on both ends."),
                 ),
-                ("depth", integer("Maximum propagation depth. Default unbounded.")),
+                (
+                    "depth",
+                    integer("Maximum propagation depth. Default unbounded."),
+                ),
             ],
             &[],
         ),
@@ -134,7 +149,10 @@ pub fn input_schema(name: &str) -> Option<Value> {
                 ("title", string("The one-line label.")),
                 ("state", string("Override the class's initial state.")),
                 ("scope", scope_schema()),
-                ("topic", string("The exclusivity handle, normative kinds only.")),
+                (
+                    "topic",
+                    string("The exclusivity handle, normative kinds only."),
+                ),
                 ("slots", slots_schema()),
                 ("claims", claims_schema()),
                 ("relations", relations_schema()),
@@ -167,7 +185,10 @@ pub fn input_schema(name: &str) -> Option<Value> {
         "knowledge.supersede" => object(
             vec![
                 ("old_key", string("The key whose head is retired.")),
-                ("new_key", string("The superseding key. Defaults to old_key.")),
+                (
+                    "new_key",
+                    string("The superseding key. Defaults to old_key."),
+                ),
                 ("slots", slots_schema()),
                 ("dispositions", dispositions_schema()),
             ],
@@ -184,7 +205,10 @@ pub fn input_schema(name: &str) -> Option<Value> {
                             "description",
                             Value::string("check id -> evidence reference."),
                         ),
-                        ("additionalProperties", Value::object(vec![("type", Value::string("string"))])),
+                        (
+                            "additionalProperties",
+                            Value::object(vec![("type", Value::string("string"))]),
+                        ),
                     ]),
                 ),
             ],
@@ -251,7 +275,10 @@ fn string_array(description: &str) -> Value {
     Value::object(vec![
         ("type", Value::string("array")),
         ("description", Value::string(description)),
-        ("items", Value::object(vec![("type", Value::string("string"))])),
+        (
+            "items",
+            Value::object(vec![("type", Value::string("string"))]),
+        ),
     ])
 }
 
@@ -293,7 +320,10 @@ fn claims_schema() -> Value {
         (
             "items",
             object(
-                vec![("anchor", string("The anchor.")), ("text", string("The claim."))],
+                vec![
+                    ("anchor", string("The anchor.")),
+                    ("text", string("The claim.")),
+                ],
                 &["anchor", "text"],
             ),
         ),
@@ -326,8 +356,16 @@ fn dispositions_schema() -> Value {
             object(
                 vec![
                     ("child", string("The child's key.")),
-                    ("outcome", string("carried_forward, completed_elsewhere, intentionally_dropped or still_required_separately.")),
-                    ("into", string("Where it went, where the outcome needs one.")),
+                    (
+                        "outcome",
+                        string(
+                            "carried_forward, completed_elsewhere, intentionally_dropped or still_required_separately.",
+                        ),
+                    ),
+                    (
+                        "into",
+                        string("Where it went, where the outcome needs one."),
+                    ),
                     ("note", string("Why.")),
                 ],
                 &["child", "outcome"],

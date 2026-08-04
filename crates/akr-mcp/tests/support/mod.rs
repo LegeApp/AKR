@@ -503,6 +503,31 @@ pub fn mcp_binary() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_akr-mcp"))
 }
 
+/// Collapses a JSON literal onto one line.
+///
+/// The stdio transport is newline-delimited, so a request may not contain a line break; a
+/// test that writes its arguments pretty-printed would otherwise hand the server several
+/// fragments and get a parse error back instead of the tool's answer. Whitespace inside
+/// strings is preserved — only the layout between tokens goes.
+pub fn one_line(json: &str) -> String {
+    let mut out = String::with_capacity(json.len());
+    let mut in_string = false;
+    let mut escaped = false;
+    for character in json.chars() {
+        if in_string {
+            out.push(character);
+            in_string = !(character == '"' && !escaped);
+            escaped = character == '\\' && !escaped;
+        } else if character == '"' {
+            out.push(character);
+            in_string = true;
+        } else if !character.is_whitespace() {
+            out.push(character);
+        }
+    }
+    out
+}
+
 fn binary_beside(name: &str) -> PathBuf {
     let mcp = mcp_binary();
     let dir = mcp.parent().expect("a target directory");
