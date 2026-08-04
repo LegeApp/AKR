@@ -110,6 +110,17 @@ pub struct Record {
     pub span: Span,
 }
 
+impl Record {
+    /// The byte offset just past the record header, `record key/rev : kind`.
+    ///
+    /// A diagnostic about a whole record underlines its header rather than its body, so
+    /// this is where the caret stops.
+    #[must_use]
+    pub fn header_end(&self) -> u32 {
+        self.kind_span.end
+    }
+}
+
 /// A `namespace` declaration.
 #[derive(Debug, Clone)]
 pub struct Namespace {
@@ -164,11 +175,7 @@ impl BodyItem {
     #[must_use]
     pub fn head_text(&self) -> String {
         match self {
-            Self::Block(b) => b
-                .head
-                .as_ref()
-                .map(Value::render_inline)
-                .unwrap_or_default(),
+            Self::Block(b) => b.head_text(),
             Self::Slot(_) => String::new(),
         }
     }
@@ -206,6 +213,20 @@ pub struct Block {
     pub inner_trailing: Vec<Comment>,
     /// The whole block.
     pub span: Span,
+}
+
+impl Block {
+    /// The block head rendered inline, or an empty string for a headless block.
+    ///
+    /// This is the text blocks sort by (D-012) and the identifier a
+    /// [`crate::diagnostics::SlotRef`] carries for a `claim`, `check` or `disposition`.
+    #[must_use]
+    pub fn head_text(&self) -> String {
+        self.head
+            .as_ref()
+            .map(Value::render_inline)
+            .unwrap_or_default()
+    }
 }
 
 /// A value.

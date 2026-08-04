@@ -1,0 +1,21 @@
+[package]
+name = "akr-cli"
+description = "The `akr` command line: read, verify and build a knowledge ledger."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "akr"
+path = "src/main.rs"
+
+# No runtime dependencies. Argument parsing and JSON writing are both small enough to
+# own outright, and `docs/13-implementation-roadmap.md` §4 keeps the dependency list
+# short deliberately.
+[dependencies]
+akr-core = { path = "../akr-core" }

@@ -1,0 +1,46 @@
+akr 0.1
+project sys-tandem
+
+record engine.obs.channel-coverage/1 : observation {
+    title "Two thirds of player-relevant simulator systems have no engine channel"
+    state verified
+    scope [ path "SYSEngine/crates/sys_game_bridge/**", path "SYSEngine/crates/sys_present/**" ]
+    statement """
+        Castle, lighting, bodies, stage, frame discipline and the perception seam are
+        strong and audited. The gap is in projection: of the player-relevant simulator
+        systems, most either arrive flattened to strings or have no channel at all.
+        """
+    observed_at git:9d40e1b7c85a326f0b1de94738ca5602f81b7d4a
+    method manual
+    watches [ "SYSEngine/crates/sys_game_bridge/**", "SYSEngine/crates/sys_present/**" ]
+    review_after 2026-09-15
+    claim coverage-counts {
+        text """
+            Of roughly 24 player-relevant simulator systems, roughly 6 are well
+            represented, roughly 8 arrive flattened to strings, and roughly 10 have no
+            channel at all.
+            """
+    }
+    created_at 2026-08-02
+    source {
+        kind legacy
+        path "SYSEngine/docs/2026-08-02-mid-engine-assessment.md"
+        excerpt """
+            The gap register. BUILD-STATUS.md carries the verified tree state.
+            """
+    }
+}
+
+record engine.obs.sound-decided-not-heard/1 : observation {
+    title "Sound is decided but not heard"
+    state disproven
+    scope [ path "SYSEngine/crates/sys_sound/**" ]
+    statement """
+        The sound design is settled in plan and in record, but nothing is audible:
+        there is no mixer and no device.
+        """
+    observed_at git:9d40e1b7c85a326f0b1de94738ca5602f81b7d4a
+    method manual
+    watches [ "SYSEngine/crates/sys_sound/**" ]
+    created_at 2026-08-02
+}

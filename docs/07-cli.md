@@ -16,6 +16,12 @@ this document does not describe.
 akr [GLOBAL FLAGS] <command> [COMMAND FLAGS] [ARGUMENTS]
 ```
 
+Global flags are also accepted **after** the command, so `akr check --format json` and
+`akr --format json check` are the same invocation. The grammar above is the canonical
+form and the one this document uses; no command flag shares a name with a global one, so
+accepting both costs nothing and refusing one would be enforcing punctuation rather than
+meaning.
+
 One binary, no daemon, no server, no state outside the workspace. Every command:
 
 1. Locates the workspace by walking up from `--dir` (default: the current directory)
@@ -60,7 +66,12 @@ argument is `AKR-C003`; a bad flag value is `AKR-C004`. All four exit 2.
 | **0** | Success | The command did what it was asked. Includes a `check` that found only build facts such as staleness. |
 | **1** | Diagnostics | One or more `AKR-*` diagnostics of effective severity `error` were produced. Under `--strict` that includes warnings. |
 | **2** | Usage | The invocation was malformed: `AKR-C001`–`AKR-C005`, `AKR-C041`. Nothing was read and nothing was written. |
-| **3** | Environment | The workspace or repository is unusable: `AKR-C011`, `AKR-C012`, `AKR-G001`, `AKR-G003`, `AKR-I003`. Not a ledger problem. |
+| **3** | Environment | The workspace or repository is unusable: `AKR-C011`, `AKR-C012`, `AKR-C042`, `AKR-G001`, `AKR-G003`, `AKR-I003`. Not a ledger problem. |
+
+`AKR-G013` — an unknown revision given to `--at` or to either end of `--git-diff` — is in
+neither list, and so exits **1**. The checkout is fine and the invocation is well-formed;
+the tool looked the revision up and it was not there, which is a finding about the
+repository's contents and is reported as a diagnostic like any other.
 
 The distinction between 1 and 3 is what makes CI logs readable: exit 1 means *fix the
 ledger*, exit 3 means *fix the checkout*.
@@ -494,6 +505,21 @@ An existing key is an error: use `akr revise`. An undeclared namespace is `AKR-L
 The write pipeline of §4 applies in full, so a proposal that would break the ledger is
 refused and nothing is written (`AKR-C031`).
 
+**A body source is effectively mandatory.** `--from` and `--edit` read as optional, and
+they are not: §4 validates the *resulting* ledger, every kind requires its prose slot
+(`AKR-T001`), and V-008 refuses an empty one. A `propose` with neither flag therefore
+produces a record with no `definition`, `statement`, `intent` or `rule` — and is refused
+before anything reaches the disk. The flags are optional in the grammar and required in
+practice; nothing is written either way, so the failure is safe, but it is worth knowing
+in advance rather than discovering.
+
+```
+$ akr propose sys.term.day-loop --kind term --title "The day loop"
+error[AKR-C031]: write aborted: the resulting ledger did not validate (1 diagnostics)
+error[AKR-T001]: term requires slot `definition`
+nothing written
+```
+
 ---
 
 ### `akr revise`
@@ -502,10 +528,36 @@ refused and nothing is written (`AKR-C031`).
 akr revise <key> [--from <file>] [--edit] [--state <state>]
 ```
 
-Creates revision *n+1* of an existing key by copying the head and applying edits.
-Revision *n* is left exactly as it is; if it was sealed, its content hash still matches.
-This is the only way to change a settled record (D-015), and `AKR-C032` names it when
-someone tries the other way.
+Creates revision *n+1* of an existing key by copying the head and applying edits. This is
+the only way to change a settled record (D-015), and `AKR-C032` names it when someone
+tries the other way.
+
+**A revise on a sealed head retires the old head in the same write.** Revision *n+1* is
+created, it gains a `supersedes` edge to *n*, and *n* moves to `superseded` — one atomic
+write, not two. The old revision's *body* is untouched and its `supersedes` chain is
+exactly what `akr supersede` would have produced; only its `state` slot changes.
+
+This is not a convenience. Two live revisions of one key is `AKR-R012` (V-012), and §4
+refuses to write a ledger that does not validate — so a revise that created *n+1* and left
+*n* live would have to be refused, and the "intermediate state" in which the old head is
+still live cannot be written at all. `akr revise` on a sealed head and `akr supersede`
+share one implementation for that reason;
+[`04-references-and-versioning.md`](04-references-and-versioning.md) §2.1 states the same
+rule from the model's side.
+
+One consequence follows for planning records: **a revise on a sealed planning head demands
+a disposition for every unfinished `part_of` child**, exactly as `akr supersede` does
+(D-017). The requirement belongs to the act of replacing a plan, not to the name of the
+command that does it, and `--disposition` is accepted here for that reason.
+
+A `proposed` head is edited in place instead, and no revision is created: D-015 makes
+proposed revisions editable, and revision 2 of a proposal nobody accepted would be noise.
+`--in-place` forces the in-place path and is `AKR-C032` on a sealed head.
+
+Because every write changes a record's canonical text, it changes its content hash, and
+`akr.lock` records the old one. `akr revise` therefore reports that the lock is stale and
+`akr check` raises `AKR-R052` until the next `akr build`. That is correct: a lock records
+a *build* (D-014) and no write operation may invent one.
 
 `--state` moves the new revision along its class's lifecycle. An illegal transition is
 `AKR-T011` (V-007).
@@ -568,6 +620,27 @@ help: run the check and record it with
 nothing written
 ```
 
+**Completing a milestone requires its plan of record to be retired first.** V-019 refuses
+a live `work` record whose `plan_of_record` resolves to a terminal milestone, so completing
+the milestone while its plan is still `active` produces a ledger that does not validate,
+and §4 refuses to write it:
+
+```
+$ akr complete sys.milestone.m3-playable-day \
+      --check no-placeholder-assets=@sys.evidence.asset-audit/1
+error[AKR-C031]: write aborted: the resulting ledger did not validate (1 diagnostics)
+error[AKR-R021]: sys.work.m3-plan/2 is active but `plan_of_record` resolves to
+                 sys.milestone.m3-playable-day/1, which is completed
+help: repoint the reference, or revise this record (see V-019)
+nothing written
+```
+
+The order is `akr complete` or `akr abandon` on the plan, then `akr complete` on the
+milestone. This is the rule doing its job rather than getting in the way: a plan is a
+statement about work that is still to be done, and a plan of record for a finished
+milestone is a claim that has stopped being true. The tool makes you say which — the plan
+was completed, or it was abandoned — at the moment you know.
+
 ---
 
 ### `akr abandon`
@@ -578,7 +651,15 @@ akr abandon <key> --reason <text> [--disposition <child>=<outcome>[:<into>] ...]
 
 Moves a planning record to `abandoned`. Like `supersede`, it demands a disposition for
 every unfinished child — abandoning a plan silently is exactly the failure D-017 exists
-to prevent. `--reason` is required and lands in a `note`.
+to prevent.
+
+`--reason` is required and lands in the record's **`note` slot** (D-026), not in a
+comment. The distinction matters twice over: a comment is excluded from the seal hash by
+D-015, and it is invisible to every generated view. An abandonment reason is durable
+knowledge, so it is stored as content and
+[`11-projections.md`](11-projections.md) §3 renders it wherever a terminal planning record
+appears — `ACTIVE-WORK.md`, `ROADMAP.md` and `DECISION-HISTORY.md`. The operator who
+abandons a plan on Tuesday leaves something the Thursday reader can see.
 
 Nothing is deleted; the record stays, terminal, and its references keep resolving.
 

@@ -381,3 +381,59 @@ fn the_dependency_graph_uses_exactly_three_relations() {
 fn empty_stale_set_flags_nothing() {
     assert!(propagate_staleness(&freshness_ledger(), &BTreeSet::new()).is_empty());
 }
+
+#[test]
+fn only_live_records_are_flagged_at_risk() {
+    // `docs/02-data-model.md` §6 defines at_risk over live records. A superseded record
+    // rests on whatever it rested on; flagging it asks for a review nobody will do.
+    let mut ledger = Ledger::new(Project::new("p", &["fx"]));
+    ledger.extend([
+        RecordBuilder::new("fx.obs.measurement", 1, Kind::Observation)
+            .filled()
+            .build(),
+        RecordBuilder::new("fx.assessment.retired", 1, Kind::Assessment)
+            .filled()
+            .state(State::Superseded)
+            .rel(Relation::SupportedBy, "@fx.obs.measurement")
+            .build(),
+        RecordBuilder::new("fx.assessment.current", 1, Kind::Assessment)
+            .filled()
+            .rel(Relation::SupportedBy, "@fx.obs.measurement")
+            .build(),
+    ]);
+
+    let stale: BTreeSet<RevisionId> = [id("fx.obs.measurement", 1)].into();
+    let flagged: Vec<String> = propagate_staleness(&ledger, &stale)
+        .into_iter()
+        .map(|r| r.id.to_string())
+        .collect();
+    assert_eq!(flagged, ["fx.assessment.current/1"]);
+}
+
+#[test]
+fn doubt_does_not_travel_through_a_terminal_record() {
+    // `derived_from` is the one relation that may point at a terminal record. It is
+    // provenance: what the retired finding said at the time, not a live dependency.
+    let mut ledger = Ledger::new(Project::new("p", &["fx"]));
+    ledger.extend([
+        RecordBuilder::new("fx.obs.measurement", 1, Kind::Observation)
+            .filled()
+            .build(),
+        RecordBuilder::new("fx.obs.retired", 1, Kind::Observation)
+            .filled()
+            .state(State::Disproven)
+            .rel(Relation::DerivedFrom, "@fx.obs.measurement")
+            .build(),
+        RecordBuilder::new("fx.decision.downstream", 1, Kind::Decision)
+            .filled()
+            .state(State::Active)
+            .rel(Relation::DerivedFrom, "@fx.obs.retired/1")
+            .build(),
+    ]);
+
+    let stale: BTreeSet<RevisionId> = [id("fx.obs.measurement", 1)].into();
+    assert!(
+        propagate_staleness(&ledger, &stale).is_empty(),
+        "the retired observation is not flagged, and nothing beyond it is either"
+    );
+}

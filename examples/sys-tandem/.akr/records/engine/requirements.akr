@@ -1,0 +1,18 @@
+akr 0.1
+project sys-tandem
+
+record engine.req.no-debug-surfaces/1 : requirement {
+    title "Nothing in the product day reads as debug"
+    state active
+    scope [ path "SYSEngine/crates/sys_client/**", path "SYSEngine/crates/sys_present/**" ]
+    statement """
+        In the seeded product day, no surface a player can reach reads as debug output:
+        no developer overlays, no raw identifiers, no placeholder text presented as
+        content.
+        """
+    rationale """
+        It is half the definition of playable, and the half a person notices first.
+        """
+    depends_on [ @tandem.term.playable-day ]
+    created_at 2026-08-03
+}

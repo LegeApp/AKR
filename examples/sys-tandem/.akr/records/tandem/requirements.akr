@@ -1,0 +1,24 @@
+akr 0.1
+project sys-tandem
+
+record tandem.req.bridge-invents-nothing/1 : requirement {
+    title "The bridge invents nothing"
+    state active
+    scope [ path "SYSEngine/crates/sys_game_bridge/**" ]
+    statement """
+        Every value the bridge hands the engine is read from a simulator record. The
+        bridge does not infer activity kinds, re-derive emotional tone, or synthesise
+        any value the simulator did not state.
+        """
+    rationale """
+        A bridge that infers is a second, undocumented simulator, and the two drift.
+        The re-derivation defect in mid-engine-assessment section 8 is what this
+        requirement exists to retire at the source.
+        """
+    depends_on [ @tandem.term.bridge ]
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "SYSEngine/docs/plans/show-dont-tell.md"
+    }
+}

@@ -1,0 +1,151 @@
+akr 0.1
+project sys-tandem
+
+record tandem.work.defect-retirement-plan/1 : work {
+    title "Defect retirement schedule"
+    state superseded
+    intent """
+        The first schedule for the open redesign-ledger entries: re-base the fast
+        digest pins, delete the Phase enum, fix the classic Play/Debug split, and
+        favour the A5, A7 and A8 defects.
+        """
+    plan_of_record [ @tandem.track.defect-retirement ]
+    created_at 2026-07-31
+}
+
+record tandem.work.defect-retirement-plan/2 : work {
+    title "Defect retirement schedule"
+    state active
+    intent """
+        The 2026-08-03 schedule. The digest pins and the Phase enum move to the
+        standing track; the A defects fold into M4's simulator half where they touch
+        the close; the classic Play/Debug split is dropped under the TUI-divergence
+        ruling.
+        """
+    disposition @simulator.work.a5-a7-a8-defects {
+        outcome completed_elsewhere
+        into @simulator.work.day-close
+        note """
+            A5, A7 and A8 touch the close, so they landed inside M4's simulator half
+            rather than separately.
+            """
+    }
+    disposition @simulator.work.classic-play-debug-split {
+        outcome intentionally_dropped
+        note """
+            The classic surface is a test harness now, not a product surface. Fixing
+            its Play/Debug split would be extending a test surface, which the
+            2026-08-02 ruling forbids.
+            """
+    }
+    disposition @simulator.work.delete-phase-enum {
+        outcome carried_forward
+        into @tandem.track.defect-retirement
+        note """
+            Any time. Nothing sequences it.
+            """
+    }
+    disposition @simulator.work.rebase-digest-pins {
+        outcome carried_forward
+        into @tandem.track.defect-retirement
+        note """
+            Scheduled S3, before M4 lands, since M4 deliberately changes the product
+            day and must be caught by pins that watch it.
+            """
+    }
+    implements [ @tandem.policy.same-change-audit ]
+    plan_of_record [ @tandem.track.defect-retirement ]
+    supersedes [ @tandem.work.defect-retirement-plan/1 ]
+    created_at 2026-08-03
+}
+
+record tandem.work.m1-plan/1 : work {
+    title "M1 plan of record"
+    state completed
+    intent """
+        Part A: closed-door CourtSession records. Part B: two-party calm-day percepts.
+        """
+    plan_of_record [ @tandem.milestone.m1-court-speaks ]
+    created_at 2026-08-02
+    source {
+        kind legacy
+        path "2026-08-02-closed-doors-and-court-conversation-plan.md"
+    }
+}
+
+record tandem.work.m5-plan/1 : work {
+    title "M5 plan of record"
+    state active
+    intent """
+        Harden the client shell, triage the remaining playability fixes, and then get
+        three seeded full-day sessions in front of a designer. The code half is done;
+        what remains is a human sitting down to play.
+        """
+    depends_on [ @tandem.assessment.central-fact ]
+    plan_of_record [ @tandem.milestone.m5-one-playable-day ]
+    created_at 2026-08-03
+}
+
+record tandem.work.roadmap-import/1 : work {
+    title "Import the tandem roadmap's durable claims"
+    state proposed
+    intent """
+        Disposition every durable claim in the 2026-08-03 tandem roadmap: record it as
+        a record of the right kind, or drop it explicitly. The legacy document is
+        archived only when this work item completes.
+        """
+    acceptance {
+        check exclusion-claims {
+            statement """
+                Section 5's exclusions are dispositioned as constraints or explicitly
+                dropped.
+                """
+            method manual
+        }
+        check implementation-record-claims {
+            statement """
+                Section 7's implementation record is dispositioned as evidence and
+                milestone states, including the parts that contradict section 1.
+                """
+            method manual
+        }
+        check milestone-claims {
+            statement """
+                Section 3's five milestones and their named acceptance instruments are
+                dispositioned as milestones with acceptance checks.
+                """
+            method manual
+        }
+        check nomenclature-claims {
+            statement """
+                Section 0's rulings are dispositioned as terms, a policy and a
+                constraint.
+                """
+            method manual
+        }
+        check plan-index-claims {
+            statement """
+                Section 6's plan index is dispositioned as legacy source blocks. No
+                record is invented for a document this project does not hold.
+                """
+            method manual
+        }
+        check standing-track-claims {
+            statement """
+                Section 4's standing tracks are dispositioned as tracks, and the rules
+                inside them as policies.
+                """
+            method manual
+        }
+    }
+    part_of [ @tandem.track.doc-discipline ]
+    created_at 2026-08-04
+    source {
+        kind legacy
+        path "examples/sys-tandem/legacy/2026-08-03-engine-simulator-tandem-roadmap.md"
+        excerpt """
+            The whole document. This work record is the migration tracking record of
+            D-022; the roadmap is archived only when every check above is satisfied.
+            """
+    }
+}

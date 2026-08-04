@@ -124,9 +124,9 @@ one of these four; a fifth class would mean the model was wrong.
 | `observation` | empirical | What was found true of the system at a specific commit | `statement`, `observed_at` | `watches`, `review_after`, `method` |
 | `evidence` | empirical | The outcome of a check that was actually run | `result`, `method`, `observed_at` | `command`, `artifact`, `summary` |
 | `assessment` | empirical | A judgement drawn from observations | `statement` | `confidence`, `as_of` |
-| `milestone` | planning | A named point at which defined checks pass | `intent`, `acceptance` | `target` |
-| `work` | planning | A unit of intended change | `intent` | `acceptance`, `disposition`, `target` |
-| `track` | planning | Standing work no milestone contains | `intent` | `cadence` |
+| `milestone` | planning | A named point at which defined checks pass | `intent`, `acceptance` | `target`, `note` |
+| `work` | planning | A unit of intended change | `intent` | `acceptance`, `disposition`, `target`, `note` |
+| `track` | planning | Standing work no milestone contains | `intent` | `cadence`, `note` |
 | `question` | inquiry | An open matter that blocks or endangers something | `question` | `resolution` |
 
 Every kind also accepts the common slots: `title`, `state`, `scope`, `retired_claims`,
@@ -463,6 +463,7 @@ A named point at which a defined set of acceptance checks passes.
 | --- | --- | --- | --- |
 | `intent` | prose | yes | What is true when this milestone is reached. |
 | `target` | date | no | Intended date. Never enforced; missing it is not an error. |
+| `note` | prose | no | Operator commentary (D-026). Informational; no rule reads it. |
 | `acceptance` | block | **yes** | What "done" means. See §9. |
 
 ```
@@ -514,6 +515,7 @@ track is what other systems would call a plan; AKR has no separate `plan` kind (
 | --- | --- | --- | --- |
 | `intent` | prose | yes | What will change. |
 | `target` | date | no | |
+| `note` | prose | no | Operator commentary (D-026). `akr abandon --reason` writes it. |
 | `acceptance` | block | no | Optional; a work item may borrow its milestone's. |
 | `disposition` | block[] | conditional | Required when superseding a planning record with unfinished children (§8.3). |
 
@@ -546,9 +548,25 @@ At most one live work record may be `plan_of_record` for a given milestone or tr
 (V-018). Two live plans for one milestone is the ambiguity the invariant exists to
 forbid.
 
+### The `note` slot
+
+`note` is free-form operator commentary on a planning record, and it is the one slot in
+the vocabulary that no rule reads (D-026). Nothing requires it, nothing validates it, and
+nothing fails if it is absent. `akr abandon --reason` writes the reason there, and views
+render it for records in terminal states, so the reason a plan was dropped is visible in
+`ACTIVE-WORK.md` and `DECISION-HISTORY.md` rather than buried in a source comment.
+
+It exists only on the planning kinds. Normative and empirical records already have a home
+for every kind of prose they should carry — `rationale`, `context`, `consequences`,
+`summary` — and a general commentary slot on them would become the metadata bag §12
+refuses to have. Planning records are the ones operators abandon, carry forward and
+re-schedule mid-flight, and that is the commentary this is for.
+
 *Common mistakes.* Superseding a plan without dispositioning its children — the single
 most valuable check in the system, and the one people most want to skip (§8.3). Making a
-work item `part_of` a milestone directly when it belongs to the plan.
+work item `part_of` a milestone directly when it belongs to the plan. Using `note` to
+carry something a typed slot already holds, which puts knowledge where nothing can check
+it.
 
 ### 4.11 `track` (planning)
 
@@ -558,6 +576,7 @@ Standing work that no milestone contains, and that does not end.
 | --- | --- | --- | --- |
 | `intent` | prose | yes | What the track keeps doing. |
 | `cadence` | string | no | How often, in whatever units make sense. |
+| `note` | prose | no | Operator commentary (D-026). Informational; no rule reads it. |
 
 ```
 record sys.track.lighting/1 : track {
@@ -612,8 +631,17 @@ it.
 It is not the same as `resolved`, and conflating them is how a project forgets that it
 never actually found out.
 
-*Common mistakes.* Recording a question with no `blocks` edge, so it never surfaces
-anywhere it matters. Deleting questions once answered instead of resolving them.
+A question that blocks nothing is still worth recording. Give it a `blocks` edge when
+something really is waiting on the answer, and leave it bare when nothing is: an
+unscheduled question surfaces in `OPEN-QUESTIONS.md` either way. Two real examples from
+`examples/sys-tandem/`: `engine.question.voice-direction` is deferred with no scheduled
+milestone, and `tandem.question.step-6-polish` is explicitly not a milestone blocker.
+Inventing a `blocks` edge for either would be asserting a dependency the project does not
+have.
+
+*Common mistakes.* Adding a `blocks` edge the project does not actually have, so that a
+milestone reads as stalled on a question nobody is waiting for. Deleting questions once
+answered instead of resolving them.
 
 ---
 

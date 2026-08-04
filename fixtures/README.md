@@ -89,6 +89,7 @@ point, so `007-idempotent` is not the only idempotence check, just the most expl
 | `parse/ok/009-key-depth` | `key` at two and eight segments |
 | `parse/ok/010-project-file` | `namespace_decl`, `defaults_block`, `integer` |
 | `parse/ok/011-lock-file` | `akr-lock` header, `lock_item`, string `block_head` |
+| `parse/ok/012-planning-note` | The `note` slot on `work` and `track` (D-026), in its canonical position as the last content slot of its kind |
 
 ## 5. Coverage matrix — diagnostics
 

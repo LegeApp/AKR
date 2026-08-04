@@ -1,0 +1,73 @@
+akr 0.1
+project sys-tandem
+
+record tandem.policy.same-change-audit/1 : policy {
+    title "A slice lands with its audit and its documents in the same change"
+    state active
+    scope [ all ]
+    topic slice-discipline
+    rule """
+        A slice lands with its audit in the same change. Every slice flips the affected
+        banners and updates SYSEngine/docs/BUILD-STATUS.md and the mid-engine gap
+        register in that same change.
+        """
+    rationale """
+        An audit that lands a change later audits a tree nobody has now, and a banner
+        that lags is worse than no banner: it reads as current.
+        """
+    created_at 2026-08-03
+    source {
+        kind legacy
+        path "AGENTS.md"
+        excerpt """
+            AGENTS.md section Map-audit; mid-engine-assessment section 9 closing note.
+            """
+    }
+}
+
+record tandem.policy.tandem-work/1 : policy {
+    title "Milestones are one simulator slice and one engine slice that consume each other"
+    state active
+    scope [ all ]
+    topic tandem-work
+    rule """
+        Every milestone is one simulator slice plus one engine slice that consume each
+        other, with the acceptance instrument named up front. Do not start milestone
+        N+1's simulator half before milestone N's engine half can display what N built:
+        that display is how N is judged.
+        """
+    rationale """
+        Neither half can be finished on its own terms. Each next engine slice needs a
+        simulator slice, and the simulator's open phases only become judgeable when the
+        engine can show them.
+        """
+    exceptions [ @tandem.track.lighting ]
+    claim display-is-judgement {
+        text """
+            A milestone is judged by the engine half displaying what the simulator half
+            built. Nothing else counts as the milestone being met.
+            """
+    }
+    supported_by [ @tandem.assessment.central-fact ]
+    created_at 2026-08-03
+}
+
+record tandem.policy.test-surfaces-only/1 : policy {
+    title "The TUI and classic CLI are simulator test surfaces only"
+    state active
+    scope [ path "src/bin/**", path "src/tui/**" ]
+    topic test-surfaces
+    rule """
+        The TUI and the classic CLI remain simulator test surfaces only. Keep them
+        compiling. Do not extend them.
+        """
+    author "designer ruling 2026-08-02"
+    created_at 2026-08-02
+    source {
+        kind legacy
+        path "AGENTS.md"
+        excerpt """
+            Designer ruling 2026-08-02 in AGENTS.md section 3.
+            """
+    }
+}

@@ -1,0 +1,18 @@
+akr 0.1
+project sys-tandem
+
+record engine.assessment.castle-not-court/1 : assessment {
+    title "The engine shows a castle with people in it, not a court"
+    state verified
+    scope [ path "SYSEngine/crates/sys_present/**" ]
+    statement """
+        What renders is architecture and bodies moving through it. The institution —
+        precedence, office, obligation, the scarcity of the duke's ear — is computed by
+        the simulator and does not reach the screen. A viewer sees a castle with people
+        in it, not a court.
+        """
+    confidence high
+    as_of git:9d40e1b7c85a326f0b1de94738ca5602f81b7d4a
+    supported_by [ @engine.obs.channel-coverage ]
+    created_at 2026-08-02
+}

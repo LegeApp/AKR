@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "akr-cli"
+version = "0.1.0"
+dependencies = [
+ "akr-core",
+]
+
+[[package]]
 name = "akr-core"
 version = "0.1.0"
 dependencies = [

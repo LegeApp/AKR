@@ -12,14 +12,62 @@
 //! which keeps this module out of the business of knowing how a record is written.
 
 use super::{BuildInputs, SourceFile};
-use crate::diagnostics::{Diagnostic, FileId};
+use crate::diagnostics::{Diagnostic, SlotRef, SourceMap, Span, Subject};
 use crate::hash::source_file_hash;
-use crate::model::{Ledger, LogicalKey, RevisionId};
+use crate::model::{ContentSlot, Ledger, LogicalKey, Relation, RevisionId, Segment};
 use crate::syntax::cst::{File, Item};
 use crate::syntax::{format, lower::lower_all, parse};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+
+/// Maps a diagnostic [`Subject`] to the span of the thing it names.
+///
+/// This is the P2/P3 join: the validation rules produce subject-bearing diagnostics with
+/// no spans, because a rule reasons about records rather than about bytes, and the CST
+/// knows where each record sits. Filling [`Label::span`](crate::diagnostics::Label) needs
+/// exactly this table and nothing else, and building it during loading costs one pass
+/// over the CST the parser already produced.
+#[derive(Debug, Clone, Default)]
+pub struct SpanIndex {
+    spans: BTreeMap<Subject, Span>,
+}
+
+impl SpanIndex {
+    /// The span of a subject, if the index has one.
+    #[must_use]
+    pub fn get(&self, subject: &Subject) -> Option<Span> {
+        self.spans.get(subject).copied().or_else(|| match subject {
+            // A slot the index does not know falls back to its record, which is always
+            // better than no location at all.
+            Subject::Slot(id, _) => self.spans.get(&Subject::Revision(id.clone())).copied(),
+            _ => None,
+        })
+    }
+
+    /// Attaches spans to a diagnostic and its notes, in place.
+    pub fn attach(&self, diagnostic: &mut Diagnostic) {
+        if diagnostic.primary.span.is_none() {
+            diagnostic.primary.span = self.get(&diagnostic.primary.subject);
+        }
+        for note in &mut diagnostic.notes {
+            if note.span.is_none() {
+                note.span = self.get(&note.subject);
+            }
+        }
+    }
+
+    /// Attaches spans to every diagnostic in a slice.
+    pub fn attach_all(&self, diagnostics: &mut [Diagnostic]) {
+        for diagnostic in diagnostics {
+            self.attach(diagnostic);
+        }
+    }
+
+    fn insert(&mut self, subject: Subject, span: Span) {
+        self.spans.entry(subject).or_insert(span);
+    }
+}
 
 /// A workspace read from disk.
 #[derive(Debug)]
@@ -32,6 +80,10 @@ pub struct Workspace {
     pub diagnostics: Vec<Diagnostic>,
     /// The `akr.lock` text, if the workspace has one.
     pub lock_text: Option<String>,
+    /// Every file, for rendering diagnostics.
+    pub sources: SourceMap,
+    /// Subject-to-span, for attaching locations to rule diagnostics.
+    pub spans: SpanIndex,
 }
 
 /// Reads every `.akr` source under an `.akr/` directory.
@@ -57,8 +109,10 @@ pub fn load_workspace(root: &Path, akr_dir: &Path) -> io::Result<Workspace> {
     let mut canonical_text: BTreeMap<RevisionId, String> = BTreeMap::new();
     let mut diagnostics = Vec::new();
     let mut lock_text = None;
+    let mut source_map = SourceMap::new();
+    let mut spans = SpanIndex::default();
 
-    for (index, path) in paths.iter().enumerate() {
+    for path in &paths {
         let bytes = fs::read(path)?;
         let relative = relative_slash(root, path);
         if path.file_name().is_some_and(|n| n == "akr.lock") {
@@ -67,7 +121,7 @@ pub fn load_workspace(root: &Path, akr_dir: &Path) -> io::Result<Workspace> {
         }
 
         let text = String::from_utf8_lossy(&bytes).into_owned();
-        let file_id = FileId(u32::try_from(index).unwrap_or(u32::MAX));
+        let file_id = source_map.add(&relative, &text);
         let parsed = parse(&text, file_id);
         diagnostics.extend(parsed.diagnostics);
 
@@ -76,6 +130,7 @@ pub fn load_workspace(root: &Path, akr_dir: &Path) -> io::Result<Workspace> {
             for (at, item) in file.items.iter().enumerate() {
                 if let Item::Record(record) = item {
                     records += 1;
+                    index_record_spans(&mut spans, record);
                     if let Ok(key) = LogicalKey::parse(&record.key)
                         && let Some(canonical) = canonical_record_text(&file, at)
                     {
@@ -105,6 +160,8 @@ pub fn load_workspace(root: &Path, akr_dir: &Path) -> io::Result<Workspace> {
         },
         diagnostics,
         lock_text,
+        sources: source_map,
+        spans,
     })
 }
 
@@ -131,6 +188,61 @@ pub fn canonical_record_text(file: &File, index: usize) -> Option<String> {
     let rendered = format(&single);
     let start = rendered.find("\nrecord ")? + 1;
     Some(rendered[start..].to_owned())
+}
+
+/// Indexes the spans of one record: the revision itself, then each slot and block.
+///
+/// The revision's span is its **header line**, not its whole body: a caret under fifty
+/// lines of record is not a location, it is a shrug. Slots and blocks get their own
+/// spans, so a diagnostic about `state` points at `state`.
+fn index_record_spans(spans: &mut SpanIndex, record: &crate::syntax::cst::Record) {
+    let Ok(key) = LogicalKey::parse(&record.key) else {
+        return;
+    };
+    let id = RevisionId::new(key, record.revision);
+
+    // From `record` through the opening brace. Canonical form puts exactly `" {"` after
+    // the kind (D-012), so the header ends two bytes past the kind word.
+    let header = Span {
+        file: record.span.file,
+        start: record.span.start,
+        end: record.kind_span.end.saturating_add(2).min(record.span.end),
+    };
+    spans.insert(Subject::Revision(id.clone()), header);
+
+    for item in &record.body {
+        let span = item.span();
+        let slot = match item {
+            crate::syntax::cst::BodyItem::Slot(slot) => slot_ref(&slot.name),
+            crate::syntax::cst::BodyItem::Block(block) => match block.name.as_str() {
+                "acceptance" => Some(SlotRef::Acceptance),
+                "claim" => Segment::new(&block.head_text()).ok().map(SlotRef::Claim),
+                "check" => Segment::new(&block.head_text()).ok().map(SlotRef::Check),
+                _ => None,
+            },
+        };
+        if let Some(slot) = slot {
+            spans.insert(Subject::Slot(id.clone(), slot), span);
+        }
+    }
+}
+
+/// Maps a slot name to the [`SlotRef`] the rules use.
+fn slot_ref(name: &str) -> Option<SlotRef> {
+    Some(match name {
+        "title" => SlotRef::Title,
+        "state" => SlotRef::State,
+        "scope" => SlotRef::Scope,
+        "topic" => SlotRef::Topic,
+        "retired_claims" => SlotRef::RetiredClaims,
+        other => {
+            if let Some(relation) = Relation::from_name(other) {
+                SlotRef::Relation(relation)
+            } else {
+                SlotRef::Content(ContentSlot::from_name(other)?)
+            }
+        }
+    })
 }
 
 /// Recursively collects `.akr` files, including `akr.lock`.

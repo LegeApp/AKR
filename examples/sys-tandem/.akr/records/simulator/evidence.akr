@@ -1,0 +1,70 @@
+akr 0.1
+project sys-tandem
+
+record simulator.evidence.court-almanac-seed-1042/1 : evidence {
+    title "Court Almanac production run, seed 1042"
+    state verified
+    result pass
+    method command
+    observed_at git:5cb1a4f0d2e79836ba4c17e05d3f96428a7bc10e
+    command "cargo run --bin court_almanac -- --machine-audit --seed 1042"
+    summary """
+        A 900-tick production run with 8 of 10 institutions live.
+        """
+    created_at 2026-08-03
+}
+
+record simulator.evidence.court-almanac-seed-1735/1 : evidence {
+    title "Court Almanac production run, seed 1735"
+    state verified
+    result pass
+    method command
+    observed_at git:5cb1a4f0d2e79836ba4c17e05d3f96428a7bc10e
+    command "cargo run --bin court_almanac -- --machine-audit --seed 1735"
+    summary """
+        A 900-tick production run with 8 of 10 institutions live.
+        """
+    created_at 2026-08-03
+}
+
+record simulator.evidence.court-almanac-seed-2901/1 : evidence {
+    title "Court Almanac production run, seed 2901"
+    state verified
+    result pass
+    method command
+    observed_at git:5cb1a4f0d2e79836ba4c17e05d3f96428a7bc10e
+    command "cargo run --bin court_almanac -- --machine-audit --seed 2901"
+    summary """
+        A 900-tick production run with 8 of 10 institutions live.
+        """
+    created_at 2026-08-03
+}
+
+record simulator.evidence.court-session-audits/1 : evidence {
+    title "CourtSession audits pass"
+    state verified
+    result pass
+    method command
+    observed_at git:5cb1a4f0d2e79836ba4c17e05d3f96428a7bc10e
+    command "cargo test --test court_session_audit"
+    summary """
+        CourtSession owns the rank rule, the participant entry gate, the lifecycle and
+        its audits, per the closed-doors plan section A4.
+        """
+    created_at 2026-08-03
+}
+
+record simulator.evidence.prime-bell-fixture/1 : evidence {
+    title "The Prime-bell-at-the-servery-door fixture passes"
+    state verified
+    result pass
+    method command
+    observed_at git:5cb1a4f0d2e79836ba4c17e05d3f96428a7bc10e
+    command "cargo test -p sys_game_bridge --test legibility -- prime_bell_servery"
+    summary """
+        Simulator-authored room activity and typed practice submission feed the queue
+        pockets, visible yields, workplace idles and carried objects the fixture
+        watches.
+        """
+    created_at 2026-08-03
+}

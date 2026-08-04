@@ -479,17 +479,28 @@ fn a_hand_edit_fails_with_e011_naming_the_file_and_the_first_differing_line() {
         .zip(edited.lines())
         .position(|(a, b)| a != b)
         .expect("a differing line");
-    let note = diagnostic.notes.first().expect("a note");
-    let text = note.message.as_deref().expect("note text");
+    // One note per side, so neither line has to share a row with the other: a generated
+    // view's lines are long, and a single note holding both is unreadable in a terminal.
+    let notes: Vec<&str> = diagnostic
+        .notes
+        .iter()
+        .filter_map(|note| note.message.as_deref())
+        .collect();
+    assert_eq!(notes.len(), 2, "{notes:?}");
+    for note in &notes {
+        assert!(
+            note.starts_with(&format!("line {expected_line} ")),
+            "{note}"
+        );
+    }
     assert!(
-        text.starts_with(&format!("line {expected_line}: ")),
-        "{text}"
+        notes[0].contains("nearly done"),
+        "quotes the committed line: {notes:?}"
     );
     assert!(
-        text.contains("nearly done"),
-        "quotes the committed line: {text}"
+        notes[1].contains("`active`"),
+        "quotes the emitted line: {notes:?}"
     );
-    assert!(text.contains("`active`"), "quotes the emitted line: {text}");
 
     assert!(
         diagnostic
@@ -629,4 +640,56 @@ fn every_emission_code_is_registered_in_the_runtime_registry() {
             "{code} is not an emission code"
         );
     }
+}
+
+// -------------------------------------------------------------------------------------
+// D-026 — the note slot
+// -------------------------------------------------------------------------------------
+
+#[test]
+fn a_terminal_planning_record_renders_its_note_and_a_live_one_does_not() {
+    use akr_core::model::{ContentSlot, ContentValue, Ledger, State};
+
+    let workspace = example();
+    let with_note = |state: State| -> Ledger {
+        let mut ledger = Ledger::new(workspace.ledger.project.clone());
+        ledger.facts = workspace.ledger.facts.clone();
+        let records: Vec<_> = workspace
+            .ledger
+            .records()
+            .iter()
+            .map(|record| {
+                let mut copy = record.clone();
+                if copy.id.key.to_string() == "sys.track.lighting" {
+                    copy.state = state;
+                    copy.content.insert(
+                        ContentSlot::Note,
+                        ContentValue::prose("Standing work, paused while M3 lands."),
+                    );
+                }
+                copy
+            })
+            .collect();
+        ledger.extend(records);
+        ledger
+    };
+
+    // Live: the note is working commentary the record's own intent should carry, so no
+    // view shows it (docs/11 §3).
+    let live = with_note(State::Active);
+    let model = ResolvedModel::build(&live, &example_inputs(&workspace));
+    let freshness = Freshness::from_stale(&live, stale_set());
+    let rendered = render_roadmap(RenderContext::new(&model, &freshness));
+    assert!(!rendered.contains("**Note:**"), "{rendered}");
+
+    // Terminal: the note is the last thing anybody wrote about the record, and the only
+    // place a reader finds out why it stopped (D-026).
+    let done = with_note(State::Abandoned);
+    let model = ResolvedModel::build(&done, &example_inputs(&workspace));
+    let freshness = Freshness::from_stale(&done, stale_set());
+    let rendered = render_roadmap(RenderContext::new(&model, &freshness));
+    assert!(
+        rendered.contains("> **Note:** Standing work, paused while M3 lands."),
+        "{rendered}"
+    );
 }

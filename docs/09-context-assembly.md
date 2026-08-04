@@ -79,8 +79,14 @@ for context around a policy is a different question, answered by `akr get --rela
 
 Eleven steps, run in order, producing eleven sections in the same order. Each step states
 its **selection predicate** and its **sort key**. A record selected by an earlier step is
-not repeated by a later one, except in the acceptance, contradictions and staleness
-sections, which are cross-cutting and reference records by key.
+not repeated by a later one, except in the acceptance, questions, contradictions and
+staleness sections, which are cross-cutting and reference records by key.
+
+Questions are on that list for a reason the worked example of §8 already shows: a question
+that blocks a selected work item is selected twice over, by step 6 as a blocker and by step
+9 as an open question, and it belongs in both. In step 6 it is a reason to stop; in step 9
+it is a thing nobody knows. Dropping either occurrence would cost the reader one of those
+two facts.
 
 Throughout: *live* means the record's state is in its class's live set
 (`spec/tables/vocabulary.json`); *head* means whatever the two-tier resolution of
@@ -235,7 +241,17 @@ assume the check is wrong.
 - have a `scope` or `watches` glob overlapping any `--paths` glob;
 - have a `scope` `ref` term overlapping the goal or a step-2 record under D-010;
 - are the target of a `supported_by`, `verified_by`, `derived_from` or `depends_on` edge
-  from any already-selected record.
+  from any already-selected record, **including one selected by this step** — the
+  selection is run to a fixpoint.
+
+A `verified_by` reference inside a `check` block counts as such an edge, which is how the
+evidence behind a satisfied acceptance check reaches the bundle.
+
+The fixpoint is not a refinement. In the worked example of §8,
+`sys.assessment.m3-readiness/1` arrives by its `ref` scope on the goal and carries
+`supported_by @sim.obs.timestep-drift/1`; the observation is reachable no other way, and it
+is one half of the bundle's only contradiction. A single pass would present the
+contradiction with one side missing.
 
 *Sort:* stale records first, then by `observed_at` commit in reverse history order, then
 by key.

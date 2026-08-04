@@ -1,0 +1,794 @@
+akr-lock 0.1
+project sys-tandem
+
+build {
+    tool "akr 0.1.0"
+    grammar "0.1"
+    vocabulary "0.1"
+    commit git:b7e3092d6a1f48c5039be2714da86f05c93e1b6d
+    source_graph "sha256:c363a08a0a46670860c5da8f022d4511087b547046909763bc2e77f35a7d49af"
+    built_at 2026-08-04T10:00:00Z
+}
+
+source ".akr/project.akr" {
+    hash "sha256:63e84b611d961a97cbeacf98ac82b054cd5db19b7bb1cca2467a8bc4c34da837"
+    records 0
+}
+
+source ".akr/records/engine/assessments.akr" {
+    hash "sha256:1f296d223a24130ebc861f7c93c7f8d1fe5239694db37fbaad0f13f3aaaa3ad1"
+    records 1
+}
+
+source ".akr/records/engine/decisions.akr" {
+    hash "sha256:aca9f6f1b0c29788f212550a3aa7c2c3c5696ae38f8fb79e8b9cb5fc124def70"
+    records 1
+}
+
+source ".akr/records/engine/evidence.akr" {
+    hash "sha256:cdaab1a65eaadf535f5b307332c8c476e6fa07832bd3397299538103686ad13a"
+    records 4
+}
+
+source ".akr/records/engine/observations.akr" {
+    hash "sha256:989b024bbfa76ea330e91abf99aa0502a2277ede2200f1a763b5ad205d8c2d0d"
+    records 2
+}
+
+source ".akr/records/engine/questions.akr" {
+    hash "sha256:54e72c1fca3536806b149154ff16cc87b3a819d5d0b8cb9d8e574c0b2e06f6f2"
+    records 1
+}
+
+source ".akr/records/engine/requirements.akr" {
+    hash "sha256:8da1987f231bfb5d84b5774830c921d8c541dbc23cf872c745ffb209bca5da47"
+    records 1
+}
+
+source ".akr/records/engine/work.akr" {
+    hash "sha256:eb53afc1e1876d9e42e0cb0e74317407015e21eebdc4e52fa6a5a2b0486f02fa"
+    records 5
+}
+
+source ".akr/records/simulator/decisions.akr" {
+    hash "sha256:64ad3bb4c00ff425e8fcce26fcc2f1129a50f906698691cb3858ba9569a1154e"
+    records 1
+}
+
+source ".akr/records/simulator/evidence.akr" {
+    hash "sha256:1e1854ee33b0ba141f225067abe6f83434966562b825bb328eb0429bc633a5f9"
+    records 5
+}
+
+source ".akr/records/simulator/observations.akr" {
+    hash "sha256:f8e10c644a8b438d943c67157048b5d5b420703012c5d6b7fc34714f97242c6d"
+    records 2
+}
+
+source ".akr/records/simulator/questions.akr" {
+    hash "sha256:9f5efb890099f35febe9df7e7676dd7978e1b2b97547ad6551f1e03924237535"
+    records 1
+}
+
+source ".akr/records/simulator/work.akr" {
+    hash "sha256:b685ad1b1590c2d395edaacd3d678b5202b7388f43172b0f04c7721649ddd799"
+    records 8
+}
+
+source ".akr/records/tandem/assessments.akr" {
+    hash "sha256:22d83e72ee90f655dd7bfe18b598b8db9cb589fc03faab481354541b1a29d7da"
+    records 3
+}
+
+source ".akr/records/tandem/constraints.akr" {
+    hash "sha256:e03a65607b4126750ae1bc38d74c2a03befea4f32f557725cd73e6866c85d701"
+    records 5
+}
+
+source ".akr/records/tandem/decisions.akr" {
+    hash "sha256:98ca1d5d279d344bf68f7428795ae82af90b70169878b60c714977ca45b5de82"
+    records 2
+}
+
+source ".akr/records/tandem/milestones.akr" {
+    hash "sha256:3cf8ee9db5ff98f8fe2fba2614d679370bf9159a245309c8ad690da5f9db4473"
+    records 6
+}
+
+source ".akr/records/tandem/policies.akr" {
+    hash "sha256:72e4f2cff1a733debacf53ceb3203d16bbcefc24a8e4838d5a2ea97faebaba1f"
+    records 3
+}
+
+source ".akr/records/tandem/questions.akr" {
+    hash "sha256:d3801267ab81c1699d5eb161afbac6f6c33e01711820ca2fdfc0e4010455321d"
+    records 1
+}
+
+source ".akr/records/tandem/requirements.akr" {
+    hash "sha256:0e93004d29712fe0a20e52c60568b95eb47388295880de956c480a6f1e2d8053"
+    records 1
+}
+
+source ".akr/records/tandem/terms.akr" {
+    hash "sha256:50b98b53375c0c933c6753560455cc24d26ece8b5d9b9fe964eb24d4ed1eeb1f"
+    records 4
+}
+
+source ".akr/records/tandem/tracks.akr" {
+    hash "sha256:7bfd379085566b75322ef428dcc6f7409dcb86e6bc36cf2820709fbc6af1304f"
+    records 3
+}
+
+source ".akr/records/tandem/work.akr" {
+    hash "sha256:bad83a9b300fadf72c8907b5f817228aaf8ee7e443ac009fe6573c85c2b6f339"
+    records 5
+}
+
+resolution @engine.assessment.castle-not-court/1 {
+    slot supported_by
+    to @engine.obs.channel-coverage/1
+    hash "sha256:8cf7a511e5d3969637e6ec8ca9d0e6defdf573c7c5504a17331e7d138cde53ba"
+}
+
+resolution @engine.decision.placeholder-tts-offline/1 {
+    slot implements
+    to @tandem.constraint.no-runtime-tts/1
+    hash "sha256:99dba0c31167bf8d3d158a98515effe6e60c91242727052e74931a1dcad7006e"
+}
+
+resolution @engine.req.no-debug-surfaces/1 {
+    slot depends_on
+    to @tandem.term.playable-day/1
+    hash "sha256:8a143cfeef53211ddb81c43f801581944ef5cde149e52204f7c35fe52b9f06f3"
+}
+
+resolution @engine.work.citadel-openings/1 {
+    slot part_of
+    to @tandem.track.lighting/1
+    hash "sha256:72f039370ff18bc825fb6a29ce43475c0048db5a67143be73756af5df7ea5ecd"
+}
+
+resolution @engine.work.client-shell-hardening/1 {
+    slot implements
+    to @engine.req.no-debug-surfaces/1
+    hash "sha256:e7709f70af080854e1224b77d23abb8c06580f339447edadabafe8f88845d520"
+}
+
+resolution @engine.work.client-shell-hardening/1 {
+    slot part_of
+    to @tandem.milestone.m5-one-playable-day/1
+    hash "sha256:c9c02dbf4655b8c61e4fbeb5b5ad3538594a31f8e9918b4551430341d0276481"
+}
+
+resolution @engine.work.four-record-families/1 {
+    slot implements
+    to @tandem.req.bridge-invents-nothing/1
+    hash "sha256:1025598bf58cbf17f7f1cbe197601dd165b5d3a63ab4348c7b5058697108fc06"
+}
+
+resolution @engine.work.four-record-families/1 {
+    slot part_of
+    to @tandem.milestone.m4-day-means-something/1
+    hash "sha256:d3cbe9142cf20843e874e8fbeb875fc1de4b9a0d2e98371eb490fc7aee41391f"
+}
+
+resolution @engine.work.mixer-core/1 {
+    slot part_of
+    to @tandem.milestone.m3-audible-day/1
+    hash "sha256:c6e1bca1ab8695a0c792cc4dd459b2fa3cc227c2c7dca48c84a9908c2daeed36"
+}
+
+resolution @engine.work.queue-pockets/1 {
+    slot part_of
+    to @tandem.milestone.m2-castle-works/1
+    hash "sha256:752aa5b8c169bdc23e818b7c1189aa15ee568e75418297d6b01649e1959b8433"
+}
+
+resolution @simulator.decision.wild-threshold-ignored/1 {
+    slot depends_on
+    to @tandem.constraint.no-new-features/1
+    hash "sha256:b43991009f514abd81cf81a42502b69c0d1abf67996548fdbf10275537412307"
+}
+
+resolution @simulator.decision.wild-threshold-ignored/1 {
+    slot resolves
+    to @simulator.question.wild-threshold/1
+    hash "sha256:8064092fc5b84cb551f9bdff1399dd6797e22c1fa73c98e59fd41b50efb8f466"
+}
+
+resolution @simulator.work.court-session-records/1 {
+    slot part_of
+    to @tandem.milestone.m1-court-speaks/2
+    hash "sha256:0816d81cbb5aaeefa17f82c89b8e982810ac05295b7580a9583b90d18b960603"
+}
+
+resolution @simulator.work.day-close/1 {
+    slot part_of
+    to @tandem.milestone.m4-day-means-something/1
+    hash "sha256:d3cbe9142cf20843e874e8fbeb875fc1de4b9a0d2e98371eb490fc7aee41391f"
+}
+
+resolution @simulator.work.playability-triage/1 {
+    slot part_of
+    to @tandem.milestone.m5-one-playable-day/1
+    hash "sha256:c9c02dbf4655b8c61e4fbeb5b5ad3538594a31f8e9918b4551430341d0276481"
+}
+
+resolution @simulator.work.room-activity-table/1 {
+    slot implements
+    to @tandem.req.bridge-invents-nothing/1
+    hash "sha256:1025598bf58cbf17f7f1cbe197601dd165b5d3a63ab4348c7b5058697108fc06"
+}
+
+resolution @simulator.work.room-activity-table/1 {
+    slot part_of
+    to @tandem.milestone.m2-castle-works/1
+    hash "sha256:752aa5b8c169bdc23e818b7c1189aa15ee568e75418297d6b01649e1959b8433"
+}
+
+resolution @tandem.assessment.acceptance-gap/1 {
+    slot scope
+    to @tandem.milestone.m5-one-playable-day/1
+    hash "sha256:c9c02dbf4655b8c61e4fbeb5b5ad3538594a31f8e9918b4551430341d0276481"
+}
+
+resolution @tandem.assessment.acceptance-gap/1 {
+    slot supported_by
+    to @engine.evidence.dawn-capture-review/1
+    hash "sha256:9472755eff2e95ca0d2fc8aa10c9136ec90dcf4189fc9371d43d88aebb60116b"
+}
+
+resolution @tandem.assessment.acceptance-gap/1 {
+    slot supported_by
+    to @engine.evidence.lane-audits-green/1
+    hash "sha256:f91c9cdaa9a21e0c28e92c0af6a7517196b60b93d7d5e5019d1a307c748180a3"
+}
+
+resolution @tandem.assessment.central-fact/1 {
+    slot supported_by
+    to @engine.obs.channel-coverage/1
+    hash "sha256:8cf7a511e5d3969637e6ec8ca9d0e6defdf573c7c5504a17331e7d138cde53ba"
+}
+
+resolution @tandem.assessment.central-fact/1 {
+    slot supported_by
+    to @simulator.obs.idle-channels/1
+    hash "sha256:2c220e39964374e7412e1a9ae3544011bef6961394a6256aecf4eb09fe2108bb"
+}
+
+resolution @tandem.assessment.central-fact/2 {
+    slot supported_by
+    to @engine.obs.channel-coverage/1
+    hash "sha256:8cf7a511e5d3969637e6ec8ca9d0e6defdf573c7c5504a17331e7d138cde53ba"
+}
+
+resolution @tandem.decision.nomenclature/1 {
+    slot depends_on
+    to @tandem.constraint.no-identifier-renames/1
+    hash "sha256:06e5583839c9b2c803adf212e296180ee221e7ec2b745612895f890bde15f84b"
+}
+
+resolution @tandem.decision.tui-divergence/1 {
+    slot implements
+    to @tandem.policy.test-surfaces-only/1
+    hash "sha256:b51c4a0ad4d42c35f34c6e974a6ab5444219be2b5a4abb1759dc0c160ebcafce"
+}
+
+resolution @tandem.milestone.m1-court-speaks/2 {
+    slot derived_from
+    to @simulator.decision.wild-threshold-ignored/1
+    hash "sha256:6f71a2c859caf49495c58290b15840351556db3a6ae1db0fbf1ab68c108dfdec"
+}
+
+resolution @tandem.milestone.m1-court-speaks/2 {
+    slot verified_by
+    to @engine.evidence.squelch-audit-unignored/1
+    hash "sha256:92b5e11d61b12717f511a693c7dfd9f93724b08fd96bb5cfdc5041258bc73d78"
+}
+
+resolution @tandem.milestone.m1-court-speaks/2 {
+    slot verified_by
+    to @simulator.evidence.court-session-audits/1
+    hash "sha256:5c40fc2bc817e0cc8c630589716cad996dde14c444f372fbcdf1cae123d80514"
+}
+
+resolution @tandem.milestone.m2-castle-works/1 {
+    slot after
+    to @tandem.milestone.m1-court-speaks/2
+    hash "sha256:0816d81cbb5aaeefa17f82c89b8e982810ac05295b7580a9583b90d18b960603"
+}
+
+resolution @tandem.milestone.m2-castle-works/1 {
+    slot verified_by
+    to @engine.evidence.lane-audits-green/1
+    hash "sha256:f91c9cdaa9a21e0c28e92c0af6a7517196b60b93d7d5e5019d1a307c748180a3"
+}
+
+resolution @tandem.milestone.m2-castle-works/1 {
+    slot verified_by
+    to @simulator.evidence.prime-bell-fixture/1
+    hash "sha256:9dc0b24e8fe955a2a2659a6894bdef9288243326f53b1ba615bcc842202b6f66"
+}
+
+resolution @tandem.milestone.m3-audible-day/1 {
+    slot after
+    to @tandem.milestone.m2-castle-works/1
+    hash "sha256:752aa5b8c169bdc23e818b7c1189aa15ee568e75418297d6b01649e1959b8433"
+}
+
+resolution @tandem.milestone.m3-audible-day/1 {
+    slot verified_by
+    to @engine.evidence.sound-contracts/1
+    hash "sha256:e88556500a18f334236e6dd8fd8cc4cd8a6a4a4504b241823125354a85a642b6"
+}
+
+resolution @tandem.milestone.m4-day-means-something/1 {
+    slot after
+    to @tandem.milestone.m3-audible-day/1
+    hash "sha256:c6e1bca1ab8695a0c792cc4dd459b2fa3cc227c2c7dca48c84a9908c2daeed36"
+}
+
+resolution @tandem.milestone.m4-day-means-something/1 {
+    slot verified_by
+    to @engine.evidence.lane-audits-green/1
+    hash "sha256:f91c9cdaa9a21e0c28e92c0af6a7517196b60b93d7d5e5019d1a307c748180a3"
+}
+
+resolution @tandem.milestone.m4-day-means-something/1 {
+    slot verified_by
+    to @simulator.evidence.court-almanac-seed-1042/1
+    hash "sha256:e289ef00e5d72a5e57b0e6669b98d14bcee1d00a60da2262831c67d163cc487f"
+}
+
+resolution @tandem.milestone.m4-day-means-something/1 {
+    slot verified_by
+    to @simulator.evidence.court-almanac-seed-1735/1
+    hash "sha256:05054798ef85d4d967a20478583d21039a2918c836041ff4a4b030a71ec10e8f"
+}
+
+resolution @tandem.milestone.m4-day-means-something/1 {
+    slot verified_by
+    to @simulator.evidence.court-almanac-seed-2901/1
+    hash "sha256:c8f02deefbfc6561b6a5be9345dbf97b1f44a7d7f84275ca4384dd7e44b34fea"
+}
+
+resolution @tandem.milestone.m5-one-playable-day/1 {
+    slot after
+    to @tandem.milestone.m4-day-means-something/1
+    hash "sha256:d3cbe9142cf20843e874e8fbeb875fc1de4b9a0d2e98371eb490fc7aee41391f"
+}
+
+resolution @tandem.milestone.m5-one-playable-day/1 {
+    slot depends_on
+    to @tandem.term.playable-day/1
+    hash "sha256:8a143cfeef53211ddb81c43f801581944ef5cde149e52204f7c35fe52b9f06f3"
+}
+
+resolution @tandem.milestone.m5-one-playable-day/1 {
+    slot verified_by
+    to @engine.evidence.lane-audits-green/1
+    hash "sha256:f91c9cdaa9a21e0c28e92c0af6a7517196b60b93d7d5e5019d1a307c748180a3"
+}
+
+resolution @tandem.policy.tandem-work/1 {
+    slot exceptions
+    to @tandem.track.lighting/1
+    hash "sha256:72f039370ff18bc825fb6a29ce43475c0048db5a67143be73756af5df7ea5ecd"
+}
+
+resolution @tandem.policy.tandem-work/1 {
+    slot supported_by
+    to @tandem.assessment.central-fact/2
+    hash "sha256:7cc85c864a130316fa1bf59921fc108198ea04d095300935a58beed70b327b61"
+}
+
+resolution @tandem.req.bridge-invents-nothing/1 {
+    slot depends_on
+    to @tandem.term.bridge/1
+    hash "sha256:ae252cb76314f07328cdb04fcfacf801f6b3427c8511d297e47993d2571a320e"
+}
+
+resolution @tandem.track.doc-discipline/1 {
+    slot depends_on
+    to @tandem.policy.same-change-audit/1
+    hash "sha256:8bf9a65ac12678b8e0f93d4b55474bbb5c51c5bcc966c97eef9d3801b5174f8c"
+}
+
+resolution @tandem.work.defect-retirement-plan/1 {
+    slot plan_of_record
+    to @tandem.track.defect-retirement/1
+    hash "sha256:bdba8352f26215cd4fbe1040bacdfc9b487376855eeeb2a7d427c31992978e46"
+}
+
+resolution @tandem.work.defect-retirement-plan/2 {
+    slot disposition
+    to @simulator.work.a5-a7-a8-defects/1
+    hash "sha256:fad61cb2370c13d44cfd6f1fa4de723464434d5d3b47364c58e5b453248d5826"
+}
+
+resolution @tandem.work.defect-retirement-plan/2 {
+    slot disposition
+    to @simulator.work.classic-play-debug-split/1
+    hash "sha256:f95e96881a3889b966de2f73ccb9f94e0b58533735be05a806a5ad74bea1a172"
+}
+
+resolution @tandem.work.defect-retirement-plan/2 {
+    slot disposition
+    to @simulator.work.delete-phase-enum/1
+    hash "sha256:4997df5808754ebce6880b93264828e09b6b7994b21caba53ba50fe1128be364"
+}
+
+resolution @tandem.work.defect-retirement-plan/2 {
+    slot disposition
+    to @simulator.work.rebase-digest-pins/1
+    hash "sha256:1945d4625af2a4ab62917bc5d4ea4471a792370debf327e70a6872e0ac968723"
+}
+
+resolution @tandem.work.defect-retirement-plan/2 {
+    slot implements
+    to @tandem.policy.same-change-audit/1
+    hash "sha256:8bf9a65ac12678b8e0f93d4b55474bbb5c51c5bcc966c97eef9d3801b5174f8c"
+}
+
+resolution @tandem.work.defect-retirement-plan/2 {
+    slot into
+    to @simulator.work.day-close/1
+    hash "sha256:b316c875593872e708a3e8ecc2028ab9e733a55c97ad0d15ee590bc1628850c1"
+}
+
+resolution @tandem.work.defect-retirement-plan/2 {
+    slot into
+    to @tandem.track.defect-retirement/1
+    hash "sha256:bdba8352f26215cd4fbe1040bacdfc9b487376855eeeb2a7d427c31992978e46"
+}
+
+resolution @tandem.work.defect-retirement-plan/2 {
+    slot plan_of_record
+    to @tandem.track.defect-retirement/1
+    hash "sha256:bdba8352f26215cd4fbe1040bacdfc9b487376855eeeb2a7d427c31992978e46"
+}
+
+resolution @tandem.work.m1-plan/1 {
+    slot plan_of_record
+    to @tandem.milestone.m1-court-speaks/2
+    hash "sha256:0816d81cbb5aaeefa17f82c89b8e982810ac05295b7580a9583b90d18b960603"
+}
+
+resolution @tandem.work.m5-plan/1 {
+    slot depends_on
+    to @tandem.assessment.central-fact/2
+    hash "sha256:7cc85c864a130316fa1bf59921fc108198ea04d095300935a58beed70b327b61"
+}
+
+resolution @tandem.work.m5-plan/1 {
+    slot plan_of_record
+    to @tandem.milestone.m5-one-playable-day/1
+    hash "sha256:c9c02dbf4655b8c61e4fbeb5b5ad3538594a31f8e9918b4551430341d0276481"
+}
+
+resolution @tandem.work.roadmap-import/1 {
+    slot part_of
+    to @tandem.track.doc-discipline/1
+    hash "sha256:90a556160b2915fe44677aff5422b59cd7fa304acb2ffdb4217cf9e71c04ca80"
+}
+
+seal @engine.assessment.castle-not-court/1 {
+    state verified
+    hash "sha256:72b90c0dbc3828e6b6c920eadec75983215d40e6ef1cce7ceed788b3c6760e36"
+}
+
+seal @engine.decision.placeholder-tts-offline/1 {
+    state active
+    hash "sha256:09d541cc8525d4eb2b78e318343b76e4599aeb7720b3a2d6ea979bb82fa456b8"
+}
+
+seal @engine.evidence.dawn-capture-review/1 {
+    state verified
+    hash "sha256:9472755eff2e95ca0d2fc8aa10c9136ec90dcf4189fc9371d43d88aebb60116b"
+}
+
+seal @engine.evidence.lane-audits-green/1 {
+    state verified
+    hash "sha256:f91c9cdaa9a21e0c28e92c0af6a7517196b60b93d7d5e5019d1a307c748180a3"
+}
+
+seal @engine.evidence.sound-contracts/1 {
+    state verified
+    hash "sha256:e88556500a18f334236e6dd8fd8cc4cd8a6a4a4504b241823125354a85a642b6"
+}
+
+seal @engine.evidence.squelch-audit-unignored/1 {
+    state verified
+    hash "sha256:92b5e11d61b12717f511a693c7dfd9f93724b08fd96bb5cfdc5041258bc73d78"
+}
+
+seal @engine.obs.channel-coverage/1 {
+    state verified
+    hash "sha256:8cf7a511e5d3969637e6ec8ca9d0e6defdf573c7c5504a17331e7d138cde53ba"
+}
+
+seal @engine.obs.sound-decided-not-heard/1 {
+    state disproven
+    hash "sha256:bdfbcd7805d27a5b5cede0b00fb7499d3c9424ad44e92787f552a9bdfe45060b"
+}
+
+seal @engine.question.voice-direction/1 {
+    state deferred
+    hash "sha256:1525afe70460eb07a4704a18636e99262679c6c9acadfb8607ef1d1f4dc57871"
+}
+
+seal @engine.req.no-debug-surfaces/1 {
+    state active
+    hash "sha256:e7709f70af080854e1224b77d23abb8c06580f339447edadabafe8f88845d520"
+}
+
+seal @engine.work.citadel-openings/1 {
+    state ready
+    hash "sha256:76abd39866fad7e328186416d82801feee0221a166453e62bb8cc45c272da1ae"
+}
+
+seal @engine.work.client-shell-hardening/1 {
+    state active
+    hash "sha256:a376365ee5af794f1bb5dcd11a0ce5b0fd9c5973d6c40d8fc48d82f023c1ae04"
+}
+
+seal @engine.work.four-record-families/1 {
+    state completed
+    hash "sha256:904aa05dd7bc4573a24cfb3692faca42a1fe78a262269f21346d68cf9df4ab8c"
+}
+
+seal @engine.work.mixer-core/1 {
+    state completed
+    hash "sha256:dc9d6689693f08284c084b8cba4c389a0fc53c2119051701e2ca79b2dafc7281"
+}
+
+seal @engine.work.queue-pockets/1 {
+    state completed
+    hash "sha256:0c853e9bd6c688c91c37dce4f25285c3e3bdd9de5ce1396b0e72fac47516345f"
+}
+
+seal @simulator.decision.wild-threshold-ignored/1 {
+    state active
+    hash "sha256:6f71a2c859caf49495c58290b15840351556db3a6ae1db0fbf1ab68c108dfdec"
+}
+
+seal @simulator.evidence.court-almanac-seed-1042/1 {
+    state verified
+    hash "sha256:e289ef00e5d72a5e57b0e6669b98d14bcee1d00a60da2262831c67d163cc487f"
+}
+
+seal @simulator.evidence.court-almanac-seed-1735/1 {
+    state verified
+    hash "sha256:05054798ef85d4d967a20478583d21039a2918c836041ff4a4b030a71ec10e8f"
+}
+
+seal @simulator.evidence.court-almanac-seed-2901/1 {
+    state verified
+    hash "sha256:c8f02deefbfc6561b6a5be9345dbf97b1f44a7d7f84275ca4384dd7e44b34fea"
+}
+
+seal @simulator.evidence.court-session-audits/1 {
+    state verified
+    hash "sha256:5c40fc2bc817e0cc8c630589716cad996dde14c444f372fbcdf1cae123d80514"
+}
+
+seal @simulator.evidence.prime-bell-fixture/1 {
+    state verified
+    hash "sha256:9dc0b24e8fe955a2a2659a6894bdef9288243326f53b1ba615bcc842202b6f66"
+}
+
+seal @simulator.obs.day-runs-deterministically/1 {
+    state verified
+    hash "sha256:457cdc6568a0bf2d95306121ff47a2235e6febfb61aead5d8e716db52568c895"
+}
+
+seal @simulator.obs.idle-channels/1 {
+    state disproven
+    hash "sha256:2c220e39964374e7412e1a9ae3544011bef6961394a6256aecf4eb09fe2108bb"
+}
+
+seal @simulator.question.wild-threshold/1 {
+    state resolved
+    hash "sha256:8064092fc5b84cb551f9bdff1399dd6797e22c1fa73c98e59fd41b50efb8f466"
+}
+
+seal @simulator.work.a5-a7-a8-defects/1 {
+    state ready
+    hash "sha256:fad61cb2370c13d44cfd6f1fa4de723464434d5d3b47364c58e5b453248d5826"
+}
+
+seal @simulator.work.classic-play-debug-split/1 {
+    state ready
+    hash "sha256:f95e96881a3889b966de2f73ccb9f94e0b58533735be05a806a5ad74bea1a172"
+}
+
+seal @simulator.work.court-session-records/1 {
+    state completed
+    hash "sha256:51c6cc896a09ce3e4e0236b1162eb0f44f9cb6bc35edb4dc417b93da38a3e70f"
+}
+
+seal @simulator.work.day-close/1 {
+    state completed
+    hash "sha256:b316c875593872e708a3e8ecc2028ab9e733a55c97ad0d15ee590bc1628850c1"
+}
+
+seal @simulator.work.delete-phase-enum/1 {
+    state ready
+    hash "sha256:4997df5808754ebce6880b93264828e09b6b7994b21caba53ba50fe1128be364"
+}
+
+seal @simulator.work.playability-triage/1 {
+    state active
+    hash "sha256:c05f67dcb61e26681ef42e3ca74d7c83a04e86e0ffc6a097542184ba48185f77"
+}
+
+seal @simulator.work.rebase-digest-pins/1 {
+    state ready
+    hash "sha256:1945d4625af2a4ab62917bc5d4ea4471a792370debf327e70a6872e0ac968723"
+}
+
+seal @simulator.work.room-activity-table/1 {
+    state completed
+    hash "sha256:b0a30f284331d66d324091847ebbf3f608ebb197db65cdb30bab30884e01b269"
+}
+
+seal @tandem.assessment.acceptance-gap/1 {
+    state verified
+    hash "sha256:108f07954cc2cb9f72a889358e9e019b5fc2c43aded01e44dff8cf2b0905da98"
+}
+
+seal @tandem.assessment.central-fact/1 {
+    state superseded
+    hash "sha256:f0f69bc325db13eccf8cd1a409e514b334b3a818ff843c0304d6e32be63927fb"
+}
+
+seal @tandem.assessment.central-fact/2 {
+    state verified
+    hash "sha256:7cc85c864a130316fa1bf59921fc108198ea04d095300935a58beed70b327b61"
+}
+
+seal @tandem.constraint.deferred-tool-suite/1 {
+    state active
+    hash "sha256:3e563767a5f3cf0aa27cb6b36b8b85094fee55cead32cc05f80406997e67443b"
+}
+
+seal @tandem.constraint.no-identifier-renames/1 {
+    state active
+    hash "sha256:06e5583839c9b2c803adf212e296180ee221e7ec2b745612895f890bde15f84b"
+}
+
+seal @tandem.constraint.no-new-features/1 {
+    state active
+    hash "sha256:b43991009f514abd81cf81a42502b69c0d1abf67996548fdbf10275537412307"
+}
+
+seal @tandem.constraint.no-runtime-tts/1 {
+    state active
+    hash "sha256:99dba0c31167bf8d3d158a98515effe6e60c91242727052e74931a1dcad7006e"
+}
+
+seal @tandem.constraint.out-of-scope-systems/1 {
+    state active
+    hash "sha256:49cf0c753bee8f6c10eea6bf22a229332806861aa7550720347e4e3f2ac63b70"
+}
+
+seal @tandem.decision.nomenclature/1 {
+    state active
+    hash "sha256:816317f9b419fa080db9fd7b65db4b95e4927e4375b9be1d30ee5ff1cd725c28"
+}
+
+seal @tandem.decision.tui-divergence/1 {
+    state active
+    hash "sha256:398e294f48b7dd6c8181b037018dfd91e7865c5cdce957b2c535a673f975066f"
+}
+
+seal @tandem.milestone.m1-court-speaks/1 {
+    state superseded
+    hash "sha256:12d8cb855ca104b623dccb0441e2580b6aca8948b6861986f530d061d5ef964f"
+}
+
+seal @tandem.milestone.m1-court-speaks/2 {
+    state completed
+    hash "sha256:0816d81cbb5aaeefa17f82c89b8e982810ac05295b7580a9583b90d18b960603"
+}
+
+seal @tandem.milestone.m2-castle-works/1 {
+    state completed
+    hash "sha256:752aa5b8c169bdc23e818b7c1189aa15ee568e75418297d6b01649e1959b8433"
+}
+
+seal @tandem.milestone.m3-audible-day/1 {
+    state completed
+    hash "sha256:c6e1bca1ab8695a0c792cc4dd459b2fa3cc227c2c7dca48c84a9908c2daeed36"
+}
+
+seal @tandem.milestone.m4-day-means-something/1 {
+    state completed
+    hash "sha256:d3cbe9142cf20843e874e8fbeb875fc1de4b9a0d2e98371eb490fc7aee41391f"
+}
+
+seal @tandem.milestone.m5-one-playable-day/1 {
+    state active
+    hash "sha256:c9c02dbf4655b8c61e4fbeb5b5ad3538594a31f8e9918b4551430341d0276481"
+}
+
+seal @tandem.policy.same-change-audit/1 {
+    state active
+    hash "sha256:8bf9a65ac12678b8e0f93d4b55474bbb5c51c5bcc966c97eef9d3801b5174f8c"
+}
+
+seal @tandem.policy.tandem-work/1 {
+    state active
+    hash "sha256:a5f4baa5de048944354308835973499cd5c07db932f82ee410de13760a7a8a3c"
+}
+
+seal @tandem.policy.test-surfaces-only/1 {
+    state active
+    hash "sha256:b51c4a0ad4d42c35f34c6e974a6ab5444219be2b5a4abb1759dc0c160ebcafce"
+}
+
+seal @tandem.question.step-6-polish/1 {
+    state open
+    hash "sha256:11b6347d58f866d481163b3e7b3c15f89569e796a66c49e8d702e699634e30b1"
+}
+
+seal @tandem.req.bridge-invents-nothing/1 {
+    state active
+    hash "sha256:1025598bf58cbf17f7f1cbe197601dd165b5d3a63ab4348c7b5058697108fc06"
+}
+
+seal @tandem.term.bridge/1 {
+    state active
+    hash "sha256:ae252cb76314f07328cdb04fcfacf801f6b3427c8511d297e47993d2571a320e"
+}
+
+seal @tandem.term.engine/1 {
+    state active
+    hash "sha256:9f666793c3485c4700974bee6eb3ba1c1e28f659984f1d1e68f3b1107ec43431"
+}
+
+seal @tandem.term.playable-day/1 {
+    state active
+    hash "sha256:8a143cfeef53211ddb81c43f801581944ef5cde149e52204f7c35fe52b9f06f3"
+}
+
+seal @tandem.term.simulator/1 {
+    state active
+    hash "sha256:860eaf274e9ff78d58b4262bacba787e8a54da08e0a08a4ca3f509f7ad6f026d"
+}
+
+seal @tandem.track.defect-retirement/1 {
+    state active
+    hash "sha256:bdba8352f26215cd4fbe1040bacdfc9b487376855eeeb2a7d427c31992978e46"
+}
+
+seal @tandem.track.doc-discipline/1 {
+    state active
+    hash "sha256:90a556160b2915fe44677aff5422b59cd7fa304acb2ffdb4217cf9e71c04ca80"
+}
+
+seal @tandem.track.lighting/1 {
+    state active
+    hash "sha256:72f039370ff18bc825fb6a29ce43475c0048db5a67143be73756af5df7ea5ecd"
+}
+
+seal @tandem.work.defect-retirement-plan/1 {
+    state superseded
+    hash "sha256:10169227984f8b7dc9c294632a875a8ef2ba1e92d3b202f967865fe7900d3a8f"
+}
+
+seal @tandem.work.defect-retirement-plan/2 {
+    state active
+    hash "sha256:1e32726aaf548c652ebd7fa8596c46c8844707e93a12eb560c37fd9f42a5b97d"
+}
+
+seal @tandem.work.m1-plan/1 {
+    state completed
+    hash "sha256:998fd64ac94b7a4017184ebbc97d2fa18441d36c961ed01573ec465c47cac0f5"
+}
+
+seal @tandem.work.m5-plan/1 {
+    state active
+    hash "sha256:a99787e8447fbb026e6afaa713b7ca8d08eb97684426dc2880ead26ac9f6fcc3"
+}

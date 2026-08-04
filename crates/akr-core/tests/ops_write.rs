@@ -1,0 +1,614 @@
+//! The five write operations of `docs/07` §6, exercised over copies of both worked
+//! examples in temporary directories.
+//!
+//! Every test works on a copy: the operations write to disk, and a test that mutated the
+//! committed examples would be a test that broke the repository.
+
+mod ops_support;
+
+use akr_core::model::{
+    Class, ContentSlot, ContentValue, Kind, Outcome as DispositionOutcome, Record, Reference,
+    State, key,
+};
+use akr_core::ops::{self, DispositionRequest, Edits, ReviseMode, WriteContext, conventional_file};
+use ops_support::Sandbox;
+
+fn term(key_text: &str, title: &str) -> Record {
+    let mut record = akr_core::model::RecordBuilder::new(key_text, 1, Kind::Term)
+        .title(title)
+        .all_scope()
+        .build();
+    record.content.insert(
+        ContentSlot::Definition,
+        ContentValue::prose("A definition supplied by the caller, as `--from` would."),
+    );
+    record
+}
+
+// -------------------------------------------------------------------------------------
+// propose
+// -------------------------------------------------------------------------------------
+
+#[test]
+fn propose_creates_revision_one_in_the_conventional_file() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir()).with_author("tester");
+    let target = key("sys.term.audit-lane");
+
+    let applied = ops::propose(
+        &context,
+        &target,
+        Kind::Term,
+        "Audit lane",
+        Some(term("sys.term.audit-lane", "Audit lane")),
+    )
+    .expect("a well-formed proposal is accepted");
+
+    assert_eq!(applied.operation, ops::Operation::Propose);
+    assert_eq!(applied.changes.len(), 1);
+    assert_eq!(applied.changes[0].kind, ops::ChangeKind::Created);
+    assert_eq!(applied.files, vec![conventional_file(&target, Kind::Term)]);
+    assert!(applied.lock_stale, "a new revision needs a new seal");
+
+    // The record is on disk, in the state its class starts in, and the tree still parses.
+    let reloaded = sandbox.ledger();
+    let head = reloaded.head(&target).expect("the new head");
+    assert_eq!(head.id.revision, 1);
+    assert_eq!(
+        head.state,
+        State::Proposed,
+        "a new record starts unaccepted (docs/07 §6)"
+    );
+    assert_eq!(head.author.as_deref(), Some("tester"));
+    sandbox.assert_canonical();
+}
+
+#[test]
+fn propose_refuses_an_existing_key() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    let target = key("sys.term.playable-day");
+
+    let refused = ops::propose(&context, &target, Kind::Term, "again", None)
+        .expect_err("the key already exists");
+    assert_eq!(refused.code.as_str(), "AKR-L041");
+    assert!(refused.help.is_some_and(|h| h.contains("akr revise")));
+}
+
+#[test]
+fn propose_refuses_a_record_that_would_not_validate() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+
+    // No `definition`, which V-008 requires of a term. A bare proposal is refused rather
+    // than written with a placeholder body.
+    let refused = ops::propose(&context, &key("sys.term.bare"), Kind::Term, "Bare", None)
+        .expect_err("a term with no definition does not validate");
+    assert_eq!(refused.code.as_str(), "AKR-C031");
+    assert!(
+        refused
+            .diagnostics
+            .iter()
+            .any(|d| d.code.as_str() == "AKR-T001")
+    );
+}
+
+#[test]
+fn propose_refuses_an_undeclared_namespace() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    let refused = ops::propose(
+        &context,
+        &key("nope.term.stranger"),
+        Kind::Term,
+        "Stranger",
+        Some(term("nope.term.stranger", "Stranger")),
+    )
+    .expect_err("the namespace is not declared");
+    assert!(
+        refused
+            .diagnostics
+            .iter()
+            .any(|d| d.code.as_str() == "AKR-L004")
+    );
+}
+
+// -------------------------------------------------------------------------------------
+// revise
+// -------------------------------------------------------------------------------------
+
+#[test]
+fn revise_edits_a_proposed_head_in_place() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    // `sim.decision.timestep-4ms` is the example's one `proposed` normative head.
+    let target = key("sim.decision.timestep-4ms");
+    let before = sandbox.ledger().head(&target).expect("the head").id.clone();
+
+    let applied = ops::revise(
+        &context,
+        &target,
+        ReviseMode::Auto,
+        &Edits {
+            title: Some("Fix the simulator timestep at 4 ms (revised)".to_owned()),
+            ..Edits::default()
+        },
+    )
+    .expect("a proposed head is editable");
+
+    assert_eq!(applied.changes[0].kind, ops::ChangeKind::Edited);
+    let after = sandbox.ledger();
+    let head = after.head(&target).expect("the head");
+    assert_eq!(head.id, before, "a proposed head is edited, not duplicated");
+    assert!(head.title.ends_with("(revised)"));
+    assert_eq!(after.revisions_of(&target).len(), 1);
+}
+
+#[test]
+fn revise_creates_a_new_revision_from_a_sealed_head() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    let target = key("sys.term.playable-day");
+
+    let applied = ops::revise(
+        &context,
+        &target,
+        ReviseMode::Auto,
+        &Edits {
+            title: Some("Playable day, restated".to_owned()),
+            ..Edits::default()
+        },
+    )
+    .expect("a sealed head produces a new revision");
+
+    assert_eq!(
+        applied.changes.len(),
+        2,
+        "the new revision and the retired one"
+    );
+    let after = sandbox.ledger();
+    assert_eq!(after.revisions_of(&target).len(), 2);
+    let head = after.head(&target).expect("the head");
+    assert_eq!(head.id.revision, 2);
+    assert_eq!(
+        head.state,
+        State::Proposed,
+        "a new revision starts unaccepted"
+    );
+    assert!(
+        head.targets(akr_core::model::Relation::Supersedes)
+            .iter()
+            .any(|t| t.revision == Some(1)),
+        "the new revision must declare what it supersedes"
+    );
+    // Revision 1 is retired in the same write. Leaving it live would be two live heads,
+    // and `docs/07` §4 refuses to write a ledger that does not validate.
+    let first = after
+        .get(&akr_core::model::RevisionId::new(target, 1))
+        .expect("revision 1");
+    assert_eq!(first.state, State::Superseded);
+    sandbox.assert_canonical();
+}
+
+#[test]
+fn revise_refuses_an_in_place_edit_of_a_sealed_head() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    let refused = ops::revise(
+        &context,
+        &key("sys.term.playable-day"),
+        ReviseMode::InPlace,
+        &Edits {
+            title: Some("nope".to_owned()),
+            ..Edits::default()
+        },
+    )
+    .expect_err("sealed bodies are immutable");
+    assert_eq!(refused.code.as_str(), "AKR-C032");
+}
+
+#[test]
+fn revise_refuses_an_unknown_key() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    let refused = ops::revise(
+        &context,
+        &key("sys.term.absent"),
+        ReviseMode::Auto,
+        &Edits::default(),
+    )
+    .expect_err("there is nothing to revise");
+    assert_eq!(refused.code.as_str(), "AKR-L001");
+}
+
+// -------------------------------------------------------------------------------------
+// supersede
+// -------------------------------------------------------------------------------------
+
+/// Proposes a plan and a child that **pins** revision 1 of it.
+///
+/// Neither committed example has a head with children pinned to it — in both, the
+/// children pin the superseded revision, which is what the disposition already accounts
+/// for. So the scenario that makes V-017 fire has to be built.
+fn plan_with_a_child(context: &WriteContext) {
+    let mut plan = akr_core::model::RecordBuilder::new("sys.work.demo-plan", 1, Kind::Work)
+        .title("Demo plan")
+        .build();
+    plan.content.insert(
+        ContentSlot::Intent,
+        ContentValue::prose("A plan with one child."),
+    );
+    ops::propose(
+        context,
+        &key("sys.work.demo-plan"),
+        Kind::Work,
+        "Demo plan",
+        Some(plan),
+    )
+    .expect("the plan proposes");
+
+    let mut child = akr_core::model::RecordBuilder::new("sys.work.demo-child", 1, Kind::Work)
+        .title("Demo child")
+        .state(State::Ready)
+        .rel(akr_core::model::Relation::PartOf, "@sys.work.demo-plan/1")
+        .build();
+    child.content.insert(
+        ContentSlot::Intent,
+        ContentValue::prose("A child pinned to revision 1."),
+    );
+    ops::propose(
+        context,
+        &key("sys.work.demo-child"),
+        Kind::Work,
+        "Demo child",
+        Some(child),
+    )
+    .expect("the child proposes");
+}
+
+#[test]
+fn supersede_lists_the_children_it_needs_a_disposition_for() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    plan_with_a_child(&context);
+    let before = sandbox.snapshot();
+
+    let refused = ops::supersede(&context, &key("sys.work.demo-plan"), &[])
+        .expect_err("a replan may not drop a child silently");
+
+    assert_eq!(refused.code.as_str(), "AKR-R014");
+    assert_eq!(refused.unfinished_children.len(), 1);
+    assert_eq!(
+        refused.unfinished_children[0].key,
+        key("sys.work.demo-child")
+    );
+    assert_eq!(refused.unfinished_children[0].state, State::Ready);
+    assert!(refused.help.is_some_and(|h| h.contains("--disposition")));
+    assert_eq!(before, sandbox.snapshot(), "a refusal writes nothing");
+}
+
+#[test]
+fn supersede_writes_once_every_child_is_dispositioned() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    plan_with_a_child(&context);
+
+    let applied = ops::supersede(
+        &context,
+        &key("sys.work.demo-plan"),
+        &[DispositionRequest {
+            child: key("sys.work.demo-child"),
+            outcome: DispositionOutcome::CarriedForward,
+            into: Some(key("sys.track.lighting")),
+            note: Some("Standing work, not this plan's.".to_owned()),
+        }],
+    )
+    .expect("a replan that accounts for its child is accepted");
+
+    assert_eq!(
+        applied.changes.len(),
+        2,
+        "the old head and the new revision"
+    );
+    assert!(applied.lock_stale);
+
+    let after = sandbox.ledger();
+    let target = key("sys.work.demo-plan");
+    assert_eq!(after.revisions_of(&target).len(), 2);
+    let head = after.head(&target).expect("the head");
+    assert_eq!(head.id.revision, 2);
+    assert_eq!(head.dispositions.len(), 1);
+    assert_eq!(
+        head.dispositions[0].outcome,
+        DispositionOutcome::CarriedForward
+    );
+    let old = after
+        .get(&akr_core::model::RevisionId::new(target, 1))
+        .expect("the old head");
+    assert_eq!(old.state, State::Superseded);
+    sandbox.assert_canonical();
+}
+
+/// Superseding a plan whose children pin an *earlier* revision needs no disposition: the
+/// replan that retired that revision already accounted for them.
+#[test]
+fn supersede_demands_nothing_when_no_child_pins_the_head() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+
+    let applied = ops::supersede(&context, &key("sys.work.m3-plan"), &[])
+        .expect("no child pins revision 2, so nothing is unaccounted for");
+    assert_eq!(applied.changes.len(), 2);
+    assert_eq!(
+        sandbox
+            .ledger()
+            .head(&key("sys.work.m3-plan"))
+            .expect("the head")
+            .id
+            .revision,
+        3
+    );
+}
+
+// -------------------------------------------------------------------------------------
+// complete
+// -------------------------------------------------------------------------------------
+
+#[test]
+fn complete_refuses_the_check_no_evidence_satisfies() {
+    // The sys-tandem M5 case: everything landed, and a designer still has to sign off.
+    let sandbox = Sandbox::sys_tandem();
+    let context = WriteContext::new(sandbox.akr_dir());
+
+    let refused = ops::complete(&context, &key("tandem.milestone.m5-one-playable-day"), &[])
+        .expect_err("code cannot self-certify a designer's judgement");
+
+    assert_eq!(refused.code.as_str(), "AKR-R022");
+    assert_eq!(refused.unsatisfied_checks.len(), 1);
+    assert_eq!(
+        refused.unsatisfied_checks[0].id,
+        "three-seed-designer-signoff"
+    );
+}
+
+#[test]
+fn complete_refuses_a_kind_that_does_not_complete() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    let refused = ops::complete(&context, &key("sys.policy.tandem-work"), &[])
+        .expect_err("policies do not complete");
+    assert_eq!(refused.code.as_str(), "AKR-T011");
+}
+
+#[test]
+fn complete_accepts_a_work_record_with_nothing_left_to_prove() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    let target = key("lege.work.extract-render-graph");
+
+    let applied =
+        ops::complete(&context, &target, &[]).expect("no acceptance block, nothing unmet");
+    assert!(matches!(
+        applied.changes[0].kind,
+        ops::ChangeKind::StateChanged {
+            to: State::Completed,
+            ..
+        }
+    ));
+    assert_eq!(
+        sandbox.ledger().head(&target).expect("the head").state,
+        State::Completed
+    );
+    sandbox.assert_canonical();
+}
+
+/// Attaching evidence satisfies the check — and then a *different* rule refuses.
+///
+/// Completing M3 makes it terminal, and `sys.work.m3-plan/2` still floats
+/// `plan_of_record` at it, so V-019 fires. That is correct: a milestone cannot be done
+/// while the plan that drives it is live. `docs/07` §6 does not mention the interaction;
+/// see the P6 report.
+#[test]
+fn complete_attaches_evidence_and_then_meets_the_plan_of_record_rule() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    let before = sandbox.snapshot();
+
+    let refused = ops::complete(
+        &context,
+        &key("sys.milestone.m3-playable-day"),
+        &[(
+            "no-placeholder-assets".to_owned(),
+            Reference::head(key("sys.evidence.playable-day-demo")),
+        )],
+    )
+    .expect_err("the live plan of record blocks completion");
+
+    assert_eq!(refused.code.as_str(), "AKR-C031");
+    assert!(
+        refused
+            .diagnostics
+            .iter()
+            .any(|d| d.code.as_str() == "AKR-R021"),
+        "the plan of record is the obstacle"
+    );
+    assert!(
+        !refused
+            .diagnostics
+            .iter()
+            .any(|d| d.code.as_str() == "AKR-R022"),
+        "the attached evidence did satisfy the acceptance check"
+    );
+    assert_eq!(before, sandbox.snapshot(), "a refusal writes nothing");
+}
+
+// -------------------------------------------------------------------------------------
+// abandon
+// -------------------------------------------------------------------------------------
+
+#[test]
+fn abandon_requires_a_reason() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    let refused = ops::abandon(&context, &key("lege.work.extract-render-graph"), "  ", &[])
+        .expect_err("a silent abandonment is the failure D-017 exists to prevent");
+    assert_eq!(refused.code.as_str(), "AKR-C031");
+}
+
+#[test]
+fn abandon_demands_a_disposition_for_every_unfinished_child() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    plan_with_a_child(&context);
+
+    let refused = ops::abandon(
+        &context,
+        &key("sys.work.demo-plan"),
+        "no longer the plan",
+        &[],
+    )
+    .expect_err("abandoning a plan with a live child is refused");
+    assert_eq!(refused.code.as_str(), "AKR-R014");
+    assert_eq!(refused.unfinished_children.len(), 1);
+    assert_eq!(
+        refused.unfinished_children[0].key,
+        key("sys.work.demo-child")
+    );
+}
+
+#[test]
+fn abandon_records_the_reason_in_the_note_slot() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    let target = key("lege.work.extract-render-graph");
+
+    let applied = ops::abandon(
+        &context,
+        &target,
+        "superseded by the snapshot boundary",
+        &[],
+    )
+    .expect("a childless work item abandons cleanly");
+    assert!(matches!(
+        applied.changes[0].kind,
+        ops::ChangeKind::StateChanged {
+            to: State::Abandoned,
+            ..
+        }
+    ));
+
+    let after = sandbox.ledger();
+    let head = after.head(&target).expect("the head");
+    assert_eq!(head.state, State::Abandoned);
+    // D-026: the reason is a rendered slot, not a comment. A comment is excluded from the
+    // seal hash and invisible to views; an abandonment reason is durable knowledge.
+    assert_eq!(
+        head.get(ContentSlot::Note),
+        Some(&ContentValue::prose("superseded by the snapshot boundary")),
+        "the reason must land in `note`"
+    );
+    let text = sandbox.read(&applied.files[0]);
+    assert!(
+        text.contains("note \"\"\""),
+        "the note must be a prose slot:\n{text}"
+    );
+    sandbox.assert_canonical();
+}
+
+/// `note` is a planning-kind slot. Setting it on anything else is V-008's business.
+#[test]
+fn the_note_slot_belongs_to_planning_kinds_only() {
+    for kind in Kind::ALL {
+        let has_note = kind
+            .content_slots()
+            .iter()
+            .any(|s| s.slot == ContentSlot::Note);
+        assert_eq!(
+            has_note,
+            kind.class() == Class::Planning,
+            "{kind}: note is planning-only (D-026)"
+        );
+    }
+}
+
+// -------------------------------------------------------------------------------------
+// invariants across operations
+// -------------------------------------------------------------------------------------
+
+#[test]
+fn every_successful_write_leaves_the_tree_canonical_and_valid() {
+    let sandbox = Sandbox::sys_tandem();
+    let context = WriteContext::new(sandbox.akr_dir());
+
+    ops::propose(
+        &context,
+        &key("tandem.term.rota"),
+        Kind::Term,
+        "Rota",
+        Some(term("tandem.term.rota", "Rota")),
+    )
+    .expect("proposal");
+    ops::revise(
+        &context,
+        &key("tandem.term.rota"),
+        ReviseMode::Auto,
+        &Edits {
+            title: Some("Rota, restated".to_owned()),
+            ..Edits::default()
+        },
+    )
+    .expect("revision");
+
+    sandbox.assert_canonical();
+    assert!(
+        akr_core::validate::validate_all(&sandbox.ledger()).is_empty(),
+        "the ledger must still validate after a sequence of writes"
+    );
+}
+
+#[test]
+fn a_repeated_state_change_is_idempotent() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    let target = key("lege.work.extract-render-graph");
+
+    ops::complete(&context, &target, &[]).expect("first completion");
+    let after_first = sandbox.snapshot();
+    // Completing an already-completed record is a no-op on disk: the state slot is
+    // already `completed`, so the canonical text does not change.
+    let second = ops::complete(&context, &target, &[]);
+    assert!(second.is_ok(), "completing twice is not an error");
+    assert_eq!(
+        after_first,
+        sandbox.snapshot(),
+        "the second write changed nothing"
+    );
+}
+
+#[test]
+fn the_conventional_file_follows_namespace_and_kind() {
+    for (kind, expected) in [
+        (Kind::Term, "records/sys/terms.akr"),
+        (Kind::Policy, "records/sys/policies.akr"),
+        (Kind::Evidence, "records/sys/evidence.akr"),
+        (Kind::Work, "records/sys/work.akr"),
+        (Kind::Question, "records/sys/questions.akr"),
+    ] {
+        assert_eq!(
+            conventional_file(&key("sys.a.b"), kind).to_string_lossy(),
+            expected
+        );
+    }
+    // Every kind has a home, and planning kinds share none of it by accident.
+    for kind in Kind::ALL {
+        let path = conventional_file(&key("sys.a.b"), *kind);
+        assert!(
+            path.starts_with("records/sys"),
+            "{kind}: {}",
+            path.display()
+        );
+        if kind.class() == Class::Planning {
+            assert!(path.to_string_lossy().ends_with(".akr"));
+        }
+    }
+}

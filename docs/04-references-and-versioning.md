@@ -74,18 +74,33 @@ history reads top to bottom in one diff.
 ### 2.1 Creating a revision
 
 `akr revise <key>` copies the current head, increments the number, sets the copy's state
-to `proposed`, and adds `supersedes [ @key/N-1 ]`. It does **not** change the previous
-revision's state: accepting the new revision and retiring the old one is a decision, and
-the tool does not make it for you. `akr check` will fail with `AKR-R001` while both are
-live, which is the reminder.
+to `proposed`, adds `supersedes [ @key/N-1 ]`, **and moves revision N-1 to
+`superseded` in the same write**.
+
+Retiring the old revision is not optional and cannot be deferred. Leaving both live is two
+live heads, which V-012 rejects, and `docs/07` §4 refuses to write a ledger that does not
+validate — so a `revise` that left the old head live could never write at all. The two
+halves are one act.
+
+It follows that revising a *sealed* head is superseding it, and the tool treats it as
+such: for planning records it demands a disposition for every unfinished child before it
+will write, exactly as `akr supersede` does. Otherwise `akr revise` would be a way to
+replace a plan without accounting for its children, which is the hole D-017 exists to
+close.
+
+A `proposed` head is different: it is unsealed (D-015), so `akr revise` edits it **in
+place** rather than creating revision N+1. Creating revision 2 of a proposal nobody has
+accepted would be noise.
 
 The normal sequence:
 
 ```
-akr revise sys.work.m3-plan          # /2 appears in state proposed
-$EDITOR .akr/records/sys/work.akr    # write the new plan, add dispositions
-akr supersede sys.work.m3-plan/1     # /1 becomes superseded
-akr check                            # one live head again
+akr revise sys.work.m3-plan \
+    --disposition sys.work.m3-audio-pass=intentionally_dropped
+                                     # /2 appears proposed, /1 becomes superseded
+$EDITOR .akr/records/sys/work.akr    # refine the new plan
+akr check                            # one live head throughout
+akr build                            # the lock catches up (§8.3)
 ```
 
 ### 2.2 Sealing
@@ -468,10 +483,17 @@ detect a floating reference silently repointing, which is the main thing it is f
 | A `source` hash changed | A file was edited | Normal; read the record diff. |
 | A `resolution` target changed | A floating `@key` now points at a new head | **Look at this.** Did the referring record intend to follow that change? |
 | A `seal` appeared | A revision left `proposed` | Was it actually reviewed? |
-| A `seal` hash changed | A sealed record was edited | Almost always wrong — should have been a new revision (`AKR-R051`). |
+| A `seal` hash changed, and only the `state` slot differs | A lifecycle transition: `supersede`, `complete`, `abandon` | **Expected.** A record's state is part of its canonical text, so advancing it changes the hash. The tool rebuilds the seal on the next `akr build`; until then `akr check` reports `AKR-R052`. |
+| A `seal` hash changed, and the body differs | A sealed record was edited | Almost always wrong — should have been a new revision (`AKR-R051`). |
 | Every seal changed at once | `akr lock --reseal`, usually a grammar upgrade | Check the tool version line changed too. |
 
-The second row is the one that pays for the file. A policy revision that quietly changes
+The two seal rows are worth telling apart, because they look identical in a bare hash
+diff and mean opposite things. A lifecycle transition is the tool doing its job: D-015
+seals a record's *body*, and moving `active` to `superseded` does not change what the
+record says. An edit to the body is the failure D-015 exists to catch. The state slot is
+the whole difference, and a reviewer should read it before anything else in the diff.
+
+The resolution row is the one that pays for the file. A policy revision that quietly changes
 what fifteen work items implement should be a fifteen-line lock diff, not a silent
 behaviour change.
 

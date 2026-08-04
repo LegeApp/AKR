@@ -238,8 +238,8 @@ const EVIDENCE_SLOTS: &[ContentSlotSpec] = &[
     opt(C::Summary),
 ];
 const ASSESSMENT_SLOTS: &[ContentSlotSpec] = &[req(C::Statement), opt(C::Confidence), opt(C::AsOf)];
-const PLAN_SLOTS: &[ContentSlotSpec] = &[req(C::Intent), opt(C::Target)];
-const TRACK_SLOTS: &[ContentSlotSpec] = &[req(C::Intent), opt(C::Cadence)];
+const PLAN_SLOTS: &[ContentSlotSpec] = &[req(C::Intent), opt(C::Target), opt(C::Note)];
+const TRACK_SLOTS: &[ContentSlotSpec] = &[req(C::Intent), opt(C::Cadence), opt(C::Note)];
 const QUESTION_SLOTS: &[ContentSlotSpec] = &[req(C::Question), opt(C::Resolution)];
 
 /// One entry of a kind's content-slot table.
@@ -286,6 +286,7 @@ pub enum ContentSlot {
     Cadence,
     Question,
     Resolution,
+    Note,
 }
 
 impl ContentSlot {
@@ -316,6 +317,7 @@ impl ContentSlot {
         Self::Cadence,
         Self::Question,
         Self::Resolution,
+        Self::Note,
     ];
 
     /// The slot name as written in source (snake_case, D-005).
@@ -347,6 +349,7 @@ impl ContentSlot {
             Self::Cadence => "cadence",
             Self::Question => "question",
             Self::Resolution => "resolution",
+            Self::Note => "note",
         }
     }
 

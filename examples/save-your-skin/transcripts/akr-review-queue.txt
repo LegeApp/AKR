@@ -5,13 +5,13 @@ review queue at e806b3f5, today 2026-08-03
 
 STALE (2)
 
-  sim.obs.projection-gaps/1          observation  verified
+  sim.obs.projection-gaps/1   observation  verified
       cause      watches "sim/src/project/**" matched by 5d9c2a70
       observed   7c41d0ba (2 commits behind the match)
       watches    "sim/src/project/**"
       review     2026-11-01 (not yet due)
 
-  sim.obs.timestep-drift/1           observation  verified
+  sim.obs.timestep-drift/1    observation  verified
       cause      review_after 2026-07-15 passed 19 days ago
       observed   5d9c2a70
       watches    "sim/src/step.rs" — not matched since observed_at
@@ -20,18 +20,16 @@ STALE (2)
 
 AT RISK (4)
 
-  depth 1  sim.work.rewrite-projection/1        work        blocked
+  depth 1  sim.work.rewrite-projection/1      work        blocked
              via depends_on   -> @sim.obs.projection-gaps/1
-             note   the coverage measurement this work item rests on was made
-                    before the projection code changed
 
-  depth 1  sys.assessment.m3-readiness/1        assessment  verified
+  depth 1  sys.assessment.m3-readiness/1      assessment  verified
              via supported_by -> @sim.obs.timestep-drift/1
 
-  depth 1  sys.assessment.projection-gaps/1     assessment  verified
+  depth 1  sys.assessment.projection-gaps/1   assessment  verified
              via supported_by -> @sim.obs.projection-gaps/1
 
-  depth 2  sys.policy.tandem-work/1             policy      active
+  depth 2  sys.policy.tandem-work/1           policy      active
              via supported_by -> @sys.assessment.projection-gaps/1
                               -> @sim.obs.projection-gaps/1
 
@@ -49,24 +47,39 @@ $ echo $?
 
 $ akr review-queue --stale-only
 
+review queue at e806b3f5, today 2026-08-03
+
 STALE (2)
+
   sim.obs.projection-gaps/1   observation  verified
-      watches "sim/src/project/**" matched by 5d9c2a70
+      cause      watches "sim/src/project/**" matched by 5d9c2a70
+      observed   7c41d0ba (2 commits behind the match)
+      watches    "sim/src/project/**"
+      review     2026-11-01 (not yet due)
+
   sim.obs.timestep-drift/1    observation  verified
-      review_after 2026-07-15 passed
+      cause      review_after 2026-07-15 passed 19 days ago
+      observed   5d9c2a70
+      watches    "sim/src/step.rs" — not matched since observed_at
+      note       contradicts @sim.evidence.determinism-suite-pass/1
+                 (acknowledged)
 
 2 stale
 
 $ akr review-queue --at-risk-only --kind policy --kind work
 
+review queue at e806b3f5, today 2026-08-03
+
 AT RISK (2)
+
   depth 1  sim.work.rewrite-projection/1   work    blocked
              via depends_on   -> @sim.obs.projection-gaps/1
+
   depth 2  sys.policy.tandem-work/1        policy  active
              via supported_by -> @sys.assessment.projection-gaps/1
                               -> @sim.obs.projection-gaps/1
 
-2 at risk
+2 at risk, maximum propagation depth 2
 
 
 # --- JSON, for a CI job summary ------------------------------------------
@@ -84,32 +97,76 @@ $ akr review-queue --format json
   "result": {
     "today": "2026-08-03",
     "stale": [
-      { "key": "sim.obs.projection-gaps", "rev": 1, "kind": "observation",
-        "state": "verified", "cause": "watch",
+      {
+        "key": "sim.obs.projection-gaps",
+        "rev": 1,
+        "kind": "observation",
+        "state": "verified",
+        "cause": "watch",
         "glob": "sim/src/project/**",
         "matched_by": "5d9c2a70e31f8b46c07d5924ab6e3f1074c9d285",
-        "matched_path": "sim/src/project/",
-        "observed_at": "7c41d0ba92e6f37518a3cd406b5e2f91d8074a63" },
-      { "key": "sim.obs.timestep-drift", "rev": 1, "kind": "observation",
-        "state": "verified", "cause": "review_after",
-        "review_after": "2026-07-15", "days_overdue": 19,
-        "observed_at": "5d9c2a70e31f8b46c07d5924ab6e3f1074c9d285" }
+        "matched_path": "sim/src/project/mod.rs",
+        "observed_at": "7c41d0ba92e6f37518a3cd406b5e2f91d8074a63"
+      },
+      {
+        "key": "sim.obs.timestep-drift",
+        "rev": 1,
+        "kind": "observation",
+        "state": "verified",
+        "cause": "review_after",
+        "review_after": "2026-07-15",
+        "days_overdue": 19,
+        "observed_at": "5d9c2a70e31f8b46c07d5924ab6e3f1074c9d285"
+      }
     ],
     "at_risk": [
-      { "key": "sim.work.rewrite-projection", "rev": 1, "kind": "work",
-        "depth": 1, "via": "depends_on",
-        "path": ["sim.obs.projection-gaps"] },
-      { "key": "sys.assessment.m3-readiness", "rev": 1, "kind": "assessment",
-        "depth": 1, "via": "supported_by",
-        "path": ["sim.obs.timestep-drift"] },
-      { "key": "sys.assessment.projection-gaps", "rev": 1, "kind": "assessment",
-        "depth": 1, "via": "supported_by",
-        "path": ["sim.obs.projection-gaps"] },
-      { "key": "sys.policy.tandem-work", "rev": 1, "kind": "policy",
-        "depth": 2, "via": "supported_by",
-        "path": ["sys.assessment.projection-gaps", "sim.obs.projection-gaps"] }
+      {
+        "key": "sim.work.rewrite-projection",
+        "rev": 1,
+        "kind": "work",
+        "depth": 1,
+        "via": "depends_on",
+        "path": [
+          "sim.obs.projection-gaps"
+        ]
+      },
+      {
+        "key": "sys.assessment.m3-readiness",
+        "rev": 1,
+        "kind": "assessment",
+        "depth": 1,
+        "via": "supported_by",
+        "path": [
+          "sim.obs.timestep-drift"
+        ]
+      },
+      {
+        "key": "sys.assessment.projection-gaps",
+        "rev": 1,
+        "kind": "assessment",
+        "depth": 1,
+        "via": "supported_by",
+        "path": [
+          "sim.obs.projection-gaps"
+        ]
+      },
+      {
+        "key": "sys.policy.tandem-work",
+        "rev": 1,
+        "kind": "policy",
+        "depth": 2,
+        "via": "supported_by",
+        "path": [
+          "sys.assessment.projection-gaps",
+          "sim.obs.projection-gaps"
+        ]
+      }
     ],
-    "counts": { "stale": 2, "at_risk": 4, "max_depth": 2 }
+    "counts": {
+      "stale": 2,
+      "at_risk": 4,
+      "max_depth": 2
+    }
   }
 }
 
@@ -129,13 +186,39 @@ created sim.obs.projection-gaps/2 (verified) in .akr/records/sim/observations.ak
 sim.obs.projection-gaps/1 -> superseded
 
 $ akr review-queue
-STALE (1)
-  sim.obs.timestep-drift/1   observation  verified
-      review_after 2026-07-15 passed
-AT RISK (1)
-  depth 1  sys.assessment.m3-readiness/1   assessment  verified
+review queue at e806b3f5, today 2026-08-03
+
+STALE (2)
+
+  sim.obs.projection-gaps/1   observation  verified
+      cause      watches "sim/src/project/**" matched by 5d9c2a70
+      observed   7c41d0ba (2 commits behind the match)
+      watches    "sim/src/project/**"
+      review     2026-11-01 (not yet due)
+
+  sim.obs.timestep-drift/1    observation  verified
+      cause      review_after 2026-07-15 passed 19 days ago
+      observed   5d9c2a70
+      watches    "sim/src/step.rs" — not matched since observed_at
+      note       contradicts @sim.evidence.determinism-suite-pass/1
+                 (acknowledged)
+
+AT RISK (4)
+
+  depth 1  sim.work.rewrite-projection/1      work        blocked
+             via depends_on   -> @sim.obs.projection-gaps/1
+
+  depth 1  sys.assessment.m3-readiness/1      assessment  verified
              via supported_by -> @sim.obs.timestep-drift/1
-1 stale, 1 at risk
+
+  depth 1  sys.assessment.projection-gaps/1   assessment  verified
+             via supported_by -> @sim.obs.projection-gaps/1
+
+  depth 2  sys.policy.tandem-work/1           policy      active
+             via supported_by -> @sys.assessment.projection-gaps/1
+                              -> @sim.obs.projection-gaps/1
+
+2 stale, 4 at risk, maximum propagation depth 2
 
 # Re-observing one record cleared it and all three records downstream of it:
 # the work item, the assessment, and the policy behind the assessment. That is

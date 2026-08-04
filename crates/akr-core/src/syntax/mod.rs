@@ -5,6 +5,7 @@
 //! `tests/round_trip.rs`.
 
 pub mod cst;
+pub mod emit;
 pub mod format;
 pub mod lexer;
 pub mod lower;
@@ -12,6 +13,7 @@ pub mod parser;
 
 use crate::diagnostics::{Diagnostic, FileId};
 
+pub use emit::{record_node, record_text};
 pub use format::format;
 pub use lower::lower_file;
 pub use parser::{Parsed, parse};
