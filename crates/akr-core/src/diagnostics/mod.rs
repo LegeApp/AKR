@@ -477,4 +477,25 @@ pub mod codes {
         /// Lock stale or incomplete.
         R052 = "AKR-R052";
     }
+
+    /// Codes the write operations raise that belong to the CLI stage.
+    ///
+    /// These are registered in `spec/diagnostics/codes-runtime.md`, which Writer B owns.
+    /// They live in their own module so that [`ALL`] stays exactly the set of language
+    /// codes `tests/codes_registry.rs` checks against `codes-lang.md`.
+    pub mod cli {
+        use super::super::Code;
+
+        /// `project.akr` is missing.
+        pub const C012: Code = Code::new("AKR-C012");
+        /// Write aborted; the result did not validate.
+        pub const C031: Code = Code::new("AKR-C031");
+        /// The write would modify a sealed revision.
+        pub const C032: Code = Code::new("AKR-C032");
+        /// The write target is not the head revision.
+        pub const C033: Code = Code::new("AKR-C033");
+
+        /// Every CLI-stage code this crate raises.
+        pub const ALL: &[Code] = &[C012, C031, C032, C033];
+    }
 }
