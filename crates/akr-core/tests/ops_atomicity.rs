@@ -5,6 +5,11 @@
 //! every refusing path rather than on a representative one. Each case below hashes every
 //! `.akr` file before and after, and compares.
 
+// `ops::Refused` is a large `Err` variant by design — it carries the structured refusal
+// data the CLI renders — and every closure here returns one. See the rationale on the
+// same allow in `src/ops/mod.rs`.
+#![allow(clippy::result_large_err)]
+
 mod ops_support;
 
 use akr_core::model::{Kind, Outcome as DispositionOutcome, Reference, key};

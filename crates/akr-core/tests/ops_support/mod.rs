@@ -3,6 +3,12 @@
 //! The write operations write. A test that ran them against the committed examples would
 //! be a test that broke the repository, so every one of them works on a copy.
 
+// Shared by two test binaries, each of which compiles it separately and uses a different
+// subset: `ops_write` wants the ledger and the canonicality assertion, `ops_atomicity`
+// wants only the snapshot. Splitting the module to satisfy the lint would give each
+// binary its own copy of the same code.
+#![allow(dead_code)]
+
 use akr_core::diagnostics::FileId;
 use akr_core::model::Ledger;
 use akr_core::syntax::{format, lower, parse};
