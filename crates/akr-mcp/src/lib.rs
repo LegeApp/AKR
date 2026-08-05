@@ -1,4 +1,4 @@
-//! `akr-mcp`: the nine `knowledge.*` tools of `docs/08-mcp.md`, over stdio.
+//! `akr-mcp`: the `knowledge.*` tools of `docs/08-mcp.md`, over stdio.
 //!
 //! # One implementation
 //!

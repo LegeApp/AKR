@@ -1,6 +1,6 @@
 [package]
 name = "akr-mcp"
-description = "The AKR MCP server: nine knowledge tools over akr-core, on stdio."
+description = "The AKR MCP server: the knowledge tools over akr-core, on stdio."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -300,8 +300,12 @@ fn git_author(session: &Session) -> Option<String> {
 
 pub(crate) fn parse_key(text: &str) -> Result<LogicalKey, EnvError> {
     let trimmed = text.strip_prefix('@').unwrap_or(text);
-    LogicalKey::parse(trimmed)
-        .map_err(|e| EnvError::new("AKR-C004", format!("{text:?} is not a key: {e}")))
+    LogicalKey::parse(trimmed).map_err(|e| {
+        EnvError::new("AKR-C004", format!("{text:?} is not a key: {e}")).help(
+            "keys are dot-delimited — namespace.topic.slug — and the first segment must \
+             be a namespace declared in .akr/project.akr",
+        )
+    })
 }
 
 fn parse_kind(text: &str) -> Result<Kind, EnvError> {

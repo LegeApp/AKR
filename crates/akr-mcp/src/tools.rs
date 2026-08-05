@@ -45,6 +45,7 @@ pub fn call(root: &Path, name: &str, arguments: &Value) -> Result<Value, ToolErr
         "knowledge.revise" => revise(root, arguments),
         "knowledge.supersede" => supersede(root, arguments),
         "knowledge.complete" => complete(root, arguments),
+        "knowledge.evidence_add" => evidence_add(root, arguments),
         other => Err(ToolError::new(
             "AKR-X041",
             format!("unknown tool {other:?}; the catalogue is closed for 0.1"),
@@ -309,6 +310,103 @@ fn complete(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
         &session,
         &parsed,
         akr_core::ops::complete(&context, &parsed, &checks),
+    )
+}
+
+/// `knowledge.evidence_add`, over the same [`akr_core::evidence::AddEvidence`] request
+/// `akr evidence add` builds.
+///
+/// The schema deliberately has no field for what the evidence verifies (D-016): the link
+/// is authored on the check (`verified_by`) or supplied to `knowledge.complete`.
+fn evidence_add(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
+    let session = open(root, true)?;
+    let key = required_str(arguments, "key")?;
+    let parsed = key_of(key)?;
+
+    let result = match required_str(arguments, "result")? {
+        "pass" => akr_core::model::EvidenceResult::Pass,
+        "fail" => akr_core::model::EvidenceResult::Fail,
+        "inconclusive" => akr_core::model::EvidenceResult::Inconclusive,
+        other => {
+            return Err(ToolError::new(
+                "AKR-C004",
+                format!("`result`: {other:?} is not `pass`, `fail` or `inconclusive`"),
+            ));
+        }
+    };
+    let method = match required_str(arguments, "method")? {
+        "manual" => akr_core::model::CheckMethod::Manual,
+        "command" => akr_core::model::CheckMethod::Command,
+        "observation" => akr_core::model::CheckMethod::Observation,
+        other => {
+            return Err(ToolError::new(
+                "AKR-C004",
+                format!("`method`: {other:?} is not `manual`, `command` or `observation`"),
+            ));
+        }
+    };
+
+    // `observed_at` defaults to HEAD, as on the command line. An evidence record with no
+    // commit could never satisfy D-016's descendancy rule.
+    let commit = match arguments.get("observed_at").and_then(Value::as_str) {
+        Some(text) => {
+            let bare = text.strip_prefix("git:").unwrap_or(text);
+            akr_core::model::Commit::new(bare).map_err(|_| {
+                ToolError::new(
+                    "AKR-C004",
+                    format!(
+                        "`observed_at`: {text:?} is not 40 lowercase hex digits; AKR takes \
+                         full commit hashes, never abbreviations (D-008)"
+                    ),
+                )
+            })?
+        }
+        None => session.commit.clone().ok_or_else(|| {
+            ToolError::new(
+                "AKR-G001",
+                "no commit to record: not inside a git repository; pass `observed_at`",
+            )
+        })?,
+    };
+    if let Some(repository) = &session.repository
+        && !repository.contains(&commit)
+    {
+        return Err(ToolError::new(
+            "AKR-G011",
+            format!("observed_at {commit} is not present in this repository"),
+        ));
+    }
+
+    let summary = arguments.get("summary").and_then(Value::as_str);
+    let title = arguments
+        .get("title")
+        .and_then(Value::as_str)
+        .or(summary)
+        .map_or_else(|| parsed.to_string(), ToOwned::to_owned);
+    let mut request =
+        akr_core::evidence::AddEvidence::new(parsed.clone(), &title, result, method, commit);
+    if let Some(command) = arguments.get("command").and_then(Value::as_str) {
+        request = request.command(command);
+    }
+    if let Some(artifact) = arguments.get("artifact").and_then(Value::as_str) {
+        request = request.artifact(artifact);
+    }
+    if let Some(summary) = summary {
+        request = request.summary(summary);
+    }
+
+    let record = request.to_record();
+    let context = write_context(&session);
+    write_result(
+        &session,
+        &parsed,
+        akr_core::ops::propose(
+            &context,
+            &parsed,
+            akr_core::model::Kind::Evidence,
+            &title,
+            Some(record),
+        ),
     )
 }
 
@@ -694,8 +792,16 @@ fn merged(arguments: &Value, head: &akr_core::model::Record) -> Value {
 fn key_of(text: &str) -> Result<akr_core::model::LogicalKey, ToolError> {
     let trimmed = text.strip_prefix('@').unwrap_or(text);
     let trimmed = trimmed.split_once('/').map_or(trimmed, |(key, _)| key);
-    akr_core::model::LogicalKey::parse(trimmed)
-        .map_err(|e| ToolError::new("AKR-C004", format!("{text:?} is not a key: {e}")))
+    akr_core::model::LogicalKey::parse(trimmed).map_err(|e| {
+        ToolError::new(
+            "AKR-C004",
+            format!(
+                "{text:?} is not a key: {e}; keys are dot-delimited — \
+                 namespace.topic.slug — and the first segment must be a namespace \
+                 declared in .akr/project.akr"
+            ),
+        )
+    })
 }
 
 fn required_str<'a>(arguments: &'a Value, name: &str) -> Result<&'a str, ToolError> {

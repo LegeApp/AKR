@@ -1,10 +1,9 @@
-//! The nine tool declarations of `docs/08-mcp.md` §2, with their JSON schemas.
+//! The tool declarations of `docs/08-mcp.md` §2, with their JSON schemas.
 //!
 //! The list is **closed for 0.1** — no `knowledge.query`, no `knowledge.build`, no
-//! `knowledge.delete`, no `knowledge.evidence_add`. §2 gives a reason for each absence and
-//! they are all the same reason: a tool is a contract, and every tool that exists is one
-//! an agent will lean on. The escape valve is `knowledge.search`, which returns records
-//! rather than rows (§6).
+//! `knowledge.delete`. §2 gives a reason for each absence and they are all the same
+//! reason: a tool is a contract, and every tool that exists is one an agent will lean on.
+//! The escape valve is `knowledge.search`, which returns records rather than rows (§6).
 
 use akr_core::json::Value;
 
@@ -74,7 +73,18 @@ pub const TOOLS: &[Tool] = &[
     Tool {
         name: "knowledge.complete",
         description: "Move a milestone or work record to completed. Every acceptance check \
-                      must be satisfied by passing evidence.",
+                      must be satisfied by passing evidence — create it first with \
+                      knowledge.evidence_add, then cite it here as a D-009 reference, e.g. \
+                      {\"checks\": {\"no-placeholder-assets\": \
+                      \"@sys.evidence.asset-audit/1\"}}.",
+        writes: true,
+    },
+    Tool {
+        name: "knowledge.evidence_add",
+        description: "Record what was observed: result, method, and the commit it was \
+                      observed at (defaults to HEAD). Deliberately has no field for what \
+                      the evidence verifies (D-016) — cite it from a check's verified_by \
+                      or from knowledge.complete.",
         writes: true,
     },
 ];
@@ -147,8 +157,14 @@ pub fn input_schema(name: &str) -> Option<Value> {
         ),
         "knowledge.propose" => object(
             vec![
-                ("key", string("The new logical key.")),
-                ("kind", string("The record kind.")),
+                (
+                    "key",
+                    string(
+                        "The new logical key, dot-delimited: namespace.topic.slug. The \
+                         first segment must be a namespace declared in .akr/project.akr.",
+                    ),
+                ),
+                ("kind", kind_schema()),
                 ("title", string("The one-line label.")),
                 ("state", string("Override the class's initial state.")),
                 ("scope", scope_schema()),
@@ -216,7 +232,12 @@ pub fn input_schema(name: &str) -> Option<Value> {
                         ("type", Value::string("object")),
                         (
                             "description",
-                            Value::string("check id -> evidence reference."),
+                            Value::string(
+                                "check id -> evidence reference, in a D-009 form: \
+                                 {\"no-placeholder-assets\": \
+                                 \"@sys.evidence.asset-audit/1\"}. Create the evidence \
+                                 with knowledge.evidence_add first.",
+                            ),
                         ),
                         (
                             "additionalProperties",
@@ -227,9 +248,91 @@ pub fn input_schema(name: &str) -> Option<Value> {
             ],
             &["key"],
         ),
+        "knowledge.evidence_add" => object(
+            vec![
+                (
+                    "key",
+                    string(
+                        "The new evidence key, dot-delimited: namespace.topic.slug, e.g. \
+                         sys.evidence.asset-audit.",
+                    ),
+                ),
+                (
+                    "result",
+                    enumeration(
+                        "What was observed.",
+                        &["pass", "fail", "inconclusive"],
+                    ),
+                ),
+                (
+                    "method",
+                    enumeration(
+                        "How it was observed.",
+                        &["manual", "command", "observation"],
+                    ),
+                ),
+                ("command", string("The exact command that was run, for method command.")),
+                ("artifact", string("A repository path to the artefact, if one exists.")),
+                ("summary", string("One line on what was observed.")),
+                (
+                    "observed_at",
+                    string(
+                        "The full 40-hex commit the observation was made at. Defaults to \
+                         HEAD.",
+                    ),
+                ),
+                ("title", string("The one-line label. Defaults to the summary or the key.")),
+            ],
+            &["key", "result", "method"],
+        ),
         _ => return None,
     };
     Some(schema)
+}
+
+/// `kind`: the closed enumeration of D-001, with each kind's required content slots in
+/// the description — generated from the same tables the type-checker reads, so an agent
+/// learns what a kind needs before the first `AKR-T001` rather than from it.
+fn kind_schema() -> Value {
+    let mut description = String::from("The record kind. Required slots per kind: ");
+    for (index, kind) in akr_core::model::Kind::ALL.iter().enumerate() {
+        if index > 0 {
+            description.push_str("; ");
+        }
+        let required: Vec<&str> = kind
+            .content_slots()
+            .iter()
+            .filter(|spec| spec.required)
+            .map(|spec| spec.slot.name())
+            .collect();
+        description.push_str(kind.name());
+        description.push_str(": ");
+        if required.is_empty() && !kind.requires_acceptance() {
+            description.push_str("(none)");
+        } else {
+            description.push_str(&required.join(", "));
+            if kind.requires_acceptance() {
+                if !required.is_empty() {
+                    description.push_str(", ");
+                }
+                description.push_str("acceptance (V-008)");
+            }
+        }
+    }
+    description.push('.');
+    Value::object(vec![
+        ("type", Value::string("string")),
+        ("description", Value::string(description)),
+        (
+            "enum",
+            Value::array(
+                akr_core::model::Kind::ALL
+                    .iter()
+                    .map(|kind| Value::string(kind.name()))
+                    .collect(),
+            ),
+        ),
+    ])
 }
 
 fn object(properties: Vec<(&str, Value)>, required: &[&str]) -> Value {

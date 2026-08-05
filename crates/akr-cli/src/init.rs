@@ -39,8 +39,10 @@ Durable project knowledge lives in `.akr/` as typed records, not in Markdown.
   edit a record that is not `proposed`.
 - Replacing a plan: `knowledge.supersede`, with a disposition for every unfinished
   child. The tool will list them; answer each one.
-- Finishing work: `knowledge.complete`, with evidence for every acceptance check.
-  Evidence records state what was observed; they never state what they verify.
+- Finishing work: record what you observed with `knowledge.evidence_add`, then
+  `knowledge.complete` with evidence for every acceptance check. Evidence records
+  state what was observed; they never state what they verify.
+- Unsure what a kind requires? `akr explain <kind>` prints its schema.
 
 **Never**
 - Never edit `docs/generated/` — it is regenerated and CI checks it.

@@ -414,5 +414,40 @@ fn no_tool_can_reach_the_sqlite_cache() {
         assert!(!schema.to_lowercase().contains("sqlite"), "{}", tool.name);
         assert!(!schema.to_lowercase().contains("select "), "{}", tool.name);
     }
-    assert_eq!(akr_mcp::schema::TOOLS.len(), 9);
+    assert_eq!(akr_mcp::schema::TOOLS.len(), 10);
+}
+
+#[test]
+fn evidence_add_creates_a_verified_record_with_head_as_default_commit() {
+    // Bug report item 4: closing out a milestone over MCP required shelling out to
+    // `akr evidence add`. The tool is the CLI command's twin: same request type, same
+    // write pipeline, and — deliberately — no field for what the evidence verifies
+    // (D-016).
+    let example = Example::materialise("mcp-evidence");
+    let arguments = r#"{
+        "key": "sys.evidence.asset-audit",
+        "result": "pass",
+        "method": "command",
+        "command": "cargo run -p tools -- audit-assets",
+        "summary": "Zero placeholder assets on the day-loop path."
+    }"#;
+    let (payload, is_error) = call(&example, "knowledge.evidence_add", arguments);
+    assert!(!is_error, "{}", error_text(&payload));
+    assert_eq!(payload.get("rev").and_then(Value::as_integer), Some(1));
+    // Empirical kinds have no proposal state: evidence lands `verified`.
+    assert_eq!(
+        payload.get("state").and_then(Value::as_str),
+        Some("verified"),
+        "{}",
+        error_text(&payload)
+    );
+    let source = example.read_file(".akr/records/sys/evidence.akr");
+    assert!(source.contains("sys.evidence.asset-audit/1"), "{source}");
+    assert!(source.contains("result pass"), "{source}");
+    // `observed_at` defaulted to HEAD — a real commit of the materialised repository.
+    assert!(source.contains("observed_at"), "{source}");
+
+    // Idempotent by key, like propose: a second add is an error, not a second record.
+    let (payload, is_error) = call(&example, "knowledge.evidence_add", arguments);
+    assert!(is_error, "{}", error_text(&payload));
 }

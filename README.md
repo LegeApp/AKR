@@ -3,9 +3,22 @@
 A versioned project-knowledge ledger for AI-agent-driven software projects, with a
 human-readable text serialization, a deterministic compiler, and generated views.
 
-**Status: design only.** This repository currently contains specifications, worked
-examples, and conformance fixtures. There is no implementation yet; the Rust
-workspace lands in phase P1 (see `docs/13-implementation-roadmap.md`).
+**Status: implemented through P8.** The Rust workspace under `crates/` delivers the
+semantic model and validator (P1), the lexer/parser/formatter (P2), the resolver (P3),
+the generated views (P4), git freshness and acceptance evidence (P5), the `akr` CLI and
+the MCP server (P6), full-text search over the index cache (P7), and migration tooling
+(`akr import`, P8). P9 — the human review interface — is not started. The
+specifications in `docs/` and `spec/` remain normative; the code implements them.
+
+## Quick start
+
+```
+cargo build --release            # builds akr (CLI) and akr-mcp (MCP server)
+cargo test                       # the conformance corpus is the spec, executable
+akr init                         # scaffold .akr/ in a project, append AGENTS.md protocol
+scripts/setup-akr-mcp.sh         # register the MCP server with Claude/Codex/OpenCode (Linux/macOS)
+scripts/setup-akr-mcp.ps1        # the same, on Windows
+```
 
 ## The problem
 
@@ -82,6 +95,15 @@ Specifications:
 | `examples/save-your-skin/` | Worked example: `.akr` sources, lock, generated views, transcripts | complete |
 | `fixtures/` | Parse, format, and validation conformance fixtures | complete |
 | `tools/check-design.py` | Design-set coherence checker | complete |
+
+Implementation:
+
+| Path | Contents |
+| --- | --- |
+| `crates/akr-core` | Model, syntax, validation, resolver, freshness, context assembly, index, views |
+| `crates/akr-cli` | The `akr` binary — and the library the MCP server reuses |
+| `crates/akr-mcp` | The `knowledge.*` MCP server over stdio |
+| `prompts/` | Prompts for drafting importable Markdown or raw `.akr` with an external LLM |
 
 ## Anti-goals
 

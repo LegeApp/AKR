@@ -68,6 +68,9 @@ impl Output {
 pub fn run_standalone(command: &Command) -> Option<Result<Output, EnvError>> {
     match command {
         Command::Help => Some(Ok(Output::text(crate::args::help()))),
+        Command::HelpFor { name } => Some(Ok(Output::text(
+            crate::args::help_for(name).unwrap_or_else(crate::args::help),
+        ))),
         Command::Version => Some(Ok(Output::text(format!("akr {TOOL_VERSION}\n")))),
         Command::Explain { subject } => Some(Ok(explain(subject))),
         Command::Init {
@@ -146,7 +149,11 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
         | Command::Complete { .. }
         | Command::Abandon { .. }
         | Command::EvidenceAdd { .. } => crate::write::run(session, command),
-        Command::Help | Command::Version | Command::Explain { .. } | Command::Init { .. } => {
+        Command::Help
+        | Command::HelpFor { .. }
+        | Command::Version
+        | Command::Explain { .. }
+        | Command::Init { .. } => {
             unreachable!("handled by run_standalone")
         }
     }
@@ -1773,9 +1780,14 @@ fn explain(subject: &str) -> Output {
         ]));
     }
 
+    if let Some(kind) = akr_core::model::Kind::from_name(&subject.to_lowercase()) {
+        return explain_kind(kind);
+    }
+
     Output {
         text: format!(
-            "error[AKR-C004]: {subject:?} is neither a registered diagnostic code nor a known rule\n"
+            "error[AKR-C004]: {subject:?} is neither a registered diagnostic code, a known \
+             rule, nor a record kind\n"
         ),
         result: Value::Object(Vec::new()),
         diagnostics: Vec::new(),
@@ -1783,6 +1795,77 @@ fn explain(subject: &str) -> Output {
         commit: None,
         source_graph: String::new(),
     }
+}
+
+/// The schema of one record kind: class, lifecycle, and slots, from the same tables the
+/// type-checker reads. This is how an author learns what a kind requires *before* the
+/// first `AKR-T001` rather than from it.
+fn explain_kind(kind: akr_core::model::Kind) -> Output {
+    let class = kind.class();
+    let mut text = format!("{} — a record kind\n", kind.name());
+    text.push_str(&format!("  class      {}\n", class.name()));
+    text.push_str(&format!(
+        "  lifecycle  {}   (initial: {})\n",
+        class
+            .states()
+            .iter()
+            .map(|s| s.name())
+            .collect::<Vec<_>>()
+            .join(", "),
+        class
+            .initial()
+            .iter()
+            .map(|s| s.name())
+            .collect::<Vec<_>>()
+            .join(", "),
+    ));
+
+    let (required, optional): (Vec<_>, Vec<_>) =
+        kind.content_slots().iter().partition(|spec| spec.required);
+    let names = |specs: &[&akr_core::model::ContentSlotSpec]| {
+        specs
+            .iter()
+            .map(|spec| spec.slot.name().to_owned())
+            .collect::<Vec<_>>()
+    };
+    let required = names(&required);
+    let mut optional = names(&optional);
+    text.push_str(&format!(
+        "  required   {}{}\n",
+        if required.is_empty() {
+            "(no kind-specific slots)".to_owned()
+        } else {
+            required.join(", ")
+        },
+        if kind.requires_acceptance() {
+            " — plus a non-empty acceptance block (V-008)"
+        } else {
+            ""
+        },
+    ));
+    if kind.allows_acceptance() && !kind.requires_acceptance() {
+        optional.push("acceptance".to_owned());
+    }
+    if !optional.is_empty() {
+        text.push_str(&format!("  optional   {}\n", optional.join(", ")));
+    }
+    if class.scope_required() {
+        text.push_str("  scope      required; `topic` marks normative exclusivity (D-004b)\n");
+    }
+    text.push_str("  reference  docs/02-data-model.md; spec/tables/vocabulary.json\n");
+
+    Output::text(text).with_result(Value::object(vec![
+        ("kind", Value::string(kind.name())),
+        ("class", Value::string(class.name())),
+        (
+            "required_slots",
+            Value::array(required.into_iter().map(Value::string).collect()),
+        ),
+        (
+            "optional_slots",
+            Value::array(optional.into_iter().map(Value::string).collect()),
+        ),
+    ]))
 }
 
 /// Turns a session's diagnostics into JSON, for the envelope.

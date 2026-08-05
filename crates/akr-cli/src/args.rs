@@ -75,6 +75,11 @@ pub struct Invocation {
 pub enum Command {
     /// Print help and exit 0.
     Help,
+    /// Print one command's help and exit 0: `akr <command> --help`.
+    HelpFor {
+        /// The command whose help was asked for.
+        name: String,
+    },
     /// Print the version and exit 0.
     Version,
     /// Scaffold a workspace.
@@ -256,6 +261,7 @@ impl Command {
     pub fn name(&self) -> String {
         match self {
             Self::Help => "help".to_owned(),
+            Self::HelpFor { .. } => "help".to_owned(),
             Self::Version => "version".to_owned(),
             Self::Init { .. } => "init".to_owned(),
             Self::Fmt { .. } => "fmt".to_owned(),
@@ -364,7 +370,22 @@ pub fn parse(argv: &[String]) -> Result<Invocation, UsageError> {
             continue;
         }
         match arg.as_str() {
-            "--help" | "-h" => return ok(global, Command::Help),
+            "--help" | "-h" => {
+                // `akr propose --help` answers for `propose`, not with the top-level
+                // list — every flag requirement should be one round trip away.
+                if let Some(name) = rest.first() {
+                    if help_for(name).is_none() {
+                        let mut error =
+                            UsageError::new("AKR-C001", format!("unknown command {name:?}"));
+                        if let Some(nearest) = nearest(name) {
+                            error = error.with_help(format!("did you mean `akr {nearest}`?"));
+                        }
+                        return Err(error);
+                    }
+                    return ok(global, Command::HelpFor { name: name.clone() });
+                }
+                return ok(global, Command::Help);
+            }
             "--version" | "-V" => return ok(global, Command::Version),
             "--dir" => global.dir = PathBuf::from(value(&mut args, "--dir")?),
             "--strict" => {
@@ -525,7 +546,7 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
         "explain" => {
             known_flags(&[])?;
             Command::Explain {
-                subject: need(0, "a diagnostic code or rule identifier")?,
+                subject: need(0, "a diagnostic code, rule identifier or record kind")?,
             }
         }
         "why-current" => {
@@ -776,6 +797,237 @@ fn distance(a: &str, b: &str) -> usize {
     previous[b.len()]
 }
 
+/// One command's `--help` text, or `None` for a name that is not a command.
+///
+/// Wording is drawn from `docs/07-cli.md` §6, compressed to what an author mid-command
+/// needs: the usage line, what the command does, every flag, and the mistakes the
+/// diagnostics most often see.
+#[must_use]
+#[allow(clippy::too_many_lines)]
+pub fn help_for(name: &str) -> Option<String> {
+    let text = match name {
+        "init" => {
+            "akr init [--project <name>] [--namespace <name> ...]\n\
+             \n\
+             Scaffolds a workspace: .akr/project.akr, .akr/records/, .akr/archive/, an\n\
+             AGENTS.md protocol section, and .gitignore entries. Never overwrites an\n\
+             existing .akr/ (AKR-C013).\n\
+             \n\
+             FLAGS\n\
+             \x20   --project <name>      the project name, in key-segment form\n\
+             \x20   --namespace <name>    a declared namespace; repeatable\n"
+        }
+        "fmt" => {
+            "akr fmt [--check] [<path> ...]\n\
+             \n\
+             Parses each .akr file and re-emits it canonically (D-012). With no paths,\n\
+             the whole workspace including akr.lock.\n\
+             \n\
+             FLAGS\n\
+             \x20   --check    write nothing; report differences as AKR-F diagnostics, exit 1\n"
+        }
+        "check" => {
+            "akr check [--review-clean] [--views-current]\n\
+             \n\
+             Runs stages A-D and reports every diagnostic. The command CI runs.\n\
+             Staleness never changes the exit code (D-024).\n\
+             \n\
+             FLAGS\n\
+             \x20   --review-clean     also fail when the review queue is non-empty (AKR-G041)\n\
+             \x20   --views-current    also render stage F in memory and diff the committed\n\
+             \x20                      views (AKR-E011..E014) — the D-025 gate\n"
+        }
+        "build" => {
+            "akr build\n\
+             \n\
+             Runs stages A-F: everything `akr check` does, then the index cache, the\n\
+             generated views, and akr.lock. Only files whose bytes change are rewritten.\n\
+             Nothing is written when any diagnostic is raised.\n"
+        }
+        "view" => {
+            "akr view <name>\n\
+             \n\
+             Renders one view to stdout without writing it. Names, case-insensitive,\n\
+             with or without .md: roadmap, current-state, active-work, review-required,\n\
+             open-questions, decision-history.\n"
+        }
+        "get" => {
+            "akr get <ref> [--history] [--relations]\n\
+             \n\
+             Retrieves one record. <ref> is any of the four D-009 forms: @key (head),\n\
+             @key/2 (pinned), @key#anchor, @key/2#anchor. The @ is optional here.\n\
+             \n\
+             FLAGS\n\
+             \x20   --history      list every revision with state and supersession edges\n\
+             \x20   --relations    include inbound edges, invisible in the source text\n"
+        }
+        "search" => {
+            "akr search <query> [--kind <kind> ...] [--state <state> ...] [--limit <n>]\n\
+             \n\
+             Full-text search over live revisions, BM25-ranked. Filters apply before\n\
+             ranking. Search ranks; it never authorises.\n\
+             \n\
+             FLAGS\n\
+             \x20   --kind <kind>      restrict to a kind; repeatable\n\
+             \x20   --state <state>    restrict to a state; repeatable\n\
+             \x20   --limit <n>        maximum results\n"
+        }
+        "context" => {
+            "akr context --goal <key> [--paths <glob> ...] [--budget <tokens>]\n\
+             \n\
+             Assembles the deterministic context bundle an agent reads before working.\n\
+             \n\
+             FLAGS\n\
+             \x20   --goal <key>        required; a live milestone, work or track record\n\
+             \x20   --paths <glob>      path globs the work will touch; repeatable\n\
+             \x20   --budget <tokens>   approximate token ceiling for the bundle\n"
+        }
+        "impact" => {
+            "akr impact <ref> | --git-diff <A>..<B> [--depth <n>]\n\
+             \n\
+             Record mode reports what rests on a record (reverse closure along\n\
+             supported_by, depends_on, derived_from). Git mode reports what a commit\n\
+             range makes stale. The tool to call before proposing a supersession.\n\
+             \n\
+             FLAGS\n\
+             \x20   --git-diff <A>..<B>   full 40-hex commits on both ends\n\
+             \x20   --depth <n>           maximum propagation depth\n"
+        }
+        "why-current" => {
+            "akr why-current <ref>\n\
+             \n\
+             Explains a head resolution and a freshness verdict: the supersession chain,\n\
+             the lock entry, and the propagation path when the record is at risk.\n"
+        }
+        "explain" => {
+            "akr explain <code> | <rule> | <kind>\n\
+             \n\
+             Prints the registry entry for a diagnostic code (akr explain AKR-R014), the\n\
+             catalogue entry for a validation rule (akr explain V-017), or the schema of\n\
+             a record kind (akr explain milestone): class, lifecycle, required and\n\
+             optional slots. Needs no workspace.\n"
+        }
+        "review-queue" => {
+            "akr review-queue [--stale-only] [--at-risk-only] [--kind <kind> ...]\n\
+             \n\
+             Lists stale records with their cause, then at-risk records by propagation\n\
+             depth. Exit 0 regardless of queue length; a non-empty queue is healthy.\n\
+             \n\
+             FLAGS\n\
+             \x20   --stale-only      only stale records\n\
+             \x20   --at-risk-only    only at-risk records\n\
+             \x20   --kind <kind>     restrict to a kind; repeatable\n"
+        }
+        "lock" => {
+            "akr lock [--check] [--update]\n\
+             \n\
+             --check reports drift between akr.lock and the current build without\n\
+             writing (AKR-R051, AKR-R052). --update rewrites the lock, which is also\n\
+             what `akr build` does at its end.\n"
+        }
+        "import" => {
+            "akr import <path> [--namespace <ns>] [--tracking <key>] [--dry-run]\n\
+             \n\
+             Reads a legacy Markdown document, proposes one record per durable claim\n\
+             with a verbatim source excerpt, and maintains a tracking work record whose\n\
+             checks enumerate the claims (D-022). Combine with --lenient for legacy\n\
+             material that raises warnings.\n\
+             \n\
+             FLAGS\n\
+             \x20   --namespace <ns>    namespace for proposed keys; defaults to the\n\
+             \x20                       document's first path segment\n\
+             \x20   --tracking <key>    the tracking work record; created if absent\n\
+             \x20   --dry-run           print what would be written, write nothing\n"
+        }
+        "propose" => {
+            "akr propose <key> --kind <kind> [--title <text>] [--from <file>] [--edit]\n\
+             \n\
+             Creates revision 1 of a new key in its class's initial state. An existing\n\
+             key is an error: use `akr revise`.\n\
+             \n\
+             <key> is dot-delimited: namespace.topic.slug — the first segment must be a\n\
+             namespace declared in .akr/project.akr.\n\
+             \n\
+             A body source is effectively mandatory: every kind requires its prose slot\n\
+             (definition, statement, intent, rule ...), so a propose with neither --from\n\
+             nor --edit is refused before anything reaches the disk. Run\n\
+             `akr explain <kind>` for the kind's required slots.\n\
+             \n\
+             FLAGS\n\
+             \x20   --kind <kind>     required; one of the twelve kinds\n\
+             \x20   --title <text>    the one-line label\n\
+             \x20   --from <file>     a file holding the record body\n\
+             \x20   --edit            open $EDITOR on a template\n"
+        }
+        "revise" => {
+            "akr revise <key> [--from <file>] [--edit] [--state <state>] [--title <text>]\n\
+             \x20          [--in-place] [--disposition <child>=<outcome>[:<into>] ...]\n\
+             \n\
+             Creates revision n+1 by copying the head and applying edits; a sealed old\n\
+             head is retired in the same atomic write. A proposed head is edited in\n\
+             place instead. Revising a sealed planning head demands a disposition for\n\
+             every unfinished part_of child, exactly as supersede does (D-017).\n\
+             \n\
+             FLAGS\n\
+             \x20   --from <file>     a file holding the replacement body\n\
+             \x20   --edit            open $EDITOR on the head\n\
+             \x20   --state <state>   move along the class's lifecycle\n\
+             \x20   --title <text>    replace the title\n\
+             \x20   --in-place        force the in-place path; AKR-C032 on a sealed head\n\
+             \x20   --disposition     <child>=<outcome>[:<into>]; repeatable\n"
+        }
+        "supersede" => {
+            "akr supersede <old-key> --with <new-key>\n\
+             \x20             [--disposition <child>=<outcome>[:<into>] ...]\n\
+             \n\
+             Creates or updates the superseding record, moves the old head to\n\
+             `superseded`, and requires a disposition for every unfinished part_of\n\
+             child of a planning record (D-017). The error lists the children it\n\
+             needs; answer each one.\n\
+             \n\
+             Outcomes: completed, carried_forward (with :<into>), intentionally_dropped,\n\
+             obsolete.\n"
+        }
+        "complete" => {
+            "akr complete <key> [--check <id>=<evidence-ref> ...]\n\
+             \n\
+             Moves a milestone or work record to `completed`. Every acceptance check\n\
+             must be satisfied by evidence with result pass observed after the record\n\
+             last changed (D-016). Evidence references are D-009 forms:\n\
+             --check no-placeholder-assets=@sys.evidence.asset-audit/1\n\
+             \n\
+             Completing a milestone requires its plan of record to be retired first\n\
+             (V-019): complete or abandon the plan, then complete the milestone.\n"
+        }
+        "abandon" => {
+            "akr abandon <key> --reason <text>\n\
+             \x20           [--disposition <child>=<outcome>[:<into>] ...]\n\
+             \n\
+             Moves a planning record to `abandoned`. Requires --reason, which lands in\n\
+             the durable note slot and is rendered by the views, and a disposition for\n\
+             every unfinished child, like supersede.\n"
+        }
+        "evidence" | "evidence add" => {
+            "akr evidence add <key> --result pass|fail|inconclusive\n\
+             \x20                   --method manual|command|observation\n\
+             \x20                   [--command <text>] [--artifact <path>]\n\
+             \x20                   [--summary <text>] [--observed-at <commit>]\n\
+             \n\
+             Creates an evidence record. --observed-at defaults to HEAD and must be a\n\
+             full 40-hex commit in the repository.\n\
+             \n\
+             There is deliberately no flag for what the evidence verifies (D-016): the\n\
+             link is authored on the check (verified_by [ @key/n ]) or supplied to\n\
+             `akr complete --check <id>=@key/n`.\n"
+        }
+        _ => return None,
+    };
+    Some(format!(
+        "{text}\nGLOBAL FLAGS are listed by `akr --help`; they are accepted before or \
+         after the command.\n"
+    ))
+}
+
 /// The `--help` text.
 #[must_use]
 pub fn help() -> String {
@@ -815,7 +1067,7 @@ pub fn help() -> String {
             "why-current",
             "explain a head resolution and a freshness verdict",
         ),
-        ("explain", "print a registry entry for a code or a rule"),
+        ("explain", "print a code, rule, or record-kind schema"),
         ("review-queue", "list the stale and at-risk records"),
         ("import", "draft proposed records from a legacy document"),
         ("lock", "verify or rewrite akr.lock"),

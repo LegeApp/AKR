@@ -1,6 +1,6 @@
 # 08 — The MCP Tool Surface
 
-How an agent reaches the ledger: nine tools, their input and output schemas, how
+How an agent reaches the ledger: ten tools, their input and output schemas, how
 diagnostics become tool errors, why reads and writes are separated, what idempotency
 means here, and the `AGENTS.md` text that makes agents use any of it.
 
@@ -48,8 +48,9 @@ guessing where the message was meant to end.
 | `knowledge.revise` | write | `akr revise` | no |
 | `knowledge.supersede` | write | `akr supersede` | no |
 | `knowledge.complete` | write | `akr complete` | by state |
+| `knowledge.evidence_add` | write | `akr evidence add` | by key |
 
-Nine tools, and the list is closed for 0.1. Notably absent:
+Ten tools, and the list is closed for 0.1. Notably absent:
 
 - **No `knowledge.query`.** No arbitrary query language, and above all no SQL. Agents
   never see the SQLite cache (§6).
@@ -57,9 +58,13 @@ Nine tools, and the list is closed for 0.1. Notably absent:
   a human or by CI, not by an agent mid-task.
 - **No `knowledge.delete`.** Nothing deletes knowledge (`01-architecture.md` §9). The
   terminal-state transitions are reached through `revise` and `supersede`.
-- **No `knowledge.evidence_add`.** Evidence is created with `knowledge.propose` using
-  `kind: "evidence"`, for the reason given in `07-cli.md` under `akr evidence add`: no
-  API affordance should exist for evidence to declare what it verifies (D-016).
+
+`knowledge.evidence_add` earns its place for the same reason `akr evidence add` does:
+an evidence record has required slots a blank template cannot invent, and the first
+agent to close out a milestone over MCP had to shell out to the CLI for exactly this
+step. Like the command, the tool deliberately has **no field for what the evidence
+verifies** (D-016) — the link is authored on the check (`verified_by`) or supplied to
+`knowledge.complete`.
 
 ## 3. Read tools
 
@@ -281,6 +286,23 @@ answering easy and skipping impossible.
 Fails with `AKR-R022` naming each unsatisfied check, including whether the failure was
 "no passing evidence" or "evidence predates the last content change" (D-016).
 
+### `knowledge.evidence_add`
+
+```jsonc
+{ "key": "sys.evidence.asset-audit",
+  "result": "pass",                       // pass | fail | inconclusive
+  "method": "command",                    // manual | command | observation
+  "command": "cargo run -p tools -- audit-assets",
+  "summary": "Zero placeholder assets on the day-loop path",
+  "observed_at": "e806b3f54a2d7091c5e13b8a26f490dc7b135e64" }  // defaults to HEAD
+```
+
+Creates an `evidence` record, exactly as `akr evidence add` does. There is no field for
+what the evidence verifies, and that absence is the tool doing its job (D-016): the
+check names its evidence in `verified_by`, or `knowledge.complete` supplies the link —
+one direction, one source of truth. The typical closing sequence is `evidence_add`,
+then `complete` with `checks` citing the returned revision.
+
 ## 5. Error mapping
 
 Every failure is an MCP tool error whose payload is the JSON diagnostic array of
@@ -391,8 +413,9 @@ Durable project knowledge lives in `.akr/` as typed records, not in Markdown.
   edit a record that is not `proposed`.
 - Replacing a plan: `knowledge.supersede`, with a disposition for every unfinished
   child. The tool will list them; answer each one.
-- Finishing work: `knowledge.complete`, with evidence for every acceptance check.
-  Evidence records state what was observed; they never state what they verify.
+- Finishing work: record what you observed with `knowledge.evidence_add`, then
+  `knowledge.complete` with evidence for every acceptance check. Evidence records
+  state what was observed; they never state what they verify.
 
 **Never**
 - Never edit `docs/generated/` — it is regenerated and CI checks it.

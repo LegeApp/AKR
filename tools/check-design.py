@@ -469,7 +469,8 @@ def check_manifest():
         if len(live_revs) > 1:
             fail("manifest", "%s: %d live revisions (V-012)" % (key, len(live_revs)))
         for path in sorted(files.get(key, ())):
-            if not path.endswith(filename):
+            # Windows walks yield backslash paths; MANIFEST names are always /-separated.
+            if not path.replace("\\", "/").endswith(filename):
                 fail("manifest", "%s: MANIFEST says %s, corpus has %s"
                      % (key, filename, path))
         if len(files.get(key, ())) > 1:
