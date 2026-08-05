@@ -83,6 +83,14 @@ pub fn to_source(
             out.push_str("    }\n");
         }
     }
+    if let Some(Value::Array(checks)) = payload.get("acceptance") {
+        out.push_str("    acceptance {\n");
+        for check in checks {
+            out.push_str(&check_block(check)?);
+        }
+        out.push_str("    }\n");
+    }
+
     if let Some(Value::Array(retired)) = payload.get("retired_claims") {
         let anchors: Vec<String> = retired
             .iter()
@@ -221,6 +229,41 @@ fn slot_line(slot: ContentSlot, value: &Value) -> Result<String, ToolError> {
         }
     };
     Ok(format!("    {name} {rendered}\n"))
+}
+
+/// One `    check <id> { ... }` block, for the `acceptance` array (D-016).
+///
+/// This is the milestone gap the CLI's `--from` workaround exists for: `knowledge.propose`
+/// had no way to author an acceptance block, so a milestone (V-008 requires one) could not
+/// be created over MCP at all.
+fn check_block(value: &Value) -> Result<String, ToolError> {
+    let id = value
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ToolError::new("AKR-C004", "each acceptance check needs an `id`"))?;
+    let statement = value
+        .get("statement")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ToolError::new("AKR-C004", "each acceptance check needs a `statement`"))?;
+    let method = value
+        .get("method")
+        .and_then(Value::as_str)
+        .ok_or_else(|| ToolError::new("AKR-C004", "each acceptance check needs a `method`"))?;
+
+    let mut out = format!("        check {id} {{\n");
+    out.push_str(&format!("            statement {}\n", prose(statement, 12)));
+    out.push_str(&format!("            method {method}\n"));
+    if let Some(command) = value.get("command").and_then(Value::as_str) {
+        out.push_str(&format!("            command {}\n", quote(command)));
+    }
+    if let Some(Value::Array(refs)) = value.get("verified_by") {
+        let items: Vec<String> = refs.iter().filter_map(Value::as_str).map(reference).collect();
+        if !items.is_empty() {
+            out.push_str(&format!("            verified_by [ {} ]\n", items.join(", ")));
+        }
+    }
+    out.push_str("        }\n");
+    Ok(out)
 }
 
 fn string(value: &Value, slot: &str) -> Result<String, ToolError> {

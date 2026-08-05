@@ -213,6 +213,19 @@ completely rather than partially. A rejected write leaves the working tree byte-
 Creates revision 1 of a **new** key, in its class's initial state. An existing key is an
 error — the tool will not silently turn a proposal into a revision.
 
+A milestone requires a non-empty `acceptance` block to exist at all (V-008), so
+`knowledge.propose` accepts one directly — an array of `{id, statement, method, command?,
+verified_by?}`, one entry per check:
+
+```jsonc
+{ "key": "product.milestone.m2", "kind": "milestone", "title": "M2: …",
+  "acceptance": [
+    { "id": "full-day-demo", "statement": "…", "method": "manual" } ] }
+```
+
+`knowledge.revise` accepts the same field to replace a record's acceptance block; omit it
+to keep the head's checks.
+
 All four writes return this payload, and three of its fields describe the write rather
 than the request:
 

@@ -23,7 +23,9 @@ pub const TOOLS: &[Tool] = &[
     Tool {
         name: "knowledge.search",
         description: "Search the ledger. Ranks; never authorises — nothing enters a context \
-                      bundle because it matched a query.",
+                      bundle because it matched a query. Right after a write, the index may \
+                      be stale and rebuilding is disabled for this tool; a human runs `akr \
+                      build` between the write and the next search.",
         writes: false,
     },
     Tool {
@@ -53,7 +55,8 @@ pub const TOOLS: &[Tool] = &[
     Tool {
         name: "knowledge.propose",
         description: "Create revision 1 of a new key. An existing key is an error: a \
-                      proposal is never silently turned into a revision.",
+                      proposal is never silently turned into a revision. Pass `acceptance` \
+                      to author its checks — required for a milestone (V-008).",
         writes: true,
     },
     Tool {
@@ -156,6 +159,10 @@ pub fn input_schema(name: &str) -> Option<Value> {
                 ("slots", slots_schema()),
                 ("claims", claims_schema()),
                 ("relations", relations_schema()),
+                (
+                    "acceptance",
+                    acceptance_schema("Required to propose a milestone (V-008)."),
+                ),
             ],
             &["key", "kind", "title"],
         ),
@@ -172,6 +179,12 @@ pub fn input_schema(name: &str) -> Option<Value> {
                     string_array("Anchors this revision drops (D-011)."),
                 ),
                 ("relations", relations_schema()),
+                (
+                    "acceptance",
+                    acceptance_schema(
+                        "Replaces the acceptance block. Omit to keep the head's checks.",
+                    ),
+                ),
                 (
                     "base_rev",
                     integer(
@@ -338,6 +351,35 @@ fn relations_schema() -> Value {
             Value::string("relation name -> array of references."),
         ),
         ("additionalProperties", string_array("References.")),
+    ])
+}
+
+/// `acceptance`: the checks a milestone or work record must satisfy to complete (D-016).
+/// Milestones require a non-empty acceptance block to exist at all (V-008), so this is
+/// what lets `knowledge.propose` create one instead of forcing `akr propose --from`.
+fn acceptance_schema(description: &str) -> Value {
+    Value::object(vec![
+        ("type", Value::string("array")),
+        ("description", Value::string(description)),
+        (
+            "items",
+            object(
+                vec![
+                    ("id", string("The check identifier, unique within the record.")),
+                    ("statement", string("The observable outcome.")),
+                    (
+                        "method",
+                        string("manual, command or observation."),
+                    ),
+                    ("command", string("The exact command, for method command.")),
+                    (
+                        "verified_by",
+                        string_array("Evidence references that already satisfy this check."),
+                    ),
+                ],
+                &["id", "statement", "method"],
+            ),
+        ),
     ])
 }
 

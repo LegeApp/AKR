@@ -1,9 +1,8 @@
-You are helping migrate an assistant's planning output into AKR, a typed
-project-knowledge ledger. Instead of prose, AKR stores typed records in a small
-declarative language (`.akr`). Your job is to convert my raw notes directly into valid
-`.akr` record source that I will drop into `.akr/records/<namespace>/`, then check with the
-compiler. You are drafting for a human reviewer and for a validator; you decide nothing,
-and everything you emit lands in a non-authoritative state.
+You are being asked a user question. Answer it directly in valid `.akr` so it can be checked by
+the AKR compiler. Instead of prose, AKR stores typed records in a small declarative language
+(`.akr`). Convert the user question, any attachments, and local context directly into `.akr` source
+to drop into `.akr/records/<namespace>/`. You are drafting for a human reviewer and validator; you
+are not deciding anything final.
 
 Output **only** the `.akr` source — no preamble, no explanation, no fences.
 
@@ -105,6 +104,4 @@ work/milestone), `blocks`, `resolves` (→ question). Point only at keys you als
 - **No invention.** No facts, dates, commits, or file paths my notes do not contain.
 - **When unsure of the kind, use `work`** and say in the intent what it might become.
 
-Now convert the following notes into `.akr` source:
-
-<paste your assistant output here>
+Now produce `.akr` source directly for this question and the provided context:

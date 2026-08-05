@@ -630,10 +630,47 @@ fn merged(arguments: &Value, head: &akr_core::model::Record) -> Value {
             ),
         ));
     }
-    for name in ["claims", "retired_claims", "author", "created_at"] {
+    for name in ["claims", "retired_claims", "author", "created_at", "acceptance"] {
         if let Some(value) = arguments.get(name) {
             fields.push((name.to_owned(), value.clone()));
         }
+    }
+    if let Some(acceptance) = &head.acceptance
+        && arguments.get("acceptance").is_none()
+        && !acceptance.checks.is_empty()
+    {
+        fields.push((
+            "acceptance".to_owned(),
+            Value::array(
+                acceptance
+                    .checks
+                    .iter()
+                    .map(|check| {
+                        let mut check_fields = vec![
+                            ("id", Value::string(check.id.to_string())),
+                            ("statement", Value::string(check.statement.clone())),
+                            ("method", Value::string(check.method.name())),
+                        ];
+                        if let Some(command) = &check.command {
+                            check_fields.push(("command", Value::string(command.clone())));
+                        }
+                        if !check.verified_by.is_empty() {
+                            check_fields.push((
+                                "verified_by",
+                                Value::array(
+                                    check
+                                        .verified_by
+                                        .iter()
+                                        .map(|r| Value::string(r.to_string()))
+                                        .collect(),
+                                ),
+                            ));
+                        }
+                        Value::object(check_fields)
+                    })
+                    .collect(),
+            ),
+        ));
     }
     if arguments.get("claims").is_none() && !head.claims.is_empty() {
         fields.push((

@@ -134,6 +134,31 @@ fn propose_creates_a_record_and_refuses_the_same_key_twice() {
 }
 
 #[test]
+fn propose_can_create_a_milestone_with_an_acceptance_block() {
+    // V-008 requires a milestone to carry a non-empty `acceptance` block from the moment
+    // it exists, and `knowledge.propose` had no field for one — the only way to author a
+    // milestone was `akr propose --from` with a hand-written record body. This is the fix:
+    // an agent should be able to do the whole thing over MCP.
+    let example = Example::materialise("mcp-propose");
+    let arguments = r#"{
+        "key": "sys.milestone.m2",
+        "kind": "milestone",
+        "title": "M2",
+        "slots": { "intent": "Ship the second milestone." },
+        "acceptance": [
+            { "id": "full-day-demo", "statement": "A full day loop runs end to end.",
+              "method": "manual" }
+        ]
+    }"#;
+    let (payload, is_error) = call(&example, "knowledge.propose", arguments);
+    assert!(!is_error, "{}", error_text(&payload));
+    assert_eq!(payload.get("rev").and_then(Value::as_integer), Some(1));
+    let source = example.read_file(".akr/records/sys/milestones.akr");
+    assert!(source.contains("acceptance {"), "{source}");
+    assert!(source.contains("check full-day-demo"), "{source}");
+}
+
+#[test]
 fn a_malformed_payload_is_a_schema_error_and_writes_nothing() {
     let example = Example::materialise("mcp-schema");
     let before = example.sources();
