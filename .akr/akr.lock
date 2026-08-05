@@ -1,0 +1,70 @@
+akr-lock 0.1
+project akr
+
+build {
+    tool "akr 0.1.0"
+    grammar "0.1"
+    vocabulary "0.1"
+    commit git:30579aeb4960ca7b4de2659953ce0694541bfa96
+    source_graph "sha256:a482a360a14f9a15a767fba1fce9428a3c150b758f86eeab9a97b2f99ca6de16"
+}
+
+source ".akr/project.akr" {
+    hash "sha256:45de78bc3edc2ee5cf00c83e24c72dcd46bafca91cd2c8f96ccf964628eb7078"
+    records 0
+}
+
+source ".akr/records/akr/evidence.akr" {
+    hash "sha256:8702dabc10402b6167067492d923fee5827ca788223771e16b4e335a1d2a459d"
+    records 3
+}
+
+source ".akr/records/akr/papercuts.akr" {
+    hash "sha256:3409391e402b311b7cbb3be38d2eac8c07340a98eb9c909b36a7650eb91a4259"
+    records 4
+}
+
+source ".akr/records/akr/work.akr" {
+    hash "sha256:e5b3d2bdc6ee2ea102a039d852de9ab5769f338d7433e04ad53667ac8f53940a"
+    records 1
+}
+
+seal @akr.evidence.fmt-clean/1 {
+    state verified
+    hash "sha256:d50b14e471eaad51531288be9279dcd1dd1dc305d31f4c5b6f796f2e7e8dd735"
+}
+
+seal @akr.evidence.mcp-help-parity/1 {
+    state verified
+    hash "sha256:39662a5cdd4cad122fa7e75e9b759ab8cba1d49b83518613806e5a804ba1f29f"
+}
+
+seal @akr.evidence.search-stale-warning/1 {
+    state verified
+    hash "sha256:7b554238825972436b05387c7a0eb3cc3f78fd703e3464c47fe242c21b4e6a56"
+}
+
+seal @akr.papercut.calling-the-knowledge-papercut-mcp-tool/1 {
+    state verified
+    hash "sha256:403655d45da62f0bc0483e12eb2e5bd69b71ddf56e826e4b0e840487ecdf4b32"
+}
+
+seal @akr.papercut.cargo-fmt-check-fails-on-the-committed-tree/1 {
+    state verified
+    hash "sha256:f664184b56b7cc3cbcc71b18c54dca3acfc21b0797acf7074dce53611d9dc460"
+}
+
+seal @akr.papercut.root-cause-of-the-discoverability-miss-the-cli/1 {
+    state verified
+    hash "sha256:3df9020ccaf0c3b5bba4beb1acd86b228f910d068788b3c09bd75c92160fe116"
+}
+
+seal @akr.papercut.the-akr-mcp-knowledge-tools-failed-with-akr/1 {
+    state verified
+    hash "sha256:1d38039f00047d9cce03276aa70e65a4d06fdc52449b32db962cfb471b44b35c"
+}
+
+seal @akr.work.mcp-help-and-format-cleanup/1 {
+    state completed
+    hash "sha256:6ec3f8025071b815645417cb0c92fe2c9e8b56a16603386f2e9fd91242665063"
+}

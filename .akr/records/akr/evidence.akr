@@ -1,0 +1,41 @@
+akr 0.1
+project akr
+
+record akr.evidence.fmt-clean/1 : evidence {
+    title "cargo fmt --all --check exits 0 across the whole workspace"
+    state verified
+    result pass
+    method command
+    observed_at git:30579aeb4960ca7b4de2659953ce0694541bfa96
+    command "cargo fmt --all -- --check"
+    summary """
+        cargo fmt --all --check exits 0 across the whole workspace
+        """
+    author "GitHub Uploader"
+}
+
+record akr.evidence.mcp-help-parity/1 : evidence {
+    title "AKR-C011 help 'run akr init' now reaches both the CLI JSON envelope and the MCP error payload identically"
+    state verified
+    result pass
+    method command
+    observed_at git:30579aeb4960ca7b4de2659953ce0694541bfa96
+    command "cargo test -p akr-mcp --features fts5 --test differential an_uninitialised_workspace_carries_the_remedy_on_both_surfaces"
+    summary """
+        AKR-C011 help 'run akr init' now reaches both the CLI JSON envelope and the MCP error payload identically
+        """
+    author "GitHub Uploader"
+}
+
+record akr.evidence.search-stale-warning/1 : evidence {
+    title "akr search flags a stale index after a write instead of silently returning old rows"
+    state verified
+    result pass
+    method command
+    observed_at git:30579aeb4960ca7b4de2659953ce0694541bfa96
+    command "cargo test -p akr-cli --features fts5 --test search a_write_between_build_and_search_is_flagged_not_hidden"
+    summary """
+        akr search flags a stale index after a write instead of silently returning old rows
+        """
+    author "GitHub Uploader"
+}

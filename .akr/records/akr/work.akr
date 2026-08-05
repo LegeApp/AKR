@@ -1,0 +1,16 @@
+akr 0.1
+project akr
+
+record akr.work.mcp-help-and-format-cleanup/1 : work {
+    title "Propagate MCP error help and restore formatting hygiene"
+    state completed
+    scope [
+        path "crates/akr-cli/**",
+        path "crates/akr-core/**",
+        path "crates/akr-mcp/**",
+        path "docs/**"
+    ]
+    intent """
+        Preserve AKR's explicit initialization and read/write separation while making MCP environment errors actionable, then restore repository-wide rustfmt cleanliness without semantic changes.
+        """
+}
