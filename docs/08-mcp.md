@@ -81,6 +81,7 @@ verifies** (D-016) — the link is authored on the check (`verified_by`) or supp
 }
 // output
 {
+  "index_stale": false,
   "results": [
     { "key": "sys.constraint.frame-budget-16ms", "rev": 1, "kind": "constraint",
       "state": "active", "title": "16 ms frame budget at p99",
@@ -94,6 +95,11 @@ verifies** (D-016) — the link is authored on the check (`verified_by`) or supp
 authorises.** A record appearing here has no standing it did not already have, and
 nothing enters a context bundle because it matched a query
 ([`09-context-assembly.md`](09-context-assembly.md) §1).
+
+`index_stale` is true when the ledger sources changed since the last `akr build`. The
+results are still returned (staleness never changes the exit code), but callers should
+build before relying on search to find a recent write. The read tool does not rebuild the
+cache itself; D-019 reserves index writes to `akr build`.
 
 ### `knowledge.get`
 

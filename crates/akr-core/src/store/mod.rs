@@ -192,6 +192,38 @@ pub fn cache_path(akr_dir: &Path) -> PathBuf {
     akr_dir.join("cache").join("index.sqlite")
 }
 
+/// Whether the cache at `path` was built from a different source graph than the one the
+/// caller is holding — i.e. the ledger has been written since the last `akr build`.
+///
+/// This is the observable half of the "invalidation is silent" policy. `akr build` drops
+/// and rebuilds a disagreeing cache; `akr search`, which by D-019 must never write the
+/// cache, cannot. It can only *notice*, so that a read taken between a write and the next
+/// build is not silently answered from stale rows. The verdict never changes an exit code
+/// (D-024): staleness is a fact to surface, not a failure.
+///
+/// `expected` is the current source-graph hash, with or without its `sha256:` prefix; the
+/// cache stores it bare. A missing cache, a cache with no `source_graph_hash` row, or an
+/// unreadable one all answer `false` — the first is another command's error to raise
+/// (`AKR-I031`), and the last two are not staleness.
+#[must_use]
+pub fn is_stale_against(path: &Path, expected: &str) -> bool {
+    if !path.exists() {
+        return false;
+    }
+    let Ok(connection) = rusqlite::Connection::open(path) else {
+        return false;
+    };
+    let expected = expected.strip_prefix("sha256:").unwrap_or(expected);
+    let stored: Option<String> = connection
+        .query_row(
+            "SELECT value FROM meta WHERE key = 'source_graph_hash'",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+    stored.is_some_and(|found| found != expected)
+}
+
 /// Opens the cache, refusing a file that is not one.
 fn open(path: &Path) -> Result<rusqlite::Connection, IndexError> {
     let existed = path.exists();

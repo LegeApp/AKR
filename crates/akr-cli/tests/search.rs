@@ -230,3 +230,69 @@ fn a_malformed_query_says_so_rather_than_returning_nothing() {
     assert_ne!(run.code, 0, "{}", run.output());
     assert!(run.output().contains("AKR-X031"), "{}", run.output());
 }
+
+// -------------------------------------------------------------------------------------
+// A write between build and search leaves the cache stale — and search now says so.
+// -------------------------------------------------------------------------------------
+
+#[test]
+fn a_write_between_build_and_search_is_flagged_not_hidden() {
+    // The friction `tandem.papercut.search-after-write-stale` recorded: an agent logs a
+    // record and searches for it in the same breath, the cache still predates the write
+    // (D-019: only `akr build` may touch it), and the old answer comes back with nothing
+    // to say it is old. Search cannot rebuild, but it can — and now does — notice.
+    let example = Example::materialise("search-after-write");
+    assert_eq!(example.run(&["build"]).code, 0);
+
+    // A fresh build: the cache matches the sources, so nothing is stale and nothing warns.
+    let fresh = example.run(&["search", "projection"]);
+    assert_eq!(fresh.code, 0, "{}", fresh.output());
+    assert!(!fresh.stdout.contains("stale index"), "{}", fresh.stdout);
+    let fresh_json = example.run(&["--format", "json", "search", "projection"]);
+    assert!(
+        fresh_json
+            .stdout
+            .replace(' ', "")
+            .contains("\"index_stale\":false"),
+        "{}",
+        fresh_json.stdout
+    );
+
+    // A write goes through the pipeline; by D-019 it does not touch the cache.
+    let wrote = example.run(&[
+        "papercut",
+        "-m",
+        "codex",
+        "a small friction while testing search staleness",
+        "--namespace",
+        "sys",
+    ]);
+    assert_eq!(wrote.code, 0, "{}", wrote.output());
+
+    // The same query still answers — from a cache that now predates the write — and says
+    // so rather than pretending the ledger is unchanged. Staleness never changes the exit
+    // code (D-024).
+    let stale = example.run(&["search", "projection"]);
+    assert_eq!(stale.code, 0, "{}", stale.output());
+    assert!(stale.stdout.contains("stale index"), "{}", stale.stdout);
+    assert!(stale.stdout.contains("akr build"), "{}", stale.stdout);
+    let stale_json = example.run(&["--format", "json", "search", "projection"]);
+    assert!(
+        stale_json
+            .stdout
+            .replace(' ', "")
+            .contains("\"index_stale\":true"),
+        "{}",
+        stale_json.stdout
+    );
+
+    // A rebuild reconciles the cache with the sources, and the warning goes away.
+    assert_eq!(example.run(&["build"]).code, 0);
+    let rebuilt = example.run(&["search", "projection"]);
+    assert_eq!(rebuilt.code, 0, "{}", rebuilt.output());
+    assert!(
+        !rebuilt.stdout.contains("stale index"),
+        "{}",
+        rebuilt.stdout
+    );
+}

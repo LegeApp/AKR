@@ -1632,6 +1632,7 @@ fn search(
         limit,
     };
     let path = akr_core::store::cache_path(&session.akr_dir);
+    let stale = akr_core::store::is_stale_against(&path, &session.source_graph());
     let hits = akr_core::store::search(&path, &request)
         .map_err(|error| EnvError::new(error.code.as_str(), error.message))?;
 
@@ -1653,6 +1654,11 @@ fn search(
             "  {:.2}  {:key_width$}  {:kind_width$} {:state_width$}  {}\n",
             hit.score, reference[index], kinds[index], states[index], hit.title
         ));
+    }
+    if stale {
+        text.push_str(
+            "warning: search results are from a stale index; run `akr build` to include recent writes\n",
+        );
     }
     text.push_str(&format!(
         "{} result{}\n",
@@ -1676,6 +1682,7 @@ fn search(
         ("query", Value::string(query.to_owned())),
         ("results", Value::array(results)),
         ("count", Value::integer(hits.len() as i64)),
+        ("index_stale", Value::bool(stale)),
     ])))
 }
 
