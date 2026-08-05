@@ -124,8 +124,22 @@ impl Ancestry {
         Some(false)
     }
 
-    fn knows(&self, c: &Commit) -> bool {
+    /// Whether `c` is a commit this ancestry has facts about.
+    ///
+    /// `pub(crate)` because D-028 needs it directly: a legacy-sourced record's evidence
+    /// still has to cite a commit the repository actually has, even once the
+    /// descendant-commit comparison itself is waived.
+    #[must_use]
+    pub(crate) fn knows(&self, c: &Commit) -> bool {
         self.parents.contains_key(c) || self.parents.values().any(|p| p == c)
+    }
+
+    /// Whether this ancestry carries no facts at all — P1's no-git case, or a build with
+    /// no repository. Distinguishes "we never asked git" from "we asked, and this
+    /// particular commit isn't one it knows".
+    #[must_use]
+    pub(crate) fn has_facts(&self) -> bool {
+        !self.parents.is_empty()
     }
 }
 

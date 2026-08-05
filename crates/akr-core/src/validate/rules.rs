@@ -7,7 +7,7 @@ use crate::diagnostics::codes as c;
 use crate::diagnostics::{Diagnostic, Label, RuleId, SlotRef, Subject};
 use crate::model::{
     Class, ContentSlot, ContentValue, EvidenceResult, HeadError, Kind, Ledger, LogicalKey, Range,
-    Record, Reference, Relation, RevisionId, ScopeTerm, State, scopes_overlap,
+    Record, Reference, Relation, RevisionId, ScopeTerm, SourceKind, State, scopes_overlap,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1168,14 +1168,25 @@ pub fn v020_acceptance_satisfied(ledger: &Ledger) -> Vec<Diagnostic> {
 ///
 /// `true` when the facts needed to decide are absent: P1 has no git, and the rest of
 /// V-020 is still worth enforcing.
+///
+/// When `record` carries a `legacy` source (D-028), the descendancy comparison itself is
+/// waived — a historical port's own introduction commit says nothing about when the work
+/// happened — but the evidence must still cite a commit this repository actually has,
+/// whenever git facts were supplied at all. That containment check is not waived.
 fn descends(ledger: &Ledger, record: &Record, evidence: &Record) -> bool {
+    let observed = evidence
+        .get(ContentSlot::ObservedAt)
+        .and_then(ContentValue::as_commit);
+    if record.sources.iter().any(|s| s.kind == SourceKind::Legacy) {
+        return match observed {
+            Some(commit) if ledger.facts.ancestry.has_facts() => ledger.facts.ancestry.knows(commit),
+            _ => true,
+        };
+    }
     let Some(last_change) = ledger.facts.last_change.get(&record.id) else {
         return true;
     };
-    let Some(observed) = evidence
-        .get(ContentSlot::ObservedAt)
-        .and_then(ContentValue::as_commit)
-    else {
+    let Some(observed) = observed else {
         return true;
     };
     ledger

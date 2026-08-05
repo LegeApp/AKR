@@ -47,7 +47,9 @@ computable and it is reported rather than guessed at.
 
 `observed_at` is also what the acceptance rule of D-016 tests against: a check is
 satisfied only by evidence whose `observed_at` **descends from** the last commit that
-changed the verified record's content.
+changed the verified record's content — unless the verified record carries a `legacy`
+source, in which case D-028 waives that comparison. The evidence's `observed_at` commit
+still has to exist in the repository; only the descendancy comparison is skipped.
 
 ### `watches`
 

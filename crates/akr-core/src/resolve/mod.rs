@@ -37,7 +37,7 @@ use crate::hash::{content_hash, source_graph_hash};
 use crate::lock::{Build, Lock, ResolutionEntry, SealEntry, SourceEntry};
 use crate::model::{
     Commit, ContentHash, ContentSlot, ContentValue, EvidenceResult, HeadError, Ledger, LogicalKey,
-    Record, Reference, Relation, RevisionId, ScopeTerm, Segment,
+    Record, Reference, Relation, RevisionId, ScopeTerm, Segment, SourceKind,
 };
 use crate::validate;
 use std::collections::{BTreeMap, BTreeSet};
@@ -367,7 +367,7 @@ pub struct CitationFacts {
     pub descends: bool,
 }
 
-/// Evaluates one citation of one check (D-016).
+/// Evaluates one citation of one check (D-016, D-028).
 #[must_use]
 pub fn citation_facts(ledger: &Ledger, owner: &RevisionId, evidence: &Record) -> CitationFacts {
     let result = evidence
@@ -379,13 +379,27 @@ pub fn citation_facts(ledger: &Ledger, owner: &RevisionId, evidence: &Record) ->
         .and_then(ContentValue::as_commit)
         .cloned();
     let last_change = ledger.facts.last_change.get(owner).cloned();
-    let descends = match (&observed_at, &last_change) {
-        (Some(observed), Some(changed)) => ledger
-            .facts
-            .ancestry
-            .is_descendant(observed, changed)
-            .unwrap_or(true),
-        _ => true,
+    // D-028: a legacy-sourced record's own git introduction date says nothing about when
+    // the work happened, so the descendant-commit comparison is waived for it. The
+    // evidence commit still has to be one this repository actually has, whenever git
+    // facts were supplied at all — that containment check is not waived.
+    let is_legacy = ledger
+        .get(owner)
+        .is_some_and(|record| record.sources.iter().any(|s| s.kind == SourceKind::Legacy));
+    let descends = if is_legacy {
+        match &observed_at {
+            Some(commit) if ledger.facts.ancestry.has_facts() => ledger.facts.ancestry.knows(commit),
+            _ => true,
+        }
+    } else {
+        match (&observed_at, &last_change) {
+            (Some(observed), Some(changed)) => ledger
+                .facts
+                .ancestry
+                .is_descendant(observed, changed)
+                .unwrap_or(true),
+            _ => true,
+        }
     };
     CitationFacts {
         result,

@@ -856,3 +856,47 @@ transcript and calls `akr papercut` per finding), user-triggered, never in stage
 **Honored by.** `spec/tables/vocabulary.json`, `crates/akr-core/src/model/kind.rs`,
 `crates/akr-core/src/papercut`, `crates/akr-core/src/render`, `docs/07-cli.md` §6,
 `docs/08-mcp.md`, `docs/11-projections.md`.
+
+---
+
+## D-028 — Legacy-sourced completion is exempt from the descendant-commit gate
+
+*Amendment, 2026-08-05.*
+
+**Question.** D-016 / V-020 requires a `completed` record's acceptance evidence to have
+an `observed_at` commit that descends from the last commit that changed the record's
+content — the condition that stops a test from 200 commits ago closing a milestone
+redefined yesterday. A historical port authors the record today, citing genuinely old
+evidence commits from before the port existed: the record's own introduction to this
+repository is necessarily the *newest* commit touching it, so its evidence can never
+descend from it. That is not a data error to be fixed by re-running the check; it is
+structurally impossible for a transcription of history to satisfy. Live case: `bpg-rs`'s
+ledger carries 19 `AKR-R022` at HEAD for exactly this reason (`bpg.papercut.v-020-s-
+descendant-commit-freshness-gate-akr/1`).
+
+**Resolution.** When a `completed` record carries at least one `source { kind legacy
+... }` block, the descendant-commit comparison of D-016 / V-020 is waived for its
+acceptance evidence. Nothing else is: the cited reference must still resolve, the
+evidence must still record `result pass`, and — whenever git facts are available at all
+— its `observed_at` commit must still be one the repository actually has. Only the
+comparison between that commit and the record's last content change is skipped. A record
+with no `legacy` source keeps the full gate, unchanged.
+
+The same exemption applies to `docs/11-projections.md`'s acceptance-verdict computation
+(`akr-core::resolve::citation_facts`), which mirrors V-020's selection so that a rendered
+view and the diagnostic it corresponds to never disagree about why a check is or is not
+satisfied.
+
+**Rationale.** A legacy-sourced record is a transcription of history: its git
+introduction date says when it was *ported*, not when the work it describes happened.
+Gating on descendancy from that introduction date would make every legacy port permanently
+`AKR-R022`, forever, regardless of how solid its cited evidence is — a false alarm with no
+action that clears it. The evidence commits are still the real, checkable claim about
+when the work happened, so they remain required, must resolve, must pass, and must be
+commits the repository can find: only the comparison that is structurally impossible for
+a port to satisfy is waived.
+
+**Honored by.** `crates/akr-core/src/validate/rules.rs` (`v020_acceptance_satisfied`,
+`descends`), `crates/akr-core/src/resolve/mod.rs` (`citation_facts`),
+`docs/05-validation-rules.md` (V-020), `docs/10-freshness-and-git.md` (the descendant
+rule), `crates/akr-core/tests/v_rules.rs`.

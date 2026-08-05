@@ -642,6 +642,13 @@ The descendant-commit condition is what stops a green run from 200 commits ago c
 milestone whose acceptance changed yesterday. Editing acceptance invalidates its evidence
 — correct, occasionally annoying, worth it.
 
+**D-028 exemption.** When the record carries at least one `source { kind legacy ... }`
+block, the descendant-commit comparison is waived — a historical port's own introduction
+commit says nothing about when the work happened. Everything else about the check is
+still enforced: the evidence must resolve, it must record `result pass`, and its
+`observed_at` commit must still be one the repository has, whenever git facts are
+available at all.
+
 ---
 
 ### V-021 — Active decisions cite something

@@ -832,6 +832,82 @@ fn v020_applies_the_descendant_rule_once_git_facts_are_present() {
 }
 
 // ---------------------------------------------------------------------------------
+// D-028: legacy-sourced completion is exempt from the descendant-commit gate
+// ---------------------------------------------------------------------------------
+
+/// The same non-descendant setup as
+/// [`v020_applies_the_descendant_rule_once_git_facts_are_present`], but on a milestone
+/// that optionally carries a `legacy` source.
+fn completed_milestone_with_old_evidence(legacy: bool) -> Ledger {
+    use akr_core::model::{Ancestry, Commit};
+    let old = Commit::new("3f0a1c9d5b7e2648a0d4f1b8c36e9752ad014b6f").expect("commit");
+    let new = Commit::new("7c41d0ba92e6f37518a3cd406b5e2f91d8074a63").expect("commit");
+
+    let mut milestone = RecordBuilder::new("fx.milestone.claimed", 1, Kind::Milestone)
+        .state(State::Completed)
+        .check("the-check", CheckMethod::Command, &["@fx.evidence.green"])
+        .filled();
+    if legacy {
+        milestone = milestone.source(SourceKind::Legacy, Some("docs/legacy/PLAN.md"));
+    }
+
+    let mut l = ledger(vec![
+        rec("fx.evidence.green", 1, Kind::Evidence).build(),
+        milestone.build(),
+    ]);
+    l.facts
+        .last_change
+        .insert(RevisionId::new(key("fx.milestone.claimed"), 1), new.clone());
+    l.facts.ancestry = Ancestry::from_pairs([(new, old)]);
+    l
+}
+
+#[test]
+fn d028_legacy_source_waives_the_descendant_gate() {
+    // (a) completed record + old non-descendant passing evidence + legacy source: no R022.
+    let l = completed_milestone_with_old_evidence(true);
+    assert_clean(&validate::v020_acceptance_satisfied(&l));
+}
+
+#[test]
+fn d028_without_a_legacy_source_the_gate_still_applies() {
+    // (b) identical setup, no legacy source: R022 as before.
+    let l = completed_milestone_with_old_evidence(false);
+    assert_raises(&validate::v020_acceptance_satisfied(&l), c::R022);
+}
+
+#[test]
+fn d028_legacy_source_still_requires_the_evidence_commit_to_exist() {
+    // (c) legacy source, but the evidence cites a commit absent from the repository's
+    // known ancestry: the descendant comparison is waived, containment is not, so this
+    // still fails.
+    use akr_core::model::{Ancestry, Commit};
+    let known = Commit::new("7c41d0ba92e6f37518a3cd406b5e2f91d8074a63").expect("commit");
+    let stranger = Commit::new("8db2c6e194f7a5013b6c0d2e9f47a1c8065de3b1").expect("commit");
+
+    let milestone = RecordBuilder::new("fx.milestone.claimed", 1, Kind::Milestone)
+        .state(State::Completed)
+        .check("the-check", CheckMethod::Command, &["@fx.evidence.green"])
+        .filled()
+        .source(SourceKind::Legacy, Some("docs/legacy/PLAN.md"));
+
+    let mut l = ledger(vec![
+        rec("fx.evidence.green", 1, Kind::Evidence)
+            .commit(ContentSlot::ObservedAt, stranger.as_str())
+            .build(),
+        milestone.build(),
+    ]);
+    l.facts.last_change.insert(
+        RevisionId::new(key("fx.milestone.claimed"), 1),
+        known.clone(),
+    );
+    // The ancestry has facts (it knows `known`), but never learned of `stranger` — the
+    // repository never had it, exactly as `AKR-G011` would flag for an empirical record.
+    l.facts.ancestry = Ancestry::from_pairs([(known.clone(), known)]);
+    assert_raises(&validate::v020_acceptance_satisfied(&l), c::R022);
+}
+
+// ---------------------------------------------------------------------------------
 // V-021 / V-022 / V-023
 // ---------------------------------------------------------------------------------
 
