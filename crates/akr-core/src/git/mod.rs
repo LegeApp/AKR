@@ -524,7 +524,10 @@ pub fn last_change_of(
     Ok(Some(answer))
 }
 
-/// The content hash of one record as it stood at one commit.
+/// The *definitional* content hash of one record as it stood at one commit (D-029): the
+/// canonical text with lifecycle and completion bookkeeping (`state`, `note`, a check's
+/// `verified_by`) removed, so `last_change_of` reports the last redefinition, not the last
+/// lifecycle transition.
 fn hash_at(
     repository: &Repository,
     commit: &Commit,
@@ -546,8 +549,12 @@ fn hash_at(
         if record.revision != revision || record.key != key.to_string() {
             continue;
         }
-        if let Some(canonical) = crate::resolve::canonical_record_text(&file, at) {
-            return Ok(Some(crate::hash::content_hash(&canonical)));
+        // D-029: `last_change` tracks the last *definitional* change, so a completion or
+        // abandonment (state, a check's `verified_by`, or a `note`) does not count as the
+        // record's newest content change and strand the evidence that closes it. The D-015
+        // seal still hashes the whole record via `canonical_record_text`.
+        if let Some(definitional) = crate::resolve::definitional_record_text(&file, at) {
+            return Ok(Some(crate::hash::content_hash(&definitional)));
         }
     }
     Ok(None)

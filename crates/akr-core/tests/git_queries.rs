@@ -350,6 +350,71 @@ fn last_change_is_none_for_an_untracked_record() {
 }
 
 #[test]
+fn a_completion_does_not_move_last_change() {
+    // D-029: `akr complete` sets state -> completed and adds a `verified_by` to each check.
+    // Neither redefines the milestone, so its last content change stays at its definition
+    // commit and the evidence that closes it is not stranded (D-016 / V-020, AKR-R022).
+    let mut repo = TempRepo::new("last-change-completion");
+    let introduced = repo.commit_file(".akr/records/m.akr", RECORD_V1, "introduce");
+    let completed = RECORD_V1
+        .replace("    state active\n", "    state completed\n")
+        .replace(
+            "            method manual\n",
+            "            method manual\n            verified_by [ @fx.evidence.done/1 ]\n",
+        );
+    repo.commit_file(".akr/records/m.akr", &completed, "complete");
+
+    let git = Repository::open(repo.root()).expect("opens");
+    let answer = last_change_of(&git, ".akr/records/m.akr", &key("fx.milestone.m1"), 1)
+        .expect("query")
+        .expect("the record exists");
+    assert_eq!(
+        answer.as_str(),
+        introduced,
+        "completing a milestone is not a definitional change (D-029)"
+    );
+}
+
+#[test]
+fn a_note_does_not_move_last_change() {
+    // D-026 `note` is commentary; D-029 keeps it out of the definitional hash, so annotating
+    // a completed record later does not re-strand its evidence.
+    let mut repo = TempRepo::new("last-change-note");
+    let introduced = repo.commit_file(".akr/records/m.akr", RECORD_V1, "introduce");
+    let annotated = RECORD_V1.replace(
+        "    intent \"\"\"\n        The first milestone.\n        \"\"\"\n",
+        "    intent \"\"\"\n        The first milestone.\n        \"\"\"\n    note \"\"\"\n        A later aside.\n        \"\"\"\n",
+    );
+    repo.commit_file(".akr/records/m.akr", &annotated, "annotate");
+
+    let git = Repository::open(repo.root()).expect("opens");
+    let answer = last_change_of(&git, ".akr/records/m.akr", &key("fx.milestone.m1"), 1)
+        .expect("query")
+        .expect("the record exists");
+    assert_eq!(
+        answer.as_str(),
+        introduced,
+        "a note is not a definitional change (D-029)"
+    );
+}
+
+#[test]
+fn last_change_moves_when_a_check_statement_changes() {
+    // The other half of D-029: a real redefinition (a check's statement) still moves the
+    // last change, so stale evidence cannot close a milestone whose requirements changed.
+    let mut repo = TempRepo::new("last-change-check");
+    repo.commit_file(".akr/records/m.akr", RECORD_V1, "introduce");
+    let edited = RECORD_V1.replace("It is done.", "It is done, and measured.");
+    let changed = repo.commit_file(".akr/records/m.akr", &edited, "restate the check");
+
+    let git = Repository::open(repo.root()).expect("opens");
+    let answer = last_change_of(&git, ".akr/records/m.akr", &key("fx.milestone.m1"), 1)
+        .expect("query")
+        .expect("the record exists");
+    assert_eq!(answer.as_str(), changed);
+}
+
+#[test]
 fn last_changes_fills_the_ledger_facts() {
     let mut repo = TempRepo::new("last-changes");
     let introduced = repo.commit_file(".akr/records/m.akr", RECORD_V1, "introduce");

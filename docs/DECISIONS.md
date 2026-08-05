@@ -900,3 +900,45 @@ a port to satisfy is waived.
 `descends`), `crates/akr-core/src/resolve/mod.rs` (`citation_facts`),
 `docs/05-validation-rules.md` (V-020), `docs/10-freshness-and-git.md` (the descendant
 rule), `crates/akr-core/tests/v_rules.rs`.
+
+## D-029 — The descendant gate measures the last *definitional* change, not the last transition
+
+*Amendment, 2026-08-05.*
+
+**Question.** D-016 / V-020 gates a `completed` record's acceptance evidence on descending
+from "the last commit that changed the record's content." D-028 waived that comparison for
+legacy ports, but the same wording bites ordinary, non-legacy work once the ledger is
+committed. `akr complete` writes the record: it sets `state` to `completed` and adds a
+`verified_by` to each satisfied check. Committing that completion is therefore, by the
+literal reading, the record's *newest* content change — and the evidence, created before
+the completion, can never descend from it. Every committed non-legacy milestone completion
+would fail with `AKR-R022`, proven end to end: define a milestone, add passing evidence,
+`akr complete` and commit, and `akr check` reports "evidence predates the last content
+change." That defeats the verb the gate exists to serve.
+
+**Resolution.** "Content change" in D-016 means a change to what the record *requires* —
+its definition — not to its lifecycle bookkeeping. The commit a record's evidence must
+descend from is the last commit that changed the record's **definitional** text: the
+canonical record with the `state` slot, every acceptance-check `verified_by`, and the
+D-026 `note` removed. `crates/akr-core/src/git/last_change_of` hashes that projection
+(`resolve::definitional_record_text`) instead of the full canonical text, so a completion,
+an abandonment, or a later note does not move `last_change`, while any change to `intent`,
+a check's `statement`/`method`/`command`, `target`, or any other definitional slot still
+does. The D-015 seal is untouched: it keeps hashing the whole record, because a seal
+attests the literal bytes, not the definition.
+
+D-028 stands and is still needed: a legacy port's *definition* is authored at the port
+commit, so its older evidence still cannot descend and still relies on the legacy waiver.
+D-029 narrows what counts as a definitional change; D-028 waives the comparison for
+transcriptions of history. They are complementary.
+
+**Rationale.** The gate's stated purpose is to stop a test from 200 commits ago closing a
+milestone *redefined* yesterday. A state transition or an evidence citation is not a
+redefinition, so counting it made the rule stricter than its purpose to the point of
+forbidding the normal completion path. Hashing the definitional projection restores the
+intended meaning without weakening it: real redefinitions still move the gate.
+
+**Honored by.** `crates/akr-core/src/resolve/source.rs` (`definitional_record_text`),
+`crates/akr-core/src/git/mod.rs` (`last_change_of`, `hash_at`),
+`docs/05-validation-rules.md` (V-020), `docs/10-freshness-and-git.md` (the descendant
+rule), `crates/akr-core/tests/git_queries.rs`.

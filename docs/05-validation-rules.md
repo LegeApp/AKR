@@ -616,8 +616,8 @@ mandatory rather than advisory for hard dependencies.
 
 **Statement.** A `milestone` or `work` record in state `completed` has every `check` in
 its `acceptance` block satisfied: at least one referenced evidence record with
-`result pass` and an `observed_at` commit descended from the record's last content
-change (D-016).
+`result pass` and an `observed_at` commit descended from the record's last *definitional*
+change (D-016, refined by D-029).
 
 **Why.** This is what makes `completed` mean something. Without it the state is a
 self-report, and a milestone marked done with a failing check is worse than no milestone
@@ -640,7 +640,10 @@ complete` refuses up front; the rule catches a hand-edited state.
 
 The descendant-commit condition is what stops a green run from 200 commits ago closing a
 milestone whose acceptance changed yesterday. Editing acceptance invalidates its evidence
-— correct, occasionally annoying, worth it.
+— correct, occasionally annoying, worth it. The commit compared against is the last one to
+change the record's **definition**, not its lifecycle: per D-029 the `state` slot, each
+check's `verified_by`, and the `note` slot are excluded, so `akr complete` writing the
+completion is not itself the change that strands the evidence.
 
 **D-028 exemption.** When the record carries at least one `source { kind legacy ... }`
 block, the descendant-commit comparison is waived — a historical port's own introduction

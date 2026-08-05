@@ -15,7 +15,7 @@ use super::{BuildInputs, SourceFile};
 use crate::diagnostics::{Diagnostic, SlotRef, SourceMap, Span, Subject};
 use crate::hash::source_file_hash;
 use crate::model::{ContentSlot, Ledger, LogicalKey, Relation, RevisionId, Segment};
-use crate::syntax::cst::{File, Item};
+use crate::syntax::cst::{BodyItem, File, Item};
 use crate::syntax::{format, lower::lower_all, parse};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -189,6 +189,54 @@ pub fn canonical_record_text(file: &File, index: usize) -> Option<String> {
     let rendered = format(&single);
     let start = rendered.find("\nrecord ")? + 1;
     Some(rendered[start..].to_owned())
+}
+
+/// The canonical text of one record with lifecycle and completion bookkeeping removed,
+/// for the D-029 "last *definitional* change" computation.
+///
+/// Drops the `state` and `note` slots and every `verified_by` slot, wherever they occur.
+/// `akr complete` writes exactly these — `state` becomes `completed` and each satisfied
+/// check gains a `verified_by` — and D-026's `note` is commentary. None of them redefine
+/// what the record *requires*, so a change confined to them must not move the record's
+/// last content change and strand the very evidence that closes it (D-016 / V-020). Only
+/// [`last_change_of`](crate::git::last_change_of) hashes this projection; the D-015 seal
+/// still hashes the whole [`canonical_record_text`].
+///
+/// Returns `None` if the index does not name a record.
+#[must_use]
+pub fn definitional_record_text(file: &File, index: usize) -> Option<String> {
+    if !matches!(file.items.get(index), Some(Item::Record(_))) {
+        return None;
+    }
+    let mut single = file.clone();
+    single.leading = Vec::new();
+    single.trailing = Vec::new();
+    single.blank_before_header = false;
+    let mut item = file.items[index].clone();
+    if let Item::Record(record) = &mut item {
+        strip_bookkeeping(&mut record.body);
+    }
+    single.items = vec![item];
+
+    let rendered = format(&single);
+    let start = rendered.find("\nrecord ")? + 1;
+    Some(rendered[start..].to_owned())
+}
+
+/// Removes `state`, `note` and `verified_by` slots from a body, recursing into blocks so a
+/// check's `verified_by` inside an `acceptance` block is reached.
+fn strip_bookkeeping(body: &mut Vec<BodyItem>) {
+    body.retain(|item| !matches!(item, BodyItem::Slot(slot) if is_bookkeeping(&slot.name)));
+    for item in body.iter_mut() {
+        if let BodyItem::Block(block) = item {
+            strip_bookkeeping(&mut block.body);
+        }
+    }
+}
+
+/// The slot names that are lifecycle or completion bookkeeping, never definition.
+fn is_bookkeeping(name: &str) -> bool {
+    matches!(name, "state" | "note" | "verified_by")
 }
 
 /// Indexes the spans of one record: the revision itself, then each slot and block.
