@@ -337,13 +337,16 @@ fn repo_relative(session: &Session, path: &Path) -> String {
         .root
         .canonicalize()
         .unwrap_or_else(|_| session.root.clone());
+    // Source paths are repository paths, and a repository path is written with `/` on
+    // every platform — git, the freshness globs, and the M022 existence check all
+    // compare against that form. `to_string_lossy` alone would store `\` on Windows.
     joined
         .canonicalize()
         .ok()
         .and_then(|p| p.strip_prefix(&root).map(Path::to_path_buf).ok())
         .unwrap_or_else(|| path.to_path_buf())
         .to_string_lossy()
-        .into_owned()
+        .replace('\\', "/")
 }
 
 /// The default namespace: the document's first path segment (`docs/12` §3).

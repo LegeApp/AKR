@@ -236,9 +236,18 @@ fn differing_lines(committed: &str, rendered: &str) -> usize {
 /// directory when it is under it, so `docs/generated/ROADMAP.md` rather than an absolute
 /// path that says nothing a reader needs.
 fn display_path(path: &Path) -> String {
-    let relative = std::env::current_dir()
-        .ok()
-        .and_then(|cwd| path.strip_prefix(cwd).ok().map(Path::to_path_buf));
+    // On Windows a canonicalised workspace path carries the `\\?\` verbatim prefix while
+    // `current_dir` does not, so the prefixes must be compared like with like or the
+    // diagnostic degrades to an absolute path.
+    let relative = std::env::current_dir().ok().and_then(|cwd| {
+        path.strip_prefix(&cwd)
+            .ok()
+            .map(Path::to_path_buf)
+            .or_else(|| {
+                let canonical = cwd.canonicalize().ok()?;
+                path.strip_prefix(canonical).ok().map(Path::to_path_buf)
+            })
+    });
     let path = relative.as_deref().unwrap_or(path);
     path.to_string_lossy().replace('\\', "/")
 }

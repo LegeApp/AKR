@@ -1248,9 +1248,10 @@ pub fn conventional_file(key: &LogicalKey, kind: Kind) -> PathBuf {
         Kind::Track => "tracks",
         Kind::Question => "questions",
     };
-    PathBuf::from("records")
-        .join(key.namespace().as_str())
-        .join(format!("{group}.akr"))
+    // Built as one `/`-separated string rather than `join`ed: this path is quoted in
+    // command output and tool payloads, where the repository form is `/` on every
+    // platform. `PathBuf` accepts `/` for filesystem use on Windows too.
+    PathBuf::from(format!("records/{}/{group}.akr", key.namespace().as_str()))
 }
 
 /// Pulls a check identifier out of a V-020 message, for the structured refusal.
