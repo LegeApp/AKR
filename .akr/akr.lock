@@ -5,8 +5,8 @@ build {
     tool "akr 0.1.0"
     grammar "0.1"
     vocabulary "0.1"
-    commit git:047a684214734d19ebc8a477030ceb9cfbc98ceb
-    source_graph "sha256:70972b3e367e4dd3799289b6dc56cb82cdc9c9402797c196698d50227e6da1f6"
+    commit git:c3c5c4c243aa1256eee11fa43aee8ac6df62abfa
+    source_graph "sha256:0218d75af6cd33fc033c82cd3f30db8affbaab229bae60b1ad95f2e76df8816c"
 }
 
 source ".akr/project.akr" {
@@ -20,8 +20,8 @@ source ".akr/records/akr/evidence.akr" {
 }
 
 source ".akr/records/akr/papercuts.akr" {
-    hash "sha256:01bc3ca9202dac2154b62a7ae07d47d050fb70ae98c4077352f994382b914144"
-    records 5
+    hash "sha256:b4fc7bbb3f6b22ddb5fc40d9984585f2c297d54a8a1858679eade73f78d58340"
+    records 6
 }
 
 source ".akr/records/akr/work.akr" {
@@ -42,6 +42,11 @@ seal @akr.evidence.mcp-help-parity/1 {
 seal @akr.evidence.search-stale-warning/1 {
     state verified
     hash "sha256:7b554238825972436b05387c7a0eb3cc3f78fd703e3464c47fe242c21b4e6a56"
+}
+
+seal @akr.papercut.bug-needs-a-decision-d-028-is-incomplete/1 {
+    state verified
+    hash "sha256:8abf2ab1c4c01de128abb8f416a010003c2fbceafde354c4208ae1c0831904ea"
 }
 
 seal @akr.papercut.calling-the-knowledge-papercut-mcp-tool/1 {

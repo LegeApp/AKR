@@ -1,6 +1,17 @@
 akr 0.1
 project akr
 
+record akr.papercut.bug-needs-a-decision-d-028-is-incomplete/1 : papercut {
+    title "BUG (needs a decision, D-028 is incomplete): completing a COMMITTED…"
+    state verified
+    statement """
+        BUG (needs a decision, D-028 is incomplete): completing a COMMITTED non-legacy milestone always fails akr check with AKR-R022. Proven in a throwaway repo: define milestone (commit A), add evidence, complete + commit (commit B); check then reports 'evidence predates the last content change'. Root cause: last_change_of hashes the full canonical record text (crate::hash::content_hash via canonical_hash_input, which strips only comments), so the completion itself - state proposed->completed plus the acceptance verified_by citations - counts as the newest content change, and any cited evidence necessarily predates it. D-028 waived the descendant comparison only for source { kind legacy }, so ongoing non-legacy milestone completion is structurally impossible to keep green once committed. Fix direction: compute last_change over the milestone's DEFINITIONAL content only (exclude state and acceptance verified_by, and lifecycle/provenance fields like reason), matching D-016's stated intent ('stop a test from 200 commits ago closing a milestone redefined yesterday'). Warrants a D-029 decision + tests in validate/rules.rs and git/last_change_of.
+        """
+    observed_at git:c3c5c4c243aa1256eee11fa43aee8ac6df62abfa
+    author "fugu"
+    created_at 2026-08-05
+}
+
 record akr.papercut.calling-the-knowledge-papercut-mcp-tool/1 : papercut {
     title "Calling the knowledge.papercut MCP tool returned 'unsupported call',…"
     state verified
