@@ -17,7 +17,8 @@
 //! than as scattered `push('\n')` calls is what keeps the output stable enough to pin
 //! with a byte-for-byte snapshot.
 
-use super::{RenderContext, View, banner, slug};
+use super::common::{is_archived, link, note_block, prose};
+use super::{RenderContext, banner};
 use crate::model::{
     ContentSlot, ContentValue, Disposition, Kind, Ledger, Record, Reference, Relation, RevisionId,
     State,
@@ -105,6 +106,18 @@ fn milestone_blocks<'a>(cx: RenderContext<'a>, record: &'a Record) -> Vec<String
     }
 
     blocks
+}
+
+/// Milestones (in `after` topological order), then tracks (by key) — `ROADMAP.md`'s own
+/// section order, reused by `active_work` to group work items in the same order their
+/// parents appear there (`docs/11-projections.md` §7).
+#[must_use]
+pub(super) fn parent_order(model: &ResolvedModel<'_>) -> Vec<RevisionId> {
+    milestone_order(model)
+        .into_iter()
+        .chain(heads_of_kind(model, Kind::Track))
+        .map(|r| r.id.clone())
+        .collect()
 }
 
 /// Milestones in `after` topological order, with the record key as tiebreak.
@@ -384,7 +397,7 @@ fn work_item_line(cx: RenderContext<'_>, item: &Record, plan: Option<&Record>) -
     line
 }
 
-fn disposition_for<'a>(plan: &'a Record, child: &RevisionId) -> Option<&'a Disposition> {
+pub(super) fn disposition_for<'a>(plan: &'a Record, child: &RevisionId) -> Option<&'a Disposition> {
     plan.dispositions.iter().find(|d| d.target.key == child.key)
 }
 
@@ -447,15 +460,6 @@ fn heads_of_kind<'a>(model: &'a ResolvedModel<'a>, kind: Kind) -> Vec<&'a Record
     out
 }
 
-/// Whether a record lives under `.akr/archive/`. Archived records still resolve; they are
-/// excluded from every view but `DECISION-HISTORY.md` (D-018).
-fn is_archived(record: &Record) -> bool {
-    record
-        .file
-        .as_deref()
-        .is_some_and(|path| path.contains("/archive/") || path.starts_with("archive/"))
-}
-
 /// The live plan of record for a milestone or track: the live `work` record whose
 /// `plan_of_record` resolves to it. At most one exists (V-018).
 fn plan_of_record<'a>(model: &'a ResolvedModel<'a>, target: &Record) -> Option<&'a Record> {
@@ -489,7 +493,7 @@ fn children_of<'a>(cx: RenderContext<'a>, parent: &RevisionId) -> Vec<&'a Record
     sorted_work(items)
 }
 
-fn live_work(ledger: &Ledger) -> Vec<&Record> {
+pub(super) fn live_work(ledger: &Ledger) -> Vec<&Record> {
     ledger
         .records()
         .iter()
@@ -498,7 +502,7 @@ fn live_work(ledger: &Ledger) -> Vec<&Record> {
 }
 
 /// The key a work record is `part_of`, resolved.
-fn parent_key(model: &ResolvedModel<'_>, record: &Record) -> Option<crate::model::LogicalKey> {
+pub(super) fn parent_key(model: &ResolvedModel<'_>, record: &Record) -> Option<crate::model::LogicalKey> {
     record
         .targets(Relation::PartOf)
         .first()
@@ -508,12 +512,12 @@ fn parent_key(model: &ResolvedModel<'_>, record: &Record) -> Option<crate::model
 
 /// Work in lifecycle order — `active`, `blocked`, `ready`, `proposed` — then by key
 /// (`docs/09-context-assembly.md` §4 step 3).
-fn sorted_work(mut items: Vec<&Record>) -> Vec<&Record> {
+pub(super) fn sorted_work(mut items: Vec<&Record>) -> Vec<&Record> {
     items.sort_by(|a, b| (state_rank(a.state), &a.id).cmp(&(state_rank(b.state), &b.id)));
     items
 }
 
-const fn state_rank(state: State) -> u8 {
+pub(super) const fn state_rank(state: State) -> u8 {
     match state {
         State::Active => 0,
         State::Blocked => 1,
@@ -523,46 +527,3 @@ const fn state_rank(state: State) -> u8 {
     }
 }
 
-/// A link to wherever a record is rendered, labelled with its `title`.
-///
-/// A record no view hosts renders as plain text: a dead link is worse than none (§3).
-fn link(record: &Record) -> String {
-    match View::hosting(record.kind) {
-        Some(view) => format!(
-            "[{}]({}#{})",
-            record.title,
-            view.file_name(),
-            slug(&record.title)
-        ),
-        None => record.title.clone(),
-    }
-}
-
-/// The `note` block quote a terminal planning record carries (D-026, §3).
-///
-/// Only in a terminal state. On a live record a note is working commentary that `intent`
-/// should be carrying instead; on a terminal one it is the last thing anybody wrote about
-/// the record, and the only place a reader finds out why the plan stopped.
-fn note_block(record: &Record) -> Option<String> {
-    if !record.is_terminal() {
-        return None;
-    }
-    let note = prose(record, ContentSlot::Note)?;
-    let text = note
-        .lines()
-        .map(str::trim_end)
-        .collect::<Vec<_>>()
-        .join(" ")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-    (!text.is_empty()).then(|| format!("> **Note:** {text}"))
-}
-
-/// A prose slot's text, or `None`.
-fn prose(record: &Record, slot: ContentSlot) -> Option<String> {
-    match record.get(slot) {
-        Some(ContentValue::Prose(text) | ContentValue::Text(text)) => Some(text.clone()),
-        _ => None,
-    }
-}

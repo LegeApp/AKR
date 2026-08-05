@@ -3,14 +3,9 @@
 //! `docs/11-projections.md` is normative for the catalogue, the source queries, the
 //! section ordering, the rendering rules, and the banner. This module implements it.
 //!
-//! # Phase P4 scope
-//!
-//! One view is rendered: [`View::Roadmap`]. The other five are in the catalogue — so that
-//! the views-current check knows their file names and does not report them as intruders
-//! (`AKR-E014`) — and [`render`] returns `None` for them. `docs/13-implementation-roadmap.md`
-//! P4 delivers "a fixed roadmap renderer, snapshot-tested", on the reasoning that a
-//! rendered roadmap is the first artefact whose *quality* can be judged rather than merely
-//! verified, and that judging it early is worth more than the two weeks it costs.
+//! All seven views render. Six always return `Some`; [`View::Papercuts`] returns `None`
+//! when the ledger holds no papercut (D-027), so a project that never logs one never
+//! grows the file.
 //!
 //! # Determinism
 //!
@@ -19,11 +14,22 @@
 //! banner's three variable fields are all build inputs, and none of them is a clock
 //! reading — a timestamp would make every rebuild produce a diff and the CI gate useless.
 
+mod active_work;
+mod common;
+mod current_state;
+mod decision_history;
+mod open_questions;
 mod papercuts;
+mod review_required;
 mod roadmap;
 mod views_current;
 
+pub use active_work::render_active_work;
+pub use current_state::render_current_state;
+pub use decision_history::render_decision_history;
+pub use open_questions::render_open_questions;
 pub use papercuts::render_papercuts;
+pub use review_required::render_review_required;
 pub use roadmap::render_roadmap;
 pub use views_current::{check_views_current, write_views};
 
@@ -246,6 +252,48 @@ impl Freshness {
             None
         }
     }
+
+    /// Stale revisions in review-queue order (`docs/10-freshness-and-git.md` §7): cause
+    /// `watch` before cause `review_after`, then the matching commit or date, then key.
+    ///
+    /// `REVIEW-REQUIRED.md` is the committed half of `akr review-queue`, and reuses this
+    /// ordering so the two never disagree about which record comes first.
+    #[must_use]
+    pub fn stale_in_order(&self) -> Vec<RevisionId> {
+        let mut out: Vec<RevisionId> = self.stale.iter().cloned().collect();
+        out.sort_by(|a, b| {
+            stale_order_key(self.causes.get(a), a).cmp(&stale_order_key(self.causes.get(b), b))
+        });
+        out
+    }
+
+    /// At-risk entries by propagation depth, then key — the order
+    /// [`crate::graph::propagate_staleness`] already computes.
+    #[must_use]
+    pub fn at_risk_in_order(&self) -> Vec<&AtRisk> {
+        let mut out: Vec<&AtRisk> = self.at_risk.values().collect();
+        out.sort_by(|a, b| (a.depth, &a.id).cmp(&(b.depth, &b.id)));
+        out
+    }
+}
+
+/// The sort key [`Freshness::stale_in_order`] uses: cause `watch` (0) before
+/// `review_after` (1), then the commit or date the cause names, then the key — the same
+/// ordering `docs/10-freshness-and-git.md` §7 defines, computed here from what `Freshness`
+/// carries rather than from the private `ReviewQueue` entry.
+fn stale_order_key(
+    cause: Option<&crate::freshness::StaleCause>,
+    id: &RevisionId,
+) -> (u8, String, String) {
+    match cause {
+        Some(crate::freshness::StaleCause::Watch { commit, .. }) => {
+            (0, commit.as_str().to_owned(), id.to_string())
+        }
+        Some(crate::freshness::StaleCause::ReviewAfter { date }) => {
+            (1, date.to_string(), id.to_string())
+        }
+        None => (2, String::new(), id.to_string()),
+    }
 }
 
 /// Everything a view needs: the resolved model, and the freshness derived over it.
@@ -271,14 +319,18 @@ impl<'a> RenderContext<'a> {
     }
 }
 
-/// Renders one view, or `None` for a view this phase does not implement yet — and for
-/// `PAPERCUTS.md` when the ledger holds no papercut (D-027).
+/// Renders one view, or `None` for `PAPERCUTS.md` when the ledger holds no papercut
+/// (D-027) — the only view with an emit-only-when-nonempty rule.
 #[must_use]
 pub fn render(view: View, context: RenderContext<'_>) -> Option<String> {
     match view {
         View::Roadmap => Some(render_roadmap(context)),
+        View::CurrentState => Some(render_current_state(context)),
+        View::ActiveWork => Some(render_active_work(context)),
+        View::ReviewRequired => Some(render_review_required(context)),
+        View::OpenQuestions => Some(render_open_questions(context)),
+        View::DecisionHistory => Some(render_decision_history(context)),
         View::Papercuts => render_papercuts(context),
-        _ => None,
     }
 }
 

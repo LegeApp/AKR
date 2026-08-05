@@ -594,19 +594,21 @@ fn an_unexpected_file_in_the_output_directory_fails_with_e014() {
 }
 
 #[test]
-fn views_this_phase_does_not_render_are_not_reported_as_intruders() {
-    // They are catalogued, so their committed files are recognised; they are not rendered,
-    // so they are not compared. Both halves matter.
-    let dir = scratch("unrendered");
+fn every_view_but_papercuts_always_renders() {
+    // `PAPERCUTS.md` alone has the emit-only-when-nonempty rule (D-027); the example
+    // holds no papercut, so it is the one file `scratch()` does not copy and the one
+    // view that renders `None` here.
     let workspace = example();
     let model = ResolvedModel::build(&workspace.ledger, &example_inputs(&workspace));
     let freshness = Freshness::from_stale(&workspace.ledger, stale_set());
-    let diagnostics =
-        check_views_current(&dir, RenderContext::new(&model, &freshness)).expect("readable");
-    assert!(diagnostics.is_empty());
-    assert!(render(View::Roadmap, RenderContext::new(&model, &freshness)).is_some());
-    for &view in &View::ALL[1..] {
-        assert!(render(view, RenderContext::new(&model, &freshness)).is_none());
+    let cx = RenderContext::new(&model, &freshness);
+    for &view in View::ALL {
+        let rendered = render(view, cx);
+        if view == View::Papercuts {
+            assert!(rendered.is_none(), "the example logs no papercut");
+        } else {
+            assert!(rendered.is_some(), "{view:?} did not render");
+        }
     }
 }
 
@@ -700,4 +702,160 @@ fn a_terminal_planning_record_renders_its_note_and_a_live_one_does_not() {
         rendered.contains("> **Note:** Standing work, paused while M3 lands."),
         "{rendered}"
     );
+}
+
+// -------------------------------------------------------------------------------------
+// The five remaining renderers — one focused test each: source query, ordering, and a
+// determinism byte-compare under shuffled insertion order.
+// -------------------------------------------------------------------------------------
+
+fn committed(file: &str) -> String {
+    std::fs::read_to_string(example_root().join("docs/generated").join(file))
+        .unwrap_or_else(|_| panic!("{file} is committed"))
+}
+
+/// `render` on the shuffled ledger reproduces the committed file byte for byte — the
+/// determinism check every renderer gets, run once per view here rather than five times
+/// over in each renderer's own test.
+fn assert_reproduces_and_is_order_independent(view: View, file: &str) {
+    let workspace = example();
+    let model = ResolvedModel::build(&workspace.ledger, &example_inputs(&workspace));
+    let freshness = Freshness::from_stale(&workspace.ledger, stale_set());
+    let rendered = render(view, RenderContext::new(&model, &freshness)).expect("renders");
+    assert_eq!(rendered, committed(file), "{file} is stale; regenerate it");
+
+    let mut shuffled = akr_core::model::Ledger::new(workspace.ledger.project.clone());
+    let mut records = workspace.ledger.records().to_vec();
+    records.reverse();
+    shuffled.extend(records);
+    shuffled.facts = workspace.ledger.facts.clone();
+    let model = ResolvedModel::build(&shuffled, &example_inputs(&workspace));
+    let freshness = Freshness::from_stale(&shuffled, stale_set());
+    let reshuffled = render(view, RenderContext::new(&model, &freshness)).expect("renders");
+    assert_eq!(reshuffled, rendered, "{file} depends on insertion order");
+}
+
+#[test]
+fn current_state_excludes_decisions_and_orders_its_seven_sections() {
+    assert_reproduces_and_is_order_independent(View::CurrentState, "CURRENT-STATE.md");
+    let text = committed("CURRENT-STATE.md");
+    assert!(
+        !text.contains("@sim.decision.timestep-4ms")
+            && !text.contains("@lege.decision.renderer-boundary"),
+        "decisions have their own view"
+    );
+    let order = [
+        "## Terms",
+        "## Constraints",
+        "## Policies",
+        "## Requirements",
+        "## Observations",
+        "## Assessments",
+        "## Evidence",
+    ];
+    let positions: Vec<usize> = order
+        .iter()
+        .map(|h| text.find(h).unwrap_or_else(|| panic!("{h} present")))
+        .collect();
+    assert!(positions.windows(2).all(|w| w[0] < w[1]), "{positions:?}");
+    // An evidence record's reversed `verified_by` edge (§6).
+    assert!(text.contains("**Verifies**"));
+}
+
+#[test]
+fn active_work_groups_by_parent_in_roadmap_order_and_names_the_blocker() {
+    assert_reproduces_and_is_order_independent(View::ActiveWork, "ACTIVE-WORK.md");
+    let text = committed("ACTIVE-WORK.md");
+    // M3's group precedes the standing track's group, matching ROADMAP.md's own order.
+    let m3 = text.find("M3 — playable day").expect("M3 group");
+    let track = text
+        .find("Tooling hygiene")
+        .expect("the tooling-hygiene track group");
+    assert!(m3 < track, "parents are not in ROADMAP.md order");
+    // Blocked work names what blocks it, inline.
+    assert!(text.contains("**Blocked by**"));
+    assert!(text.contains("Does a 4 ms timestep fit the frame budget?"));
+    // Only live work states appear.
+    for terminal in ["`completed`", "`abandoned`", "`superseded`"] {
+        assert!(!text.contains(terminal), "{terminal} is not live work");
+    }
+}
+
+#[test]
+fn review_required_lists_stale_before_at_risk_in_queue_order() {
+    assert_reproduces_and_is_order_independent(View::ReviewRequired, "REVIEW-REQUIRED.md");
+    let text = committed("REVIEW-REQUIRED.md");
+    let stale = text.find("## Stale").expect("a Stale heading");
+    let at_risk = text.find("## At risk").expect("an At risk heading");
+    assert!(stale < at_risk);
+    // MANIFEST §7: two stale observations, propagating to four at-risk records.
+    assert!(text.contains("## Stale (2)"));
+    assert!(text.contains("## At risk (4)"));
+    // Every at-risk entry names its path back to a stale record.
+    assert!(text.contains("**Via**"));
+}
+
+#[test]
+fn open_questions_sections_open_deferred_then_closed_and_shows_resolutions() {
+    assert_reproduces_and_is_order_independent(View::OpenQuestions, "OPEN-QUESTIONS.md");
+    let text = committed("OPEN-QUESTIONS.md");
+    let open = text.find("## Open").expect("Open");
+    let deferred = text.find("## Deferred").expect("Deferred");
+    let closed = text.find("## Recently closed").expect("Recently closed");
+    assert!(open < deferred && deferred < closed);
+    // A resolved question carries its resolution and the live `resolves` edge that
+    // closed it (V-011).
+    assert!(text.contains("**Resolution.**"));
+    assert!(text.contains("**Resolved by**"));
+}
+
+#[test]
+fn decision_history_groups_by_key_newest_revision_first_and_includes_terminal_normative() {
+    assert_reproduces_and_is_order_independent(View::DecisionHistory, "DECISION-HISTORY.md");
+    let text = committed("DECISION-HISTORY.md");
+    // Revision 2 of the renderer-boundary decision precedes revision 1.
+    let two = text
+        .find("### Revision 2 — The viewer consumes a frame snapshot")
+        .expect("revision 2");
+    let one = text
+        .find("### Revision 1 — The viewer calls the simulator directly")
+        .expect("revision 1");
+    assert!(two < one, "newest revision does not come first");
+    // A terminal revision of a non-decision normative kind is included (D-018's one
+    // exception: this view alone carries archived and terminal normative records).
+    assert!(
+        text.contains("@sys.policy.weekly-demo/1"),
+        "a withdrawn policy is part of the project's memory too"
+    );
+    assert!(text.contains("`withdrawn`"));
+}
+
+// -------------------------------------------------------------------------------------
+// Regenerating the worked example's committed views
+// -------------------------------------------------------------------------------------
+
+/// Rewrites `examples/save-your-skin/docs/generated/` from the current renderers, over
+/// the frozen synthetic history and pinned build inputs this file already uses for the
+/// roadmap snapshot.
+///
+/// `#[ignore]`d: it is a maintenance tool, run by hand (`cargo test --release -p
+/// akr-core --test render_roadmap -- --ignored regenerate`) after a renderer or a
+/// worked-example source change, never as part of the ordinary suite. The five
+/// views this test writes are otherwise checked byte-for-byte by
+/// `an_unmodified_directory_passes`, so a stale regeneration fails loudly on the next
+/// ordinary run rather than silently.
+#[test]
+#[ignore = "maintenance tool: run by hand to regenerate examples/save-your-skin/docs/generated/"]
+fn regenerate_the_worked_example_views() {
+    let workspace = example();
+    let model = ResolvedModel::build(&workspace.ledger, &example_inputs(&workspace));
+    let freshness = Freshness::from_stale(&workspace.ledger, stale_set());
+    let cx = RenderContext::new(&model, &freshness);
+    let dir = example_root().join("docs/generated");
+    for &view in View::ALL {
+        let Some(rendered) = render(view, cx) else {
+            continue;
+        };
+        std::fs::write(dir.join(view.file_name()), rendered).expect("writable");
+    }
 }

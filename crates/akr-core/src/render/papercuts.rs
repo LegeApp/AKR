@@ -12,6 +12,7 @@
 //! so a project that never logs one never grows the file, and the frozen worked example
 //! stays byte-identical.
 
+use super::common::is_archived;
 use super::{RenderContext, banner};
 use crate::model::{ContentSlot, ContentValue, Kind, Record};
 
@@ -24,7 +25,7 @@ pub fn render_papercuts(cx: RenderContext<'_>) -> Option<String> {
         .heads
         .values()
         .filter_map(|id| ledger.get(id))
-        .filter(|record| record.kind == Kind::Papercut && record.is_live() && !archived(record))
+        .filter(|record| record.kind == Kind::Papercut && record.is_live() && !is_archived(record))
         .collect();
     if papercuts.is_empty() {
         return None;
@@ -79,12 +80,4 @@ fn statement_line(record: &Record) -> String {
             .join(" "),
         _ => record.title.clone(),
     }
-}
-
-/// Whether a record lives under `.akr/archive/`.
-fn archived(record: &Record) -> bool {
-    record
-        .file
-        .as_deref()
-        .is_some_and(|path| path.contains("/archive/") || path.starts_with("archive/"))
 }

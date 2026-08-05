@@ -27,12 +27,8 @@ const V114: RuleId = RuleId(114);
 /// Returns diagnostics in a deterministic order: catalogue order for the per-view checks,
 /// then path order for unexpected files.
 ///
-/// # Phase P4 scope
-///
-/// Views that this phase does not render yet are skipped rather than reported: they are
-/// still *catalogued*, so their committed files are recognised and never mistaken for
-/// intruders (`AKR-E014`). [`render`] returning `None` is the one signal, and it
-/// disappears on its own as the remaining renderers land.
+/// [`render`] returns `None` for [`View::Papercuts`] alone, when the ledger holds no
+/// papercut (D-027) — that file is expected to be absent, not reported as missing.
 ///
 /// # Errors
 /// Returns any I/O error from reading the output directory.

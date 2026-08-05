@@ -635,19 +635,14 @@ fn view(session: &Session, name: &str) -> Result<Output, EnvError> {
     let queue = session.review_queue();
     let freshness = session.freshness(&queue);
     let context = akr_core::render::RenderContext::new(&model, &freshness);
+    // Every view renders `Some`, except `PAPERCUTS.md`, which is emitted only once the
+    // ledger holds a papercut (D-027).
     let Some(text) = render(view, context) else {
-        if view == View::Papercuts {
-            return Err(EnvError::new(
-                "AKR-E003",
-                "no papercuts logged; PAPERCUTS.md is emitted once one exists (D-027)",
-            )
-            .help("log one with `akr papercut -m <agent> \"message\"`"));
-        }
         return Err(EnvError::new(
             "AKR-E003",
-            format!("the {} renderer arrives with a later phase", view.name()),
+            "no papercuts logged; PAPERCUTS.md is emitted once one exists (D-027)",
         )
-        .help("`akr view roadmap` and `akr view papercuts` are implemented; the rest follow"));
+        .help("log one with `akr papercut -m <agent> \"message\"`"));
     };
     Ok(Output::text(text.clone()).with_result(Value::object(vec![
         ("view", Value::string(view.name())),

@@ -6,12 +6,9 @@
 
 # Open questions — save-your-skin
 
-What the project does not yet know. Open questions first, then deferred ones, then the
-questions that have been closed and what closed them.
+What is not yet known, and what has since been answered.
 
-**1 open · 1 deferred · 1 resolved · 0 closed without resolution**
-
-## Open (1)
+## Open
 
 ### Does a 4 ms timestep fit the frame budget?
 
@@ -23,22 +20,10 @@ renderer's share unchanged? Nobody has measured four steps against the budget
 on the target box.
 
 **Blocks**
+- `proposed` [Fix the simulator timestep at 4 ms](DECISION-HISTORY.md#revision-1--fix-the-simulator-timestep-at-4-ms) `@sim.decision.timestep-4ms/1`
+- `blocked` [Rewrite the projection pass](ACTIVE-WORK.md#rewrite-the-projection-pass) `@sim.work.rewrite-projection/1`
 
-- `proposed` `@sim.decision.timestep-4ms/1` — Fix the simulator timestep at 4 ms
-  ([DECISION-HISTORY.md](DECISION-HISTORY.md#simdecisiontimestep-4ms))
-- `blocked` `@sim.work.rewrite-projection/1` — Rewrite the projection pass
-  ([ACTIVE-WORK.md](ACTIVE-WORK.md#rewrite-the-projection-pass))
-
-**depends_on** `@sys.constraint.frame-budget-16ms/1`
-([CURRENT-STATE.md](CURRENT-STATE.md#16-ms-frame-budget))
-
-This is the only question in the ledger that blocks live work. It is why
-`@sim.work.rewrite-projection/1` is `blocked` rather than `ready`, and why
-`@sim.decision.timestep-4ms/1` is still `proposed` rather than `active`.
-
-## Deferred (1)
-
-Questions that are open but deliberately not being worked on.
+## Deferred
 
 ### When do we archive the legacy roadmap?
 
@@ -48,15 +33,7 @@ The legacy ROADMAP.md still carries claims nobody has dispositioned. Do we
 archive it as soon as the import work item completes, or keep it until M4 in
 case the import missed something?
 
-**depends_on** `@sys.work.legacy-roadmap-import/1`
-([ACTIVE-WORK.md](ACTIVE-WORK.md#import-the-legacy-roadmap))
-
-**Blocks** — _(none)_
-
-Deferred rather than open because the work item it depends on is itself `proposed`; the
-question cannot be answered before there is something to answer it about.
-
-## Recently closed (1)
+## Recently closed
 
 ### Which side owns text layout?
 
@@ -65,24 +42,6 @@ question cannot be answered before there is something to answer it about.
 Text layout needs both font metrics, which the viewer has, and string state,
 which the simulator has. Which side owns the layout pass?
 
-**Resolution**
+**Resolution.** The viewer owns text layout. The simulator emits strings and anchor points in the frame snapshot and no glyph data, which keeps layout on the side that has the metrics and keeps the boundary one-directional.
 
-The viewer owns text layout. The simulator emits strings and anchor points in
-the frame snapshot and no glyph data, which keeps layout on the side that has
-the metrics and keeps the boundary one-directional.
-
-**Resolved by** `@lege.decision.renderer-boundary/2`
-([DECISION-HISTORY.md](DECISION-HISTORY.md#legedecisionrenderer-boundary))
-
-A `resolved` question must carry a `resolution` and be the target of at least one live
-`resolves` edge (V-011). Both hold here: the boundary decision settled the layout
-question and the boundary question together, because they turned on the same line.
-
-## Closed without resolution (0)
-
-_(none)_
-
----
-
-Archived questions are excluded from this view, as from every generated view except
-[DECISION-HISTORY.md](DECISION-HISTORY.md) (D-018). There are none in this project.
+**Resolved by** [The viewer consumes a frame snapshot](DECISION-HISTORY.md#revision-2--the-viewer-consumes-a-frame-snapshot) `@lege.decision.renderer-boundary/2`

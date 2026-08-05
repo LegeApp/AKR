@@ -6,14 +6,9 @@
 
 # Active work — save-your-skin
 
-Every `work` record in a live state, grouped by what it is part of. Parents appear in
-[ROADMAP.md](ROADMAP.md) order. Blocked items name the blocker inline.
+Live work, grouped by parent in `ROADMAP.md` order. Blocked work names its blocker inline.
 
-6 live work records: 2 `active`, 1 `blocked`, 2 `ready`, 1 `proposed`.
-
-## Under M3 — playable day
-
-`@sys.milestone.m3-playable-day/1` — see [ROADMAP.md](ROADMAP.md#m3--playable-day).
+## [M3 — playable day](ROADMAP.md#m3--playable-day) `@sys.milestone.m3-playable-day/1`
 
 ### Extract the render graph behind the boundary
 
@@ -22,9 +17,6 @@ Every `work` record in a live state, grouped by what it is part of. Parents appe
 Move the render graph behind the frame-snapshot boundary so the viewer builds
 and tests without the simulator crate, and the snapshot type is the only
 shared surface.
-
-**depends_on** `@lege.decision.renderer-boundary/2` ·
-**implements** `@lege.req.no-engine-types-in-viewer/1`
 
 ### Rewrite the projection pass
 
@@ -35,67 +27,11 @@ path rather than four, and bring coverage on that path up to the steady-state
 level.
 
 **Blocked by**
+- `open` [Does a 4 ms timestep fit the frame budget?](OPEN-QUESTIONS.md#does-a-4-ms-timestep-fit-the-frame-budget) `@sim.question.timestep-vs-budget/1`
 
-- `open` [Does a 4 ms timestep fit the frame budget?](OPEN-QUESTIONS.md#does-a-4-ms-timestep-fit-the-frame-budget)
-  `@sim.question.timestep-vs-budget/1`
+> **At risk** at depth 1 via `depends_on` → `@sim.obs.projection-gaps/1` (stale). See [REVIEW-REQUIRED.md](REVIEW-REQUIRED.md#rewrite-the-projection-pass).
 
-**depends_on** `@sim.obs.projection-gaps/1`
-
-> At risk at depth 1 via `depends_on` → `@sim.obs.projection-gaps/1` (stale). The coverage
-> measurement this work item rests on was made before the projection code changed. See
-> [REVIEW-REQUIRED.md](REVIEW-REQUIRED.md#rewrite-the-projection-pass).
-
-## Under M3 plan of record
-
-`@sys.work.m3-plan/2` — the plan of record for M3.
-
-### M3 plan of record
-
-`active` · `@sys.work.m3-plan/2` · plan of record for `@sys.milestone.m3-playable-day/1` · target 2026-09-15
-
-Land the renderer boundary first, since the viewer work is unblocked and the
-sim step is not. Then the sim step rewrite, then the asset audit. Lighting
-moves to the standing track; ambient audio is dropped from the milestone.
-
-**Supersedes** `@sys.work.m3-plan/1`. Every unfinished child of revision 1 is
-dispositioned below (D-017).
-
-| Child | Outcome | Into |
-| --- | --- | --- |
-| `@sys.work.m3-audio-pass` | `intentionally_dropped` | — |
-| `@sys.work.m3-lighting-pass` | `carried_forward` | `@sys.track.lighting/1` |
-
-> **`@sys.work.m3-audio-pass`** — Ambient audio is not part of a playable day as the term
-> defines it. It is not scheduled anywhere and that is deliberate; revisit after M4.
-
-> **`@sys.work.m3-lighting-pass`** — Lighting is standing work that no milestone contains.
-> Moving it to the track is where it should have been from the start.
-
-**implements** `@sys.policy.tandem-work/1`
-
-### Ambient audio for the day loop
-
-`ready` · `@sys.work.m3-audio-pass/1` · part of `@sys.work.m3-plan/1`
-
-Ambient audio beds for the four day phases, plus footstep variation on the
-three surface types in the day-loop scenes.
-
-> Dispositioned `intentionally_dropped` by `@sys.work.m3-plan/2`. The record is still
-> `ready`: the disposition records the decision, and abandoning the record is a separate
-> write operation that has not happened yet.
-
-### Lighting pass for the day loop
-
-`ready` · `@sys.work.m3-lighting-pass/1` · part of `@sys.work.m3-plan/1`
-
-One lighting pass over the day-loop scenes: dawn, noon, dusk and night keys
-for each of the six interiors.
-
-> Dispositioned `carried_forward` into `@sys.track.lighting/1` by `@sys.work.m3-plan/2`.
-
-## Under Tooling hygiene
-
-`@sys.track.tooling-hygiene/1` — see [ROADMAP.md](ROADMAP.md#tooling-hygiene).
+## [Tooling hygiene](ROADMAP.md#tooling-hygiene) `@sys.track.tooling-hygiene/1`
 
 ### Import the legacy roadmap
 
@@ -113,22 +49,35 @@ file is archived only when this work item completes.
 | `m3-scope-claim` | manual | not satisfied — no evidence |
 | `weekly-demo-claim` | manual | not satisfied — no evidence |
 
-**Source** — legacy, `docs/legacy/ROADMAP.md`:
+## [M3 plan of record](ACTIVE-WORK.md#m3-plan-of-record) `@sys.work.m3-plan/1`
 
-> M3 — playable day. Ship the day loop; lighting can trail. Weekly demo
-> build every Friday.
+### Ambient audio for the day loop
+
+`ready` · `@sys.work.m3-audio-pass/1` · part of `@sys.work.m3-plan/1`
+
+Ambient audio beds for the four day phases, plus footstep variation on the
+three surface types in the day-loop scenes.
+
+### Lighting pass for the day loop
+
+`ready` · `@sys.work.m3-lighting-pass/1` · part of `@sys.work.m3-plan/1`
+
+One lighting pass over the day-loop scenes: dawn, noon, dusk and night keys
+for each of the six interiors.
 
 ## Unparented
 
-_(none)_
+### M3 plan of record
 
-## Summary
+`active` · `@sys.work.m3-plan/2`
 
-| Work | State | Parent |
-| --- | --- | --- |
-| Extract the render graph behind the boundary | `active` | `@sys.milestone.m3-playable-day/1` |
-| M3 plan of record | `active` | plan of record for M3 |
-| Rewrite the projection pass | `blocked`, at risk | `@sys.milestone.m3-playable-day/1` |
-| Ambient audio for the day loop | `ready` | `@sys.work.m3-plan/1` |
-| Lighting pass for the day loop | `ready` | `@sys.work.m3-plan/1` |
-| Import the legacy roadmap | `proposed` | `@sys.track.tooling-hygiene/1` |
+Land the renderer boundary first, since the viewer work is unblocked and the
+sim step is not. Then the sim step rewrite, then the asset audit. Lighting
+moves to the standing track; ambient audio is dropped from the milestone.
+
+**Plan of record for** [M3 — playable day](ROADMAP.md#m3--playable-day) `@sys.milestone.m3-playable-day/1`
+
+**Dispositions**
+
+- `@sys.work.m3-audio-pass/1` — `intentionally_dropped` — Ambient audio is not part of a playable day as the term defines it. It is not scheduled anywhere and that is deliberate; revisit after M4.
+- `@sys.work.m3-lighting-pass/1` — `carried_forward` into `@sys.track.lighting/1` — Lighting is standing work that no milestone contains. Moving it to the track is where it should have been from the start.

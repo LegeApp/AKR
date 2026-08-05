@@ -6,26 +6,9 @@
 
 # Current state — save-your-skin
 
-What the project holds to be true at commit `e806b3f5`. Live normative records first —
-what words mean, what cannot be changed, what has been chosen, what must be delivered —
-then live empirical records: what has been found, and when.
-
-Decisions have their own view: [DECISION-HISTORY.md](DECISION-HISTORY.md).
+What the project believes right now: live terms, constraints, policies and requirements, and what has been found or assessed. Decisions have their own view, `DECISION-HISTORY.md`.
 
 ## Terms
-
-### Playable day
-
-`active` · `@sys.term.playable-day/1` · scope `all`
-
-One in-game day, from the morning wake state to the following morning wake
-state, played end to end by one player without a crash, a soft-lock, or a
-placeholder asset.
-
-Also known as: "playable day", "day-loop build".
-
-- `#day-boundary` — A day boundary is the morning wake state, not midnight. Sleeping is
-  what ends a day; the clock is not.
 
 ### Renderer boundary
 
@@ -35,7 +18,15 @@ The line between the viewer and the simulator. The viewer may read a frame
 snapshot across it; it may not call across it, and no engine type may appear
 in a viewer signature.
 
-Also known as: "the boundary", "viewer boundary".
+### Playable day
+
+`active` · `@sys.term.playable-day/1` · scope `all`
+
+One in-game day, from the morning wake state to the following morning wake
+state, played end to end by one player without a crash, a soft-lock, or a
+placeholder asset.
+
+- `#day-boundary` — A day boundary is the morning wake state, not midnight. Sleeping is what ends a day; the clock is not.
 
 ### Tandem work
 
@@ -55,8 +46,6 @@ The target hardware runs at 60 Hz. A frame that takes longer than 16 ms drops,
 and dropped frames in the day loop read as a broken game rather than a slow
 one.
 
-**Measure** — 16 ms at p99, measured over a 20-minute captured session
-
 ### The simulator runs on one thread
 
 `active` · `@sys.constraint.single-threaded-sim/1` · scope `path "sim/**"`
@@ -67,25 +56,6 @@ tick loop.
 
 ## Policies
 
-### Engine and simulator advance in tandem
-
-`active` · `@sys.policy.tandem-work/1` · scope `all` · topic `tandem-work` · **at risk**
-
-No engine change lands without the matching simulator change in the same
-commit, except on the tracks listed under exceptions, where the simulator may
-lag by at most one milestone.
-
-- `#lag-bound` — Permitted simulator lag on an excepted track is at most one milestone,
-  never two.
-- `#same-commit` — Matching engine and simulator changes ship in one commit, not in a
-  follow-up commit on the same day.
-
-**exceptions** `@sys.track.lighting/1` · **supported_by** `@sys.assessment.projection-gaps/1`
-
-> At risk at depth 2 via `supported_by` → `@sys.assessment.projection-gaps/1` →
-> `@sim.obs.projection-gaps/1` (stale). See
-> [REVIEW-REQUIRED.md](REVIEW-REQUIRED.md#engine-and-simulator-advance-in-tandem).
-
 ### Generated views are never edited by hand
 
 `active` · `@sys.policy.no-hand-edited-views/1` · scope `path "docs/generated/**"` · topic `view-authorship`
@@ -93,6 +63,21 @@ lag by at most one milestone.
 Nothing under docs/generated is edited by a person or an agent. Every file
 there is written by `akr build` and carries a generated-by banner. A change to
 what a view says is a change to a record.
+
+### Engine and simulator advance in tandem
+
+`active` · `@sys.policy.tandem-work/1` · scope `all` · topic `tandem-work`
+
+No engine change lands without the matching simulator change in the same
+commit, except on the tracks listed under exceptions, where the simulator may
+lag by at most one milestone.
+
+- `#lag-bound` — Permitted simulator lag on an excepted track is at most one milestone, never two.
+- `#same-commit` — Matching engine and simulator changes ship in one commit, not in a follow-up commit on the same day.
+
+**exceptions** `@sys.track.lighting/1` · **supported_by** `@sys.assessment.projection-gaps/1`
+
+> **At risk** at depth 2 via `supported_by` → `@sys.assessment.projection-gaps/1` → `@sim.obs.projection-gaps/1` (stale). See [REVIEW-REQUIRED.md](REVIEW-REQUIRED.md#engine-and-simulator-advance-in-tandem).
 
 ## Requirements
 
@@ -128,115 +113,92 @@ platform.
 
 ### Day-loop frames land inside the budget with headroom
 
-`verified` · `@lege.obs.frame-budget-headroom/1` · scope `path "lege/src/render/**"` · observed at `e806b3f5`
+`verified` · `@lege.obs.frame-budget-headroom/1` · scope `path "lege/src/render/**"`
 
 Over a 20-minute captured session of the day loop, the 99th-percentile frame
 time was 11.4 ms against the 16 ms budget. The worst single frame, on the barn
 interior transition, was 14.8 ms.
 
-**watches** `"lege/src/render/**"` · **review after** 2026-12-01 · method `instrumented`
-
-### Long runs drift by one tick over an in-game week
-
-`verified` · `@sim.obs.timestep-drift/1` · scope `path "sim/src/step.rs"` · observed at `5d9c2a70` · **stale**
-
-Two runs from the same seed diverge by exactly one tick of accumulated state
-after roughly seven in-game days. The divergence is reproducible and appears
-to originate in the accumulator, not in the projection pass.
-
-**watches** `"sim/src/step.rs"` · **review after** 2026-07-15 · method `instrumented`
-
-**contradicts** `@sim.evidence.determinism-suite-pass/1` — acknowledged
-
-> Stale: `review_after 2026-07-15` has passed. See
-> [REVIEW-REQUIRED.md](REVIEW-REQUIRED.md#long-runs-drift-by-one-tick-over-an-in-game-week).
-
 ### Projection coverage is thinnest at day boundaries
 
-`verified` · `@sim.obs.projection-gaps/1` · scope `path "sim/src/project/**"` · observed at `7c41d0ba` · **stale**
+`verified` · `@sim.obs.projection-gaps/1` · scope `path "sim/src/project/**"`
 
 Across the projection suite the least-covered paths cluster at the transition
 from one in-game day to the next: 41 percent line coverage there against 88
 percent for steady-state paths. The uncovered branches are the ones that
 reconcile pending state at the wake boundary.
 
-**watches** `"sim/src/project/**"` · **review after** 2026-11-01 · method `command`
+> **Stale** — No cause was recorded. See [REVIEW-REQUIRED.md](REVIEW-REQUIRED.md#projection-coverage-is-thinnest-at-day-boundaries).
 
-> Stale: `watches "sim/src/project/**"` was matched by `5d9c2a70`. See
-> [REVIEW-REQUIRED.md](REVIEW-REQUIRED.md#projection-coverage-is-thinnest-at-day-boundaries).
+### Long runs drift by one tick over an in-game week
+
+`verified` · `@sim.obs.timestep-drift/1` · scope `path "sim/src/step.rs"`
+
+Two runs from the same seed diverge by exactly one tick of accumulated state
+after roughly seven in-game days. The divergence is reproducible and appears
+to originate in the accumulator, not in the projection pass.
+
+> **Stale** — No cause was recorded. See [REVIEW-REQUIRED.md](REVIEW-REQUIRED.md#long-runs-drift-by-one-tick-over-an-in-game-week).
 
 ## Assessments
 
 ### M3 is one blocked work item away from ready
 
-`verified` · `@sys.assessment.m3-readiness/1` · scope `ref @sys.milestone.m3-playable-day` · as of `e806b3f5` · **at risk**
+`verified` · `@sys.assessment.m3-readiness/1` · scope `ref @sys.milestone.m3-playable-day`
 
 Of the M3 acceptance checks, the full-day demo has passed. The remaining check
 depends on the projection rewrite, which is blocked on an unanswered timestep
 question. Nothing else on the milestone is unresolved.
 
-**confidence** medium · **supported_by** `@sim.obs.timestep-drift/1`
+**supported_by** `@sim.obs.timestep-drift/1`
 
-> At risk at depth 1 via `supported_by` → `@sim.obs.timestep-drift/1` (stale).
+> **At risk** at depth 1 via `supported_by` → `@sim.obs.timestep-drift/1` (stale). See [REVIEW-REQUIRED.md](REVIEW-REQUIRED.md#m3-is-one-blocked-work-item-away-from-ready).
 
 ### Projection gaps put the M3 date at risk
 
-`verified` · `@sys.assessment.projection-gaps/1` · scope `ref @sys.milestone.m3-playable-day` · as of `5d9c2a70` · **at risk**
+`verified` · `@sys.assessment.projection-gaps/1` · scope `ref @sys.milestone.m3-playable-day`
 
 The uncovered day-boundary paths sit on the critical path for M3. On current
 evidence the rewrite is roughly two weeks of work that has not been scheduled,
 and the milestone target does not account for it.
 
-**confidence** medium · **supported_by** `@sim.obs.projection-gaps/1`
+**supported_by** `@sim.obs.projection-gaps/1`
 
-> At risk at depth 1 via `supported_by` → `@sim.obs.projection-gaps/1` (stale).
+> **At risk** at depth 1 via `supported_by` → `@sim.obs.projection-gaps/1` (stale). See [REVIEW-REQUIRED.md](REVIEW-REQUIRED.md#projection-gaps-put-the-m3-date-at-risk).
 
 ## Evidence
 
 ### Boundary lint reports no engine imports
 
-`verified` · `@lege.evidence.boundary-lint-pass/1` · result `pass` · method `command` · observed at `b2e58f14`
+`verified` · `@lege.evidence.boundary-lint-pass/1`
 
 Zero engine types in public viewer signatures. The eleven previously reported
 by the viewer-imports-engine observation are gone.
 
-**command** `cargo run -p tools -- boundary-lint --crate lege` ·
-**artifact** `artifacts/2026-05-20-boundary-lint.txt`
+**Verifies**
 
-Verifies: `@sys.milestone.m1-walking-skeleton/1#viewer-boundary-clean`,
-`@lege.req.no-engine-types-in-viewer/1`,
-`@lege.decision.renderer-boundary/2#no-engine-types`.
+- `completed` `@sys.milestone.m1-walking-skeleton/1` — check `viewer-boundary-clean`
 
 ### Determinism suite green across a 512-seed sweep
 
-`verified` · `@sim.evidence.determinism-suite-pass/1` · result `pass` · method `command` · observed at `5d9c2a70`
+`verified` · `@sim.evidence.determinism-suite-pass/1`
 
 512 seeds, 10 000 ticks each, byte-identical state at every tick boundary. The
 suite runs 10 000 ticks, which is under two in-game days; the drift observed
 over a week is outside what this sweep covers.
 
-**command** `cargo test -p sim --test determinism -- --seed-sweep 512` ·
-**artifact** `artifacts/2026-06-30-determinism.log`
+**Verifies**
 
-Verifies: `@sys.milestone.m2-deterministic-sim/1#determinism-suite-green`,
-`@sys.req.deterministic-sim/1`.
-
-**contradicted by** `@sim.obs.timestep-drift/1` — acknowledged
+- `completed` `@sys.milestone.m2-deterministic-sim/1` — check `determinism-suite-green`
 
 ### Recorded full-day session
 
-`verified` · `@sys.evidence.playable-day-demo/1` · result `pass` · method `observation` · observed at `e806b3f5`
+`verified` · `@sys.evidence.playable-day-demo/1`
 
 One complete in-game day, 41 minutes, start to finish. No crash, no soft-lock.
 Two placeholder textures visible in the barn interior, which is why the asset
 audit check is separate.
 
-**artifact** `artifacts/2026-07-11-day-loop.mp4`
+**Verifies**
 
-Verifies: `@sys.milestone.m3-playable-day/1#full-day-demo`.
-
----
-
-The "Verifies" lines above are computed from the `verified_by` edges that point *at* each
-evidence record. No evidence record declares what it verifies (D-016); the view reverses
-the edge for the reader.
+- `active` `@sys.milestone.m3-playable-day/1` — check `full-day-demo`
