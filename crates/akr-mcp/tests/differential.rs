@@ -260,6 +260,57 @@ fn a_cache_without_a_ranker_fails_the_same_way_on_both_surfaces() {
     );
 }
 
+#[test]
+fn an_uninitialised_workspace_carries_the_remedy_on_both_surfaces() {
+    // The friction `akr.papercut.root-cause-of-the-discoverability-miss-the-cli`: the CLI
+    // tells a caller to run `akr init`, but the MCP surface used to drop that `help` line,
+    // so an agent saw `AKR-C011` with no way forward. Both surfaces must now carry it, and
+    // — §1's whole point — carry the *same* thing.
+    let example = Example::materialise("differential-uninitialised");
+    std::fs::remove_dir_all(example.root().join(".akr")).expect("the ledger goes");
+
+    const REMEDY: &str = "run `akr init` to create one";
+
+    // MCP: the error payload's first diagnostic carries the help.
+    let payload = call(&example, "knowledge.search", r#"{"query":"projection"}"#);
+    let error = payload.get("error").expect("an error payload");
+    assert_eq!(
+        error.get("class").and_then(Value::as_str),
+        Some("environment")
+    );
+    let mcp_help = error
+        .get("diagnostics")
+        .and_then(Value::as_array)
+        .and_then(|d| d.first())
+        .and_then(|d| d.get("help"))
+        .and_then(Value::as_str);
+    assert_eq!(
+        mcp_help,
+        Some(REMEDY),
+        "MCP dropped the remedy: {payload:?}"
+    );
+
+    // CLI: the same help, on the same diagnostic, in the JSON envelope.
+    let run = example.run(&["--format", "json", "search", "projection"]);
+    let document = parse(&run.stdout).expect("the CLI emits JSON");
+    let cli_help = document
+        .get("diagnostics")
+        .and_then(Value::as_array)
+        .and_then(|d| d.first())
+        .and_then(|d| d.get("help"))
+        .and_then(Value::as_str);
+    assert_eq!(
+        cli_help,
+        Some(REMEDY),
+        "CLI dropped the remedy: {}",
+        run.stdout
+    );
+    assert_eq!(
+        mcp_help, cli_help,
+        "the two surfaces disagree on the remedy"
+    );
+}
+
 // -------------------------------------------------------------------------------------
 // §7 — read/write separation and idempotency
 // -------------------------------------------------------------------------------------

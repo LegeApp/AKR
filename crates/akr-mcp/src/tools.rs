@@ -640,14 +640,31 @@ fn diagnostic_json(diagnostic: &akr_core::diagnostics::Diagnostic) -> Value {
 }
 
 fn environment(error: EnvError) -> ToolError {
-    let mut mapped = ToolError::new(error.code, error.message.clone());
     // `AKR-I022` and `AKR-M002` are the deferred surfaces — search and import — and they
     // are environment failures in the sense that matters: not the agent's fault, and not
     // fixable by trying again.
-    if mapped.class == Class::Invariant {
-        mapped.class = Class::Environment;
+    let class = match class_of(error.code) {
+        Class::Invariant => Class::Environment,
+        other => other,
+    };
+    // Carry the CLI's `help:` line into the diagnostic, the same optional field
+    // `diagnostic_json` already emits (docs/07-cli.md §5). Without it, an agent that hits
+    // `AKR-C011` over MCP is told there is no ledger but not that `akr init` makes one —
+    // the remedy the command line prints.
+    let mut fields = vec![
+        ("code", Value::string(error.code)),
+        ("severity", Value::string("error")),
+        ("message", Value::string(error.message.clone())),
+    ];
+    if let Some(help) = &error.help {
+        fields.push(("help", Value::string(help.clone())));
     }
-    mapped
+    ToolError {
+        class,
+        summary: error.message,
+        diagnostics: vec![Value::object(fields)],
+        wrote: false,
+    }
 }
 
 fn dispositions(arguments: &Value) -> Result<Vec<akr_core::ops::DispositionRequest>, ToolError> {
@@ -767,7 +784,13 @@ fn merged(arguments: &Value, head: &akr_core::model::Record) -> Value {
             ),
         ));
     }
-    for name in ["claims", "retired_claims", "author", "created_at", "acceptance"] {
+    for name in [
+        "claims",
+        "retired_claims",
+        "author",
+        "created_at",
+        "acceptance",
+    ] {
         if let Some(value) = arguments.get(name) {
             fields.push((name.to_owned(), value.clone()));
         }

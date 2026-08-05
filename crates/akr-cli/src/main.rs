@@ -79,19 +79,26 @@ fn run(argv: &[String]) -> Exit {
 /// An environment failure: exit status 3, and never a JSON `result`.
 fn report_environment(error: &EnvError, json: bool, command: &str) {
     if json {
+        // The diagnostic carries the same optional `help` field as every other §5
+        // diagnostic; dropping it here would make the JSON surface strictly less helpful
+        // than the text one and put the CLI out of step with the MCP payload.
+        let mut fields = vec![
+            ("code", akr_core::json::Value::string(error.code)),
+            ("severity", akr_core::json::Value::string("error")),
+            (
+                "message",
+                akr_core::json::Value::string(error.message.clone()),
+            ),
+        ];
+        if let Some(help) = &error.help {
+            fields.push(("help", akr_core::json::Value::string(help.clone())));
+        }
         let document = envelope(
             command,
             None,
             "",
             Exit::Environment,
-            vec![akr_core::json::Value::object(vec![
-                ("code", akr_core::json::Value::string(error.code)),
-                ("severity", akr_core::json::Value::string("error")),
-                (
-                    "message",
-                    akr_core::json::Value::string(error.message.clone()),
-                ),
-            ])],
+            vec![akr_core::json::Value::object(fields)],
             akr_core::json::Value::Object(Vec::new()),
         );
         print!("{}", document.to_pretty());
