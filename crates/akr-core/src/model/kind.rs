@@ -66,7 +66,8 @@ impl fmt::Display for Class {
     }
 }
 
-/// The twelve record kinds (D-001). There is no `plan` kind and no `goal` kind.
+/// The thirteen record kinds (D-001, extended by D-027). There is no `plan` kind and no
+/// `goal` kind.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Kind {
     /// Fixes the project's meaning for a word.
@@ -85,6 +86,8 @@ pub enum Kind {
     Evidence,
     /// A judgement drawn from observations.
     Assessment,
+    /// A small friction hit while working, logged in the moment (D-027).
+    Papercut,
     /// A named point at which defined acceptance checks pass.
     Milestone,
     /// A unit of intended change.
@@ -106,6 +109,7 @@ impl Kind {
         Kind::Observation,
         Kind::Evidence,
         Kind::Assessment,
+        Kind::Papercut,
         Kind::Milestone,
         Kind::Work,
         Kind::Track,
@@ -124,6 +128,7 @@ impl Kind {
             Self::Observation => "observation",
             Self::Evidence => "evidence",
             Self::Assessment => "assessment",
+            Self::Papercut => "papercut",
             Self::Milestone => "milestone",
             Self::Work => "work",
             Self::Track => "track",
@@ -144,7 +149,9 @@ impl Kind {
             Self::Term | Self::Requirement | Self::Policy | Self::Constraint | Self::Decision => {
                 Class::Normative
             }
-            Self::Observation | Self::Evidence | Self::Assessment => Class::Empirical,
+            Self::Observation | Self::Evidence | Self::Assessment | Self::Papercut => {
+                Class::Empirical
+            }
             Self::Milestone | Self::Work | Self::Track => Class::Planning,
             Self::Question => Class::Inquiry,
         }
@@ -168,6 +175,7 @@ impl Kind {
             Self::Observation => OBSERVATION_SLOTS,
             Self::Evidence => EVIDENCE_SLOTS,
             Self::Assessment => ASSESSMENT_SLOTS,
+            Self::Papercut => PAPERCUT_SLOTS,
             Self::Milestone | Self::Work => PLAN_SLOTS,
             Self::Track => TRACK_SLOTS,
             Self::Question => QUESTION_SLOTS,
@@ -238,6 +246,9 @@ const EVIDENCE_SLOTS: &[ContentSlotSpec] = &[
     opt(C::Summary),
 ];
 const ASSESSMENT_SLOTS: &[ContentSlotSpec] = &[req(C::Statement), opt(C::Confidence), opt(C::AsOf)];
+// D-027: both slots are filled by the tooling — no `watches`, so a papercut never
+// enters the review queue.
+const PAPERCUT_SLOTS: &[ContentSlotSpec] = &[req(C::Statement), req(C::ObservedAt)];
 const PLAN_SLOTS: &[ContentSlotSpec] = &[req(C::Intent), opt(C::Target), opt(C::Note)];
 const TRACK_SLOTS: &[ContentSlotSpec] = &[req(C::Intent), opt(C::Cadence), opt(C::Note)];
 const QUESTION_SLOTS: &[ContentSlotSpec] = &[req(C::Question), opt(C::Resolution)];

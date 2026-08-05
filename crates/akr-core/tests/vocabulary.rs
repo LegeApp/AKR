@@ -36,7 +36,11 @@ fn every_kind_is_in_code_and_in_the_json() {
     let json: BTreeSet<String> = names(&v["kinds"]);
     let code: BTreeSet<String> = Kind::ALL.iter().map(|k| k.name().to_owned()).collect();
     assert_eq!(json, code, "kind sets differ");
-    assert_eq!(code.len(), 12, "D-001 fixes the vocabulary at twelve kinds");
+    assert_eq!(
+        code.len(),
+        13,
+        "D-001 fixed twelve kinds; D-027 added papercut"
+    );
 }
 
 #[test]

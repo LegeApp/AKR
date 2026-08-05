@@ -414,7 +414,7 @@ fn no_tool_can_reach_the_sqlite_cache() {
         assert!(!schema.to_lowercase().contains("sqlite"), "{}", tool.name);
         assert!(!schema.to_lowercase().contains("select "), "{}", tool.name);
     }
-    assert_eq!(akr_mcp::schema::TOOLS.len(), 10);
+    assert_eq!(akr_mcp::schema::TOOLS.len(), 11);
 }
 
 #[test]
@@ -450,4 +450,49 @@ fn evidence_add_creates_a_verified_record_with_head_as_default_commit() {
     // Idempotent by key, like propose: a second add is an error, not a second record.
     let (payload, is_error) = call(&example, "knowledge.evidence_add", arguments);
     assert!(is_error, "{}", error_text(&payload));
+}
+
+#[test]
+fn papercut_is_one_call_and_lands_in_its_own_view() {
+    // D-027: the message is the whole ceremony. The tool allocates the key, fills the
+    // slots, and the aggregate appears in PAPERCUTS.md on the next build.
+    let example = Example::materialise("mcp-papercut");
+    let arguments = r#"{
+        "agent": "claude",
+        "namespace": "sys",
+        "message": "Ran akr search right after a write and got stale results; akr build in between fixed it."
+    }"#;
+    let (payload, is_error) = call(&example, "knowledge.papercut", arguments);
+    assert!(!is_error, "{}", error_text(&payload));
+    assert_eq!(payload.get("rev").and_then(Value::as_integer), Some(1));
+    assert_eq!(
+        payload.get("state").and_then(Value::as_str),
+        Some("verified"),
+        "{}",
+        error_text(&payload)
+    );
+    let source = example.read_file(".akr/records/sys/papercuts.akr");
+    assert!(source.contains(": papercut {"), "{source}");
+    assert!(source.contains("author \"claude\""), "{source}");
+
+    // A second papercut with the same message gets its own key, because a log never
+    // refuses an entry.
+    let (payload, is_error) = call(&example, "knowledge.papercut", arguments);
+    assert!(!is_error, "{}", error_text(&payload));
+    assert!(
+        payload
+            .get("key")
+            .and_then(Value::as_str)
+            .is_some_and(|key| key.ends_with("-2")),
+        "{}",
+        error_text(&payload)
+    );
+
+    // The build emits the view, newest first, with agent and citation.
+    let run = example.run(&["build"]);
+    assert_eq!(run.code, 0, "{}", run.output());
+    let view = example.read_file("docs/generated/PAPERCUTS.md");
+    assert!(view.contains("# Papercuts"), "{view}");
+    assert!(view.contains("[claude]"), "{view}");
+    assert!(view.contains("stale results"), "{view}");
 }

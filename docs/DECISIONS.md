@@ -806,3 +806,53 @@ commentary this slot is for.
 **Honored by.** `spec/tables/vocabulary.json`, `docs/02-data-model.md` §4.9–§4.11,
 `crates/akr-core/src/model/kind.rs`, `crates/akr-core/src/ops`, `docs/07-cli.md` §6
 (Writer B, P6c), `docs/11-projections.md`.
+
+---
+
+## D-027 — A `papercut` kind, logged in the moment, with its own generated view
+
+*Amendment, 2026-08-05. Like D-026 this entry postdates the spine's freezing and lands
+with its implementation. It consciously extends D-001's closed set of twelve kinds to
+thirteen; D-022 ("migration adds no kinds") is untouched — this kind comes from a
+recorded decision, not from an import.*
+
+**Question.** Agents hit small frictions while working — a tool call that missed and had
+to be retried, a confusing setup step, a flaky command, a stale cache, a misleading
+error, a non-obvious gotcha. None of them blocks; none of them is worth a work item; all
+of them are worth knowing in aggregate, because logged together they show where the
+project needs sanding down. Where do they go? Scratch is discarded, an `observation`
+carries watch/staleness ceremony the moment does not want, and a Markdown file at the
+repository root would be exactly the untyped pile AKR exists to replace.
+
+**Resolution.** A thirteenth kind, `papercut`, in the **empirical** class: it records
+what was found to be true at a stated point in history, which is precisely what a
+friction report is. Two content slots, both filled automatically by the tooling:
+`statement` (required prose — what you were doing, what got in the way, and a guess at
+the cause or fix as a bonus) and `observed_at` (required commit, defaulted to HEAD). The
+agent that hit it goes in the common `author` slot; the date in `created_at`. No
+`watches`, so a papercut never goes stale and never enters the review queue; no
+relations are required, so logging one is a single call.
+
+The write surface is `akr papercut -m <agent> "message"` and the `knowledge.papercut`
+MCP tool. Both allocate the key (`<namespace>.papercut.<slug-of-message>`), fill every
+slot, and run the ordinary write pipeline — a papercut is a first-class record that
+happens to cost one line to create.
+
+The aggregate lives in a seventh generated view, `PAPERCUTS.md`, newest first, emitted
+only once the ledger contains at least one papercut — a project that never logs one
+never grows the file.
+
+**Rationale.** The alternative of a free-form `PAPERCUTS.md` at the repository root was
+rejected because it recreates the prose pile: no author an agent can trust, no commit,
+no dedup handle, invisible to `akr search` and to the index. Making the record typed
+costs nothing at the call site — the tooling fills every slot — and buys search,
+provenance, and the one thing a papercut log is for: a reviewable aggregate.
+
+Logging is proactive and in the moment. Mining a whole session for papercuts afterwards
+is a language-model act, so it lives outside the tool (a harness command that reads the
+transcript and calls `akr papercut` per finding), user-triggered, never in stages A–F
+(D-020).
+
+**Honored by.** `spec/tables/vocabulary.json`, `crates/akr-core/src/model/kind.rs`,
+`crates/akr-core/src/papercut`, `crates/akr-core/src/render`, `docs/07-cli.md` §6,
+`docs/08-mcp.md`, `docs/11-projections.md`.

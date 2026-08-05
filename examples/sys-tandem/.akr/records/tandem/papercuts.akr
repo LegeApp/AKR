@@ -1,0 +1,15 @@
+akr 0.1
+project sys-tandem
+
+record tandem.papercut.search-after-write-stale/1 : papercut {
+    title "akr search right after a write returned stale results"
+    state verified
+    statement """
+        Logged the channel-coverage observation and immediately searched for it;
+        the result set did not include it. The index rebuilds on the next build,
+        not on write — an `akr build` in between fixed it.
+        """
+    observed_at git:9d40e1b7c85a326f0b1de94738ca5602f81b7d4a
+    author "codex"
+    created_at 2026-08-02
+}

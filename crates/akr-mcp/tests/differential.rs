@@ -355,7 +355,7 @@ fn every_declared_tool_has_a_schema_and_an_implementation() {
         .and_then(|r| r.get("tools"))
         .and_then(Value::as_array)
         .expect("a tool list");
-    assert_eq!(tools.len(), 10, "the catalogue is closed for 0.1");
+    assert_eq!(tools.len(), 11, "the catalogue is closed for 0.1");
 
     for tool in tools {
         let name = tool.get("name").and_then(Value::as_str).expect("a name");

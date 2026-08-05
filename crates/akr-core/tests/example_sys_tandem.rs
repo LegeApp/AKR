@@ -83,8 +83,8 @@ fn the_example_resolves_with_no_diagnostics() {
 fn the_inventory_matches_the_manifest() {
     let workspace = workspace();
     let ledger = &workspace.ledger;
-    assert_eq!(ledger.records().len(), 65, "revisions");
-    assert_eq!(ledger.keys().len(), 62, "keys");
+    assert_eq!(ledger.records().len(), 66, "revisions");
+    assert_eq!(ledger.keys().len(), 63, "keys");
 
     // Three keys carry a second revision, and each is a distinct reason to revise.
     for key_text in [

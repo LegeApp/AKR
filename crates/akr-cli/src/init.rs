@@ -15,7 +15,7 @@ use std::path::Path;
 /// Deliberately protocol only — no philosophy, no data model, no examples — because an
 /// agent reads it every session and every extra line competes with the task. Everything
 /// beyond this is reachable through the tools themselves.
-pub const AGENTS_TEMPLATE: &str = r"## Project knowledge (AKR)
+pub const AGENTS_TEMPLATE: &str = r#"## Project knowledge (AKR)
 
 Durable project knowledge lives in `.akr/` as typed records, not in Markdown.
 `docs/generated/` is build output. Follow this protocol.
@@ -44,6 +44,16 @@ Durable project knowledge lives in `.akr/` as typed records, not in Markdown.
   state what was observed; they never state what they verify.
 - Unsure what a kind requires? `akr explain <kind>` prints its schema.
 
+**Papercuts**
+- When you hit a small friction while working — a tool call that missed and had to be
+  retried, a confusing or undocumented setup step, a flaky command, a stale cache, a
+  misleading error, a non-obvious gotcha — log it with `knowledge.papercut` (or
+  `akr papercut -m <agent> "message"`). One or two sentences: what you were doing,
+  what got in the way (a guess at the cause/fix is a bonus). Do this proactively, in
+  the moment, even though none of these are blocking — logged together they show where
+  the project needs sanding down. This is distinct from durable records (knowledge) and
+  from `.agent/scratch/` (working notes).
+
 **Never**
 - Never edit `docs/generated/` — it is regenerated and CI checks it.
 - Never read `.akr/cache/` — it is a private cache.
@@ -51,7 +61,7 @@ Durable project knowledge lives in `.akr/` as typed records, not in Markdown.
 
 **Before handing back**
 - `knowledge.validate`. If it reports diagnostics, fix them or say so explicitly.
-";
+"#;
 
 /// The two paths a workspace must not track.
 const GITIGNORE_ENTRIES: &[&str] = &[".akr/cache/", ".agent/scratch/"];

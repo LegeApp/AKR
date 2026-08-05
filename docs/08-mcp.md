@@ -1,6 +1,6 @@
 # 08 — The MCP Tool Surface
 
-How an agent reaches the ledger: ten tools, their input and output schemas, how
+How an agent reaches the ledger: eleven tools, their input and output schemas, how
 diagnostics become tool errors, why reads and writes are separated, what idempotency
 means here, and the `AGENTS.md` text that makes agents use any of it.
 
@@ -49,8 +49,9 @@ guessing where the message was meant to end.
 | `knowledge.supersede` | write | `akr supersede` | no |
 | `knowledge.complete` | write | `akr complete` | by state |
 | `knowledge.evidence_add` | write | `akr evidence add` | by key |
+| `knowledge.papercut` | write | `akr papercut` | no |
 
-Ten tools, and the list is closed for 0.1. Notably absent:
+Eleven tools, and the list is closed for 0.1. Notably absent:
 
 - **No `knowledge.query`.** No arbitrary query language, and above all no SQL. Agents
   never see the SQLite cache (§6).
@@ -303,6 +304,20 @@ check names its evidence in `verified_by`, or `knowledge.complete` supplies the 
 one direction, one source of truth. The typical closing sequence is `evidence_add`,
 then `complete` with `checks` citing the returned revision.
 
+### `knowledge.papercut`
+
+```jsonc
+{ "agent": "claude",
+  "message": "Ran knowledge.search right after a write and got stale results;               akr build in between fixed it.",
+  "namespace": "sys" }   // needed only when the project declares several
+```
+
+Logs a small friction as a `papercut` record (D-027): what you were doing, what got in
+the way, and — as a bonus — a guess at the cause or fix. The message is the whole
+ceremony: the key, the commit, the author and the date are filled in by the tool. Not
+idempotent, deliberately: a log never refuses an entry, so the same message twice is two
+records with distinct keys. The aggregate renders to `PAPERCUTS.md` on the next build.
+
 ## 5. Error mapping
 
 Every failure is an MCP tool error whose payload is the JSON diagnostic array of
@@ -405,6 +420,9 @@ Durable project knowledge lives in `.akr/` as typed records, not in Markdown.
   Search ranks results; it never grants authority. A record's standing comes from its
   state, its scope, and its relations.
 - Scratch notes go in `.agent/scratch/`. Nobody reviews them and nothing depends on them.
+- When you hit a small friction — a retried tool call, a confusing setup step, a flaky
+  command, a stale cache, a misleading error — log it with `knowledge.papercut`, in the
+  moment. One or two sentences; a guess at the cause/fix is a bonus.
 
 **When something becomes durable**
 - New knowledge: `knowledge.propose`. Observations need `observed_at` and, if they can

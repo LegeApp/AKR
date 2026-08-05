@@ -148,6 +148,7 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
         | Command::Supersede { .. }
         | Command::Complete { .. }
         | Command::Abandon { .. }
+        | Command::Papercut { .. }
         | Command::EvidenceAdd { .. } => crate::write::run(session, command),
         Command::Help
         | Command::HelpFor { .. }
@@ -635,11 +636,18 @@ fn view(session: &Session, name: &str) -> Result<Output, EnvError> {
     let freshness = session.freshness(&queue);
     let context = akr_core::render::RenderContext::new(&model, &freshness);
     let Some(text) = render(view, context) else {
+        if view == View::Papercuts {
+            return Err(EnvError::new(
+                "AKR-E003",
+                "no papercuts logged; PAPERCUTS.md is emitted once one exists (D-027)",
+            )
+            .help("log one with `akr papercut -m <agent> \"message\"`"));
+        }
         return Err(EnvError::new(
             "AKR-E003",
             format!("the {} renderer arrives with a later phase", view.name()),
         )
-        .help("`akr view roadmap` is implemented; the other five follow"));
+        .help("`akr view roadmap` and `akr view papercuts` are implemented; the rest follow"));
     };
     Ok(Output::text(text.clone()).with_result(Value::object(vec![
         ("view", Value::string(view.name())),

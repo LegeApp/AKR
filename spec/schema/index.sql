@@ -85,7 +85,7 @@ CREATE TABLE records (
     head_rev    INTEGER,            -- NULL when no revision is live
     rev_count   INTEGER NOT NULL,
     CHECK (kind IN ('term', 'requirement', 'policy', 'constraint', 'decision',
-                    'observation', 'evidence', 'assessment',
+                    'observation', 'evidence', 'assessment', 'papercut',
                     'milestone', 'work', 'track',
                     'question')),
     CHECK (class IN ('normative', 'empirical', 'planning', 'inquiry')),

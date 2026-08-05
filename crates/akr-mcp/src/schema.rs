@@ -87,6 +87,17 @@ pub const TOOLS: &[Tool] = &[
                       or from knowledge.complete.",
         writes: true,
     },
+    Tool {
+        name: "knowledge.papercut",
+        description: "Log a small friction hit while working — a tool call that missed \
+                      and had to be retried, a confusing setup step, a flaky command, a \
+                      stale cache, a misleading error, a non-obvious gotcha. One or two \
+                      sentences: what you were doing, what got in the way (a guess at the \
+                      cause/fix is a bonus). Do this proactively, in the moment, even \
+                      though none of these are blocking — logged together they show where \
+                      the project needs sanding down (D-027).",
+        writes: true,
+    },
 ];
 
 /// The input schema for a tool, or `None` if the name is unknown.
@@ -284,6 +295,29 @@ pub fn input_schema(name: &str) -> Option<Value> {
                 ("title", string("The one-line label. Defaults to the summary or the key.")),
             ],
             &["key", "result", "method"],
+        ),
+        "knowledge.papercut" => object(
+            vec![
+                (
+                    "message",
+                    string(
+                        "One or two sentences: what you were doing, what got in the way, \
+                         and optionally a guess at the cause or fix.",
+                    ),
+                ),
+                (
+                    "agent",
+                    string("Who hit it: your model or harness name, e.g. \"claude\"."),
+                ),
+                (
+                    "namespace",
+                    string(
+                        "Namespace for the key. Needed only when the project declares \
+                         several.",
+                    ),
+                ),
+            ],
+            &["message", "agent"],
         ),
         _ => return None,
     };

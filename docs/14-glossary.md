@@ -62,7 +62,7 @@ truth. → [`01-architecture.md`](01-architecture.md) §2
 
 ## Kinds and classes
 
-**Kind** — One of exactly twelve: `term`, `requirement`, `policy`, `constraint`,
+**Kind** — One of exactly thirteen (D-001, extended by D-027): `term`, `requirement`, `policy`, `constraint`,
 `decision`, `observation`, `evidence`, `assessment`, `milestone`, `work`, `track`,
 `question`. → [`02-data-model.md`](02-data-model.md), D-001
 

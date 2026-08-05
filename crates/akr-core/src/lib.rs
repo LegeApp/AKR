@@ -42,6 +42,7 @@ pub mod json;
 pub mod lock;
 pub mod model;
 pub mod ops;
+pub mod papercut;
 pub mod render;
 pub mod resolve;
 pub mod store;

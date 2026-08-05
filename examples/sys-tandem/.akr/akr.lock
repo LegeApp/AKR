@@ -6,7 +6,7 @@ build {
     grammar "0.1"
     vocabulary "0.1"
     commit git:b7e3092d6a1f48c5039be2714da86f05c93e1b6d
-    source_graph "sha256:c363a08a0a46670860c5da8f022d4511087b547046909763bc2e77f35a7d49af"
+    source_graph "sha256:cbfd1d102d9d28ce84f4bce2896ea3b47042b440a7b5d467ebf3954733c03633"
     built_at 2026-08-04T10:00:00Z
 }
 
@@ -93,6 +93,11 @@ source ".akr/records/tandem/decisions.akr" {
 source ".akr/records/tandem/milestones.akr" {
     hash "sha256:3cf8ee9db5ff98f8fe2fba2614d679370bf9159a245309c8ad690da5f9db4473"
     records 6
+}
+
+source ".akr/records/tandem/papercuts.akr" {
+    hash "sha256:5db38ecac58bef7312fa3172f1f8315d61c6dfc3fe8871cba036af6c8a0d8e1a"
+    records 1
 }
 
 source ".akr/records/tandem/policies.akr" {
@@ -711,6 +716,11 @@ seal @tandem.milestone.m4-day-means-something/1 {
 seal @tandem.milestone.m5-one-playable-day/1 {
     state active
     hash "sha256:c9c02dbf4655b8c61e4fbeb5b5ad3538594a31f8e9918b4551430341d0276481"
+}
+
+seal @tandem.papercut.search-after-write-stale/1 {
+    state verified
+    hash "sha256:89e14438457dd8a0290ccaafca0f7b969c346f6fee1f5fba016ee7f50b4733c0"
 }
 
 seal @tandem.policy.same-change-audit/1 {

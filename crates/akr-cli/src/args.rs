@@ -236,6 +236,15 @@ pub enum Command {
         /// `child=outcome[:into]` pairs.
         dispositions: Vec<String>,
     },
+    /// `akr papercut -m <agent> "message"` (D-027).
+    Papercut {
+        /// What got in the way, in one or two sentences.
+        message: String,
+        /// Who hit it: a model or harness name. Lands in `author`.
+        agent: Option<String>,
+        /// The namespace for the key; needed only when the project declares several.
+        namespace: Option<String>,
+    },
     /// `akr evidence add <key>`.
     EvidenceAdd {
         /// The evidence key.
@@ -282,6 +291,7 @@ impl Command {
             Self::Supersede { .. } => "supersede".to_owned(),
             Self::Complete { .. } => "complete".to_owned(),
             Self::Abandon { .. } => "abandon".to_owned(),
+            Self::Papercut { .. } => "papercut".to_owned(),
             Self::EvidenceAdd { .. } => "evidence add".to_owned(),
         }
     }
@@ -339,6 +349,7 @@ const COMMANDS: &[&str] = &[
     "supersede",
     "complete",
     "abandon",
+    "papercut",
     "evidence",
     "review-queue",
     "import",
@@ -700,6 +711,51 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
                 dispositions: repeated(tail, "--disposition"),
             }
         }
+        "papercut" => {
+            // Parsed by hand: `-m` takes a value, and the generic positional filter
+            // would otherwise mistake that value for the message.
+            let mut message: Option<String> = None;
+            let mut agent: Option<String> = None;
+            let mut namespace: Option<String> = None;
+            let mut args = tail.iter();
+            while let Some(arg) = args.next() {
+                match arg.as_str() {
+                    "-m" | "--agent" => {
+                        agent = Some(args.next().cloned().ok_or_else(|| {
+                            UsageError::new("AKR-C003", "-m requires a value: who hit it")
+                        })?);
+                    }
+                    "--namespace" => {
+                        namespace = Some(args.next().cloned().ok_or_else(|| {
+                            UsageError::new("AKR-C003", "--namespace requires a value")
+                        })?);
+                    }
+                    other if other.starts_with('-') => {
+                        return Err(UsageError::new(
+                            "AKR-C002",
+                            format!("unknown flag {other:?} for command \"papercut\""),
+                        ));
+                    }
+                    other => {
+                        if message.is_some() {
+                            return Err(UsageError::new(
+                                "AKR-C004",
+                                format!("papercut takes one message; {other:?} is a second"),
+                            )
+                            .with_help("quote the whole message"));
+                        }
+                        message = Some(other.to_owned());
+                    }
+                }
+            }
+            Command::Papercut {
+                message: message.ok_or_else(|| {
+                    UsageError::new("AKR-C003", "papercut requires a message")
+                })?,
+                agent,
+                namespace,
+            }
+        }
         "evidence" => {
             known_flags(&[
                 "--result",
@@ -1007,6 +1063,24 @@ pub fn help_for(name: &str) -> Option<String> {
              the durable note slot and is rendered by the views, and a disposition for\n\
              every unfinished child, like supersede.\n"
         }
+        "papercut" => {
+            "akr papercut -m <agent> \"message\" [--namespace <ns>]\n\
+             \n\
+             Logs a small friction hit while working — a tool call that missed and had\n\
+             to be retried, a confusing setup step, a flaky command, a stale cache, a\n\
+             misleading error, a non-obvious gotcha. One or two sentences: what you\n\
+             were doing, what got in the way (a guess at the cause/fix is a bonus).\n\
+             Log it proactively, in the moment; together these show where the project\n\
+             needs sanding down (D-027).\n\
+             \n\
+             The message is the whole ceremony: the key, the commit, the author and\n\
+             the date are filled in automatically, and the aggregate is rendered to\n\
+             docs/generated/PAPERCUTS.md by `akr build`.\n\
+             \n\
+             FLAGS\n\
+             \x20   -m, --agent <name>    required; who hit it (a model or harness name)\n\
+             \x20   --namespace <ns>      only needed when the project declares several\n"
+        }
         "evidence" | "evidence add" => {
             "akr evidence add <key> --result pass|fail|inconclusive\n\
              \x20                   --method manual|command|observation\n\
@@ -1085,6 +1159,7 @@ pub fn help() -> String {
             "finish a milestone; --check <id>=<evidence-ref>",
         ),
         ("abandon", "abandon a planning record; --reason is required"),
+        ("papercut", "log a small friction, in the moment; -m <agent>"),
         (
             "evidence add",
             "record what was observed; --result, --method",

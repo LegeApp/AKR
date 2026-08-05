@@ -42,7 +42,7 @@ pub const SCHEMA_SQL: &str = include_str!("../../../../spec/schema/index.sql");
 /// `tests/store_schema.rs` fails when the DDL changes without a bump, because a forgotten
 /// bump is the one way this could go wrong quietly — every reader would keep using a cache
 /// whose shape no longer matches the code reading it.
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 /// Why stage E could not build the cache.
 ///

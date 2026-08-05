@@ -1243,6 +1243,7 @@ pub fn conventional_file(key: &LogicalKey, kind: Kind) -> PathBuf {
         Kind::Observation => "observations",
         Kind::Evidence => "evidence",
         Kind::Assessment => "assessments",
+        Kind::Papercut => "papercuts",
         Kind::Milestone => "milestones",
         Kind::Work => "work",
         Kind::Track => "tracks",

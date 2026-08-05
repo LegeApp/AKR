@@ -39,7 +39,7 @@ Six things are always present, in this order:
 | --- | --- | --- |
 | **Key** | `sys.policy.tandem-work` | Stable identity. Never changes, never reused, never derived from a filename (D-018). |
 | **Revision** | `/2` | Which version of that key this is. Monotonic from 1. |
-| **Kind** | `: policy` | What sort of claim this is. One of twelve (D-001). |
+| **Kind** | `: policy` | What sort of claim this is. One of thirteen (D-001, D-027). |
 | **Title** | `title "..."` | One-line human label. Required on every kind, because every generated view needs a heading and deriving one from prose is not deterministic. |
 | **State** | `state active` | Where in its lifecycle this revision sits. Drawn from the kind's class (D-002). |
 | **Body** | the remaining slots | Content slots, blocks, relations, and metadata. |
@@ -112,7 +112,7 @@ one of these four; a fifth class would mean the model was wrong.
 
 ---
 
-## 3. The twelve kinds
+## 3. The thirteen kinds
 
 | Kind | Class | Purpose in one line | Required content | Distinctive slots |
 | --- | --- | --- | --- | --- |
@@ -124,6 +124,7 @@ one of these four; a fifth class would mean the model was wrong.
 | `observation` | empirical | What was found true of the system at a specific commit | `statement`, `observed_at` | `watches`, `review_after`, `method` |
 | `evidence` | empirical | The outcome of a check that was actually run | `result`, `method`, `observed_at` | `command`, `artifact`, `summary` |
 | `assessment` | empirical | A judgement drawn from observations | `statement` | `confidence`, `as_of` |
+| `papercut` | empirical | A small friction hit while working, logged in the moment (D-027) | `statement`, `observed_at` | — |
 | `milestone` | planning | A named point at which defined checks pass | `intent`, `acceptance` | `target`, `note` |
 | `work` | planning | A unit of intended change | `intent` | `acceptance`, `disposition`, `target`, `note` |
 | `track` | planning | Standing work no milestone contains | `intent` | `cadence`, `note` |

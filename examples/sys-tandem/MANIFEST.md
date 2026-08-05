@@ -93,7 +93,7 @@ M5's unsatisfied check is `three-seed-designer-signoff`. Setting M5 to `complete
 banner's prose and the ledger's arithmetic agree — but only one of them can be checked,
 and only one of them stays right when somebody edits the milestone.
 
-## 5. Record inventory (62 keys, 65 revisions)
+## 5. Record inventory (63 keys, 66 revisions)
 
 | Key | Kind | Revs | Head state | File | Title |
 | --- | --- | --- | --- | --- | --- |
@@ -143,6 +143,7 @@ and only one of them stays right when somebody edits the milestone.
 | `tandem.milestone.m3-audible-day` | milestone | 1 | completed | `tandem/milestones.akr` | M3 — the first audible day |
 | `tandem.milestone.m4-day-means-something` | milestone | 1 | completed | `tandem/milestones.akr` | M4 — the day means something |
 | `tandem.milestone.m5-one-playable-day` | milestone | 1 | active | `tandem/milestones.akr` | M5 — one playable day |
+| `tandem.papercut.search-after-write-stale` | papercut | 1 | verified | `tandem/papercuts.akr` | akr search right after a write returned stale results |
 | `tandem.policy.same-change-audit` | policy | 1 | active | `tandem/policies.akr` | A slice lands with its audit and its documents in the same change |
 | `tandem.policy.tandem-work` | policy | 1 | active | `tandem/policies.akr` | Milestones are one simulator slice and one engine slice that consume each other |
 | `tandem.policy.test-surfaces-only` | policy | 1 | active | `tandem/policies.akr` | The TUI and classic CLI are simulator test surfaces only |
@@ -197,7 +198,7 @@ and fails if the committed file drifts, so it cannot rot the way a hand-written 
 
 ## 7. Expected outcomes
 
-- `akr check` — exits **0**. Every V-rule passes on all 65 revisions.
+- `akr check` — exits **0**. Every V-rule passes on all 66 revisions.
 - `akr review-queue` — 2 stale, 4 at risk, as in §3.
 - Completing M5 — fails with `AKR-R022` on `three-seed-designer-signoff`.
 - Reformatting — a no-op; every source file is already canonical.

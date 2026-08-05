@@ -37,7 +37,7 @@ Commands divide into four groups, and the division is worth internalising:
 | **Read** | `get`, `search`, `context`, `impact`, `why-current`, `review-queue`, `view`, `explain` | A–E | nothing |
 | **Verify** | `check`, `fmt --check` | A–D (+F in memory) | nothing |
 | **Build** | `build`, `fmt`, `lock` | A–F | cache, views, lock, formatted sources |
-| **Write** | `propose`, `revise`, `supersede`, `complete`, `abandon`, `evidence add`, `import`, `init` | A–D, then write | `.akr` source files |
+| **Write** | `propose`, `revise`, `supersede`, `complete`, `abandon`, `evidence add`, `papercut`, `import`, `init` | A–D, then write | `.akr` source files |
 
 Only the write group touches `.akr/records/`. `akr build` never does (D-003).
 
@@ -662,6 +662,34 @@ appears — `ACTIVE-WORK.md`, `ROADMAP.md` and `DECISION-HISTORY.md`. The operat
 abandons a plan on Tuesday leaves something the Thursday reader can see.
 
 Nothing is deleted; the record stays, terminal, and its references keep resolving.
+
+---
+
+### `akr papercut`
+
+```
+akr papercut -m <agent> "message" [--namespace <ns>]
+```
+
+Logs a small friction hit while working — a tool call that missed and had to be
+retried, a confusing or undocumented setup step, a flaky command, a stale cache, a
+misleading error, a non-obvious gotcha — as a `papercut` record (D-027). One or two
+sentences: what you were doing, what got in the way; a guess at the cause or fix is a
+bonus. Logged proactively, in the moment: none of these block, and together they show
+where the project needs sanding down.
+
+The message is the whole ceremony. The key is allocated
+(`<namespace>.papercut.<slug-of-message>`, suffixed on collision), `observed_at`
+defaults to HEAD, the `-m` value lands in `author`, and the date in `created_at`. The
+write runs the full pipeline of §4 like every other write. `--namespace` is needed only
+when the project declares several.
+
+The aggregate is `docs/generated/PAPERCUTS.md`, emitted by `akr build` once at least
+one papercut exists, newest first.
+
+Mining a whole session for papercuts afterwards is a language-model act and lives
+outside this tool (D-020): a harness command reads the transcript and calls
+`akr papercut` once per finding, user-triggered.
 
 ---
 

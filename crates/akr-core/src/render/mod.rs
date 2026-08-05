@@ -19,9 +19,11 @@
 //! banner's three variable fields are all build inputs, and none of them is a clock
 //! reading — a timestamp would make every rebuild produce a diff and the CI gate useless.
 
+mod papercuts;
 mod roadmap;
 mod views_current;
 
+pub use papercuts::render_papercuts;
 pub use roadmap::render_roadmap;
 pub use views_current::{check_views_current, write_views};
 
@@ -67,7 +69,7 @@ use crate::model::{Ledger, RevisionId};
 use crate::resolve::ResolvedModel;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// The six generated views (`docs/11-projections.md` §2), in the order stage F renders
+/// The seven generated views (`docs/11-projections.md` §2), in the order stage F renders
 /// them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum View {
@@ -83,6 +85,8 @@ pub enum View {
     OpenQuestions,
     /// What was decided, and what was retired.
     DecisionHistory,
+    /// Small frictions, newest first — emitted once the ledger holds one (D-027).
+    Papercuts,
 }
 
 impl View {
@@ -94,6 +98,7 @@ impl View {
         View::ReviewRequired,
         View::OpenQuestions,
         View::DecisionHistory,
+        View::Papercuts,
     ];
 
     /// The file the view is written to.
@@ -106,6 +111,7 @@ impl View {
             Self::ReviewRequired => "REVIEW-REQUIRED.md",
             Self::OpenQuestions => "OPEN-QUESTIONS.md",
             Self::DecisionHistory => "DECISION-HISTORY.md",
+            Self::Papercuts => "PAPERCUTS.md",
         }
     }
 
@@ -119,6 +125,7 @@ impl View {
             Self::ReviewRequired => "review-required",
             Self::OpenQuestions => "open-questions",
             Self::DecisionHistory => "decision-history",
+            Self::Papercuts => "papercuts",
         }
     }
 
@@ -148,6 +155,7 @@ impl View {
             Kind::Work => Self::ActiveWork,
             Kind::Decision => Self::DecisionHistory,
             Kind::Question => Self::OpenQuestions,
+            Kind::Papercut => Self::Papercuts,
             Kind::Term
             | Kind::Requirement
             | Kind::Policy
@@ -263,11 +271,13 @@ impl<'a> RenderContext<'a> {
     }
 }
 
-/// Renders one view, or `None` for a view this phase does not implement yet.
+/// Renders one view, or `None` for a view this phase does not implement yet — and for
+/// `PAPERCUTS.md` when the ledger holds no papercut (D-027).
 #[must_use]
 pub fn render(view: View, context: RenderContext<'_>) -> Option<String> {
     match view {
         View::Roadmap => Some(render_roadmap(context)),
+        View::Papercuts => render_papercuts(context),
         _ => None,
     }
 }

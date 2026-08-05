@@ -118,13 +118,14 @@ akr check — save-your-skin
   commit e806b3f5, grammar 0.1, vocabulary 0.1, today 2026-08-03
 
   stages A-D                                 ok
-  stage F  emit (in memory)   6 views        ok
+  stage F  emit (in memory)   7 views        ok
     ROADMAP.md               current
     CURRENT-STATE.md         current
     ACTIVE-WORK.md           current
     REVIEW-REQUIRED.md       current
     OPEN-QUESTIONS.md        current
     DECISION-HISTORY.md      current
+    PAPERCUTS.md             current
 
 no diagnostics
 
@@ -142,13 +143,14 @@ akr check — save-your-skin
   commit e806b3f5, grammar 0.1, vocabulary 0.1, today 2026-08-03
 
   stages A-D                                 ok
-  stage F  emit (in memory)   6 views        FAILED
+  stage F  emit (in memory)   7 views        FAILED
     ROADMAP.md               DIFFERS
     CURRENT-STATE.md         current
     ACTIVE-WORK.md           current
     REVIEW-REQUIRED.md       current
     OPEN-QUESTIONS.md        current
     DECISION-HISTORY.md      current
+    PAPERCUTS.md             current
 
 error[AKR-E011]: docs/generated/ROADMAP.md differs from the view this build would emit (1 differing line)
 note: line 48 committed: "`nearly done` · `@sys.milestone.m3-playable-day/1` · target 2026-09-30 · after `@sys.milestone.m2-deterministic-sim/1`"
@@ -167,13 +169,14 @@ akr check — save-your-skin
   commit e806b3f5, grammar 0.1, vocabulary 0.1, today 2026-08-03
 
   stages A-D                                 ok
-  stage F  emit (in memory)   6 views        ok
+  stage F  emit (in memory)   7 views        ok
     ROADMAP.md               current
     CURRENT-STATE.md         current
     ACTIVE-WORK.md           current
     REVIEW-REQUIRED.md       current
     OPEN-QUESTIONS.md        current
     DECISION-HISTORY.md      current
+    PAPERCUTS.md             current
 
 no diagnostics
 $ echo $?

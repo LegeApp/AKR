@@ -1,6 +1,6 @@
 # 11 — Projections
 
-The six generated Markdown views: what each one selects, how it is ordered, how each kind
+The seven generated Markdown views: what each one selects, how it is ordered, how each kind
 renders, what the banner contains, and how the never-hand-edit rule is enforced.
 
 Normative for the view catalogue, source queries, section ordering, rendering rules, the
@@ -30,7 +30,7 @@ Three properties, none negotiable:
 
 ## 2. The catalogue
 
-Six views, in the fixed order stage F renders them.
+Seven views, in the fixed order stage F renders them.
 
 | File | Question it answers | Source query |
 | --- | --- | --- |
@@ -40,8 +40,9 @@ Six views, in the fixed order stage F renders them.
 | `REVIEW-REQUIRED.md` | What should not be trusted without re-checking? | Records flagged `stale` or `at_risk` by stage D |
 | `OPEN-QUESTIONS.md` | What is not yet known? | `question` records |
 | `DECISION-HISTORY.md` | What was decided, and what was retired? | Every revision of every `decision`, plus terminal revisions of other normative kinds |
+| `PAPERCUTS.md` | Where does the project need sanding down? | Live `papercut` records, newest first. Emitted only once one exists (D-027) |
 
-The catalogue is closed for 0.1. A project needing a seventh view writes a template
+The catalogue is closed for 0.1. A project needing an eighth view writes a template
 against a declared section set (§10) rather than adding a case to the renderer.
 
 `akr view <name>` renders one to stdout; an unknown name is `AKR-E003`.
@@ -116,7 +117,7 @@ Every generated file opens with exactly this, on line 1 (D-025):
 
 | Field | Meaning |
 | --- | --- |
-| `source-graph` | SHA-256 over the sorted `(path, file-hash)` pairs of every source file the build read ([`06-compiler-pipeline.md`](06-compiler-pipeline.md) §9). Identical across all six views of one build. |
+| `source-graph` | SHA-256 over the sorted `(path, file-hash)` pairs of every source file the build read ([`06-compiler-pipeline.md`](06-compiler-pipeline.md) §9). Identical across all views of one build. |
 | `commit` | The commit the build resolved against — `HEAD`, or `--at`. |
 | `tool` | Semver of the binary that rendered it. |
 
@@ -472,7 +473,7 @@ carries no timestamp, the result is identical regardless of which side was taken
 
 ## 12. View templates
 
-The six views are fixed. Projects that need a seventh — a per-team roadmap, a
+The seven views are fixed (`PAPERCUTS.md`, the seventh, is emitted only once the ledger holds a papercut — D-027). Projects that need an eighth — a per-team roadmap, a
 compliance extract — declare a template rather than patching the renderer.
 
 ```

@@ -139,6 +139,17 @@ pub fn run(session: &Session, command: &Command) -> Result<Output, EnvError> {
                 ),
             )
         }
+        Command::Papercut {
+            message,
+            agent,
+            namespace,
+        } => papercut(
+            session,
+            &context,
+            message,
+            agent.as_deref(),
+            namespace.as_deref(),
+        ),
         Command::EvidenceAdd {
             key,
             result,
@@ -266,6 +277,49 @@ fn evidence_add(
     render(
         session,
         akr_core::ops::propose(context, &key, Kind::Evidence, &title, Some(record)),
+    )
+}
+
+/// `akr papercut -m <agent> "message"`, over [`akr_core::papercut`] (D-027).
+///
+/// The message is the whole ceremony: the key, the slug, the commit, the author and the
+/// date are all filled in here, because a log that asks for more does not get written in
+/// the moment.
+pub fn papercut(
+    session: &Session,
+    context: &WriteContext,
+    message: &str,
+    agent: Option<&str>,
+    namespace: Option<&str>,
+) -> Result<Output, EnvError> {
+    let agent = match agent {
+        Some(agent) => agent.to_owned(),
+        None => {
+            return Err(EnvError::new(
+                "AKR-C003",
+                "papercut requires -m <agent>: who hit it (a model or harness name)",
+            ));
+        }
+    };
+    let commit = session.commit.clone().ok_or_else(|| {
+        EnvError::new(
+            "AKR-G001",
+            "no commit to record: not inside a git repository",
+        )
+    })?;
+    let key = akr_core::papercut::allocate_key(&session.ledger, namespace, message)
+        .map_err(|e| EnvError::new("AKR-C004", e.to_string()))?;
+    let request = akr_core::papercut::LogPapercut {
+        message: message.to_owned(),
+        agent,
+        observed_at: commit,
+        created_at: Some(session.today),
+    };
+    let record = request.to_record(key.clone());
+    let title = record.title.clone();
+    render(
+        session,
+        akr_core::ops::propose(context, &key, akr_core::model::Kind::Papercut, &title, Some(record)),
     )
 }
 

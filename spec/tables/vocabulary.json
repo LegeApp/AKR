@@ -30,7 +30,7 @@
       "lifecycle": "normative"
     },
     "empirical": {
-      "kinds": ["observation", "evidence", "assessment"],
+      "kinds": ["observation", "evidence", "assessment", "papercut"],
       "means": "States what was found to be true, at a stated point in history.",
       "scope_required": false,
       "topic_allowed": false,
@@ -236,6 +236,15 @@
          "values": ["low", "medium", "high"]},
         {"name": "as_of", "type": "commit", "required": false}
       ]
+    },
+    "papercut": {
+      "class": "empirical",
+      "purpose": "Records a small friction hit while working: what was being done, what got in the way, and optionally a guess at the cause or fix (D-027).",
+      "content_slots": [
+        {"name": "statement", "type": "prose", "required": true},
+        {"name": "observed_at", "type": "commit", "required": true}
+      ],
+      "note": "Filled automatically by `akr papercut` and knowledge.papercut: the agent lands in author, the date in created_at, observed_at defaults to HEAD. No watches, so a papercut never goes stale (D-027)."
     },
     "milestone": {
       "class": "planning",

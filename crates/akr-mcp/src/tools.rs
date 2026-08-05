@@ -46,6 +46,7 @@ pub fn call(root: &Path, name: &str, arguments: &Value) -> Result<Value, ToolErr
         "knowledge.supersede" => supersede(root, arguments),
         "knowledge.complete" => complete(root, arguments),
         "knowledge.evidence_add" => evidence_add(root, arguments),
+        "knowledge.papercut" => papercut(root, arguments),
         other => Err(ToolError::new(
             "AKR-X041",
             format!("unknown tool {other:?}; the catalogue is closed for 0.1"),
@@ -404,6 +405,44 @@ fn evidence_add(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
             &context,
             &parsed,
             akr_core::model::Kind::Evidence,
+            &title,
+            Some(record),
+        ),
+    )
+}
+
+/// `knowledge.papercut`, over the same [`akr_core::papercut`] request `akr papercut`
+/// builds (D-027). The message is the whole ceremony.
+fn papercut(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
+    let session = open(root, true)?;
+    let message = required_str(arguments, "message")?;
+    let agent = required_str(arguments, "agent")?;
+    let namespace = arguments.get("namespace").and_then(Value::as_str);
+
+    let commit = session.commit.clone().ok_or_else(|| {
+        ToolError::new(
+            "AKR-G001",
+            "no commit to record: not inside a git repository",
+        )
+    })?;
+    let key = akr_core::papercut::allocate_key(&session.ledger, namespace, message)
+        .map_err(|e| ToolError::new("AKR-C004", e.to_string()))?;
+    let request = akr_core::papercut::LogPapercut {
+        message: message.to_owned(),
+        agent: agent.to_owned(),
+        observed_at: commit,
+        created_at: Some(session.today),
+    };
+    let record = request.to_record(key.clone());
+    let title = record.title.clone();
+    let context = write_context(&session);
+    write_result(
+        &session,
+        &key,
+        akr_core::ops::propose(
+            &context,
+            &key,
+            akr_core::model::Kind::Papercut,
             &title,
             Some(record),
         ),

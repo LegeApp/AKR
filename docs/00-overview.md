@@ -48,8 +48,8 @@ new document, and the project discovers six weeks later that lighting was never 
 AKR replaces the pile with three things.
 
 **Records.** The unit is a record, not a document. A record has a stable dotted key
-(`sys.policy.tandem-work`), a kind drawn from a closed vocabulary of twelve
-(D-001), numbered revisions (`@key/2`), individually addressable claims
+(`sys.policy.tandem-work`), a kind drawn from a closed vocabulary of thirteen
+(D-001, D-027), numbered revisions (`@key/2`), individually addressable claims
 (`@key/2#lag-bound`), a lifecycle state from its class's state machine (D-002), a
 declared scope, and typed relations that carry mechanical consequences. Records live in
 `.akr` files, which are containers only: identity comes from the key, never from a
@@ -112,7 +112,7 @@ Read in this order. The frozen spine is authoritative over everything else.
 | Document | What to look for |
 | --- | --- |
 | [`01-architecture.md`](01-architecture.md) | Layers, the pipeline in one diagram, the determinism contract, repository layouts. |
-| [`02-data-model.md`](02-data-model.md) | The twelve kinds, four classes, four lifecycles, twelve relations, scope, claims, acceptance. |
+| [`02-data-model.md`](02-data-model.md) | The thirteen kinds, four classes, four lifecycles, twelve relations, scope, claims, acceptance. |
 | [`03-syntax.md`](03-syntax.md) | Lexical structure and canonical formatting. |
 | [`04-references-and-versioning.md`](04-references-and-versioning.md) | Keys, revisions, the four reference forms, supersession, `akr.lock`. |
 | [`05-validation-rules.md`](05-validation-rules.md) | V-001..V-024, each with its diagnostic code and a failing example. |
@@ -126,7 +126,7 @@ Read in this order. The frozen spine is authoritative over everything else.
 | [`08-mcp.md`](08-mcp.md) | The agent tool surface, and the `AGENTS.md` text that makes agents use it. |
 | [`09-context-assembly.md`](09-context-assembly.md) | How a context bundle is built, deterministically, and why search only ranks. |
 | [`10-freshness-and-git.md`](10-freshness-and-git.md) | `observed_at`, watches, `review_after`, staleness, propagation, impact. |
-| [`11-projections.md`](11-projections.md) | The six generated views and their rendering rules. |
+| [`11-projections.md`](11-projections.md) | The seven generated views and their rendering rules. |
 | [`12-migration.md`](12-migration.md) | Getting a legacy Markdown pile into the ledger without losing anything. |
 
 **Everything else.**

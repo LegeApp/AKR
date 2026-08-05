@@ -160,7 +160,7 @@ diagnostic (D-024). Emits `AKR-R` and reads git.
 authoritative, rebuilt whenever `schema_version` or `source_graph_hash` changes, safe to
 delete at any moment. Nothing outside the tool reads it (D-019). Emits `AKR-I`.
 
-**F — Emit.** The resolved model to the six generated views, each opening with the
+**F — Emit.** The resolved model to the seven generated views, each opening with the
 banner of D-025. `akr build` writes them; `akr check --views-current` renders them in
 memory and diffs. Emits `AKR-E`.
 

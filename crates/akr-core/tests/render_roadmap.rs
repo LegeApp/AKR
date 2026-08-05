@@ -311,8 +311,12 @@ fn the_banner_is_identical_across_every_view_of_one_build() {
     let root = example_root().join("docs/generated");
     let mut banners = BTreeSet::new();
     for &view in View::ALL {
-        let text = std::fs::read_to_string(root.join(view.file_name()))
-            .unwrap_or_else(|_| panic!("{} is committed", view.file_name()));
+        // PAPERCUTS.md is emitted only once a papercut exists (D-027), and the worked
+        // example logs none — every view that IS committed carries the same banner.
+        let Ok(text) = std::fs::read_to_string(root.join(view.file_name())) else {
+            assert_eq!(view, View::Papercuts, "{} is committed", view.file_name());
+            continue;
+        };
         banners.insert(text.lines().take(5).collect::<Vec<_>>().join("\n"));
     }
     assert_eq!(banners.len(), 1, "the six banners disagree: {banners:#?}");
@@ -334,12 +338,12 @@ fn a_build_with_no_commit_says_so_visibly() {
 // -------------------------------------------------------------------------------------
 
 #[test]
-fn the_catalogue_is_six_views_with_distinct_names_and_files() {
-    assert_eq!(View::ALL.len(), 6);
+fn the_catalogue_is_seven_views_with_distinct_names_and_files() {
+    assert_eq!(View::ALL.len(), 7);
     let names: BTreeSet<&str> = View::ALL.iter().map(|v| v.name()).collect();
     let files: BTreeSet<&str> = View::ALL.iter().map(|v| v.file_name()).collect();
-    assert_eq!(names.len(), 6);
-    assert_eq!(files.len(), 6);
+    assert_eq!(names.len(), 7);
+    assert_eq!(files.len(), 7);
 }
 
 #[test]
@@ -416,7 +420,11 @@ fn scratch(name: &str) -> PathBuf {
     let source = example_root().join("docs/generated");
     for &view in View::ALL {
         let file = view.file_name();
-        std::fs::copy(source.join(file), dir.join(file)).expect("copy a view");
+        // PAPERCUTS.md is not committed in the example — it is emitted only once a
+        // papercut exists (D-027).
+        if source.join(file).exists() {
+            std::fs::copy(source.join(file), dir.join(file)).expect("copy a view");
+        }
     }
     dir
 }

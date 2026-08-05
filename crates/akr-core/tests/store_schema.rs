@@ -13,7 +13,7 @@
 use akr_core::store::{SCHEMA_SQL, SCHEMA_VERSION};
 
 /// SHA-256 of `spec/schema/index.sql`, as `akr_core::hash::sha256` renders it.
-const DDL_HASH: &str = "44c6b65c93e42b322796eb37769e8f9ad533fc8a7af12ed5da7f9369b25f3b4e";
+const DDL_HASH: &str = "131768f63fba2f6251bb60614f880125dfe223353ec7dffc3afc4eb677068d10";
 
 #[test]
 fn the_ddl_has_not_changed_without_a_decision_about_the_schema_version() {
