@@ -5,8 +5,8 @@ build {
     tool "akr 0.1.0"
     grammar "0.1"
     vocabulary "0.1"
-    commit git:30579aeb4960ca7b4de2659953ce0694541bfa96
-    source_graph "sha256:a482a360a14f9a15a767fba1fce9428a3c150b758f86eeab9a97b2f99ca6de16"
+    commit git:047a684214734d19ebc8a477030ceb9cfbc98ceb
+    source_graph "sha256:70972b3e367e4dd3799289b6dc56cb82cdc9c9402797c196698d50227e6da1f6"
 }
 
 source ".akr/project.akr" {
@@ -20,8 +20,8 @@ source ".akr/records/akr/evidence.akr" {
 }
 
 source ".akr/records/akr/papercuts.akr" {
-    hash "sha256:3409391e402b311b7cbb3be38d2eac8c07340a98eb9c909b36a7650eb91a4259"
-    records 4
+    hash "sha256:01bc3ca9202dac2154b62a7ae07d47d050fb70ae98c4077352f994382b914144"
+    records 5
 }
 
 source ".akr/records/akr/work.akr" {
@@ -52,6 +52,11 @@ seal @akr.papercut.calling-the-knowledge-papercut-mcp-tool/1 {
 seal @akr.papercut.cargo-fmt-check-fails-on-the-committed-tree/1 {
     state verified
     hash "sha256:f664184b56b7cc3cbcc71b18c54dca3acfc21b0797acf7074dce53611d9dc460"
+}
+
+seal @akr.papercut.historical-port-design-gap-recovered-from-a/1 {
+    state verified
+    hash "sha256:19ca91b5b1f94820579e6a6eb83857fe7e50eacbfa752c27690bc76ab143c3f6"
 }
 
 seal @akr.papercut.root-cause-of-the-discoverability-miss-the-cli/1 {

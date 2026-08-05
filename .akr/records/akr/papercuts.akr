@@ -23,6 +23,17 @@ record akr.papercut.cargo-fmt-check-fails-on-the-committed-tree/1 : papercut {
     created_at 2026-08-05
 }
 
+record akr.papercut.historical-port-design-gap-recovered-from-a/1 : papercut {
+    title "Historical-port design gap, recovered from a lost agent session…"
+    state verified
+    statement """
+        Historical-port design gap, recovered from a lost agent session (originally logged in the bpg-rs ledger as bpg.papercut.v-020-s-descendant-commit-freshness-gate-akr/1). A single-commit port of old history validated clean before commit, but once the ledger was committed akr check raised 19 AKR-R022: D-016/V-020's descendant-commit rule wants each completed record's evidence to postdate the record's last content change, which is structurally impossible for a transcription of history whose evidence commits predate the port commit. RESOLVED by D-028 (2026-08-05): a completed record carrying source { kind legacy } waives the descendant-commit comparison only (evidence must still resolve, record result pass, and be a commit the repo has). Ports like bpg-rs and the planned jp2lam go green once re-checked with a D-028 binary and their completed records carry a legacy source block.
+        """
+    observed_at git:047a684214734d19ebc8a477030ceb9cfbc98ceb
+    author "fugu"
+    created_at 2026-08-05
+}
+
 record akr.papercut.root-cause-of-the-discoverability-miss-the-cli/1 : papercut {
     title "Root cause of the discoverability miss: the CLI's AKR-C011 error…"
     state verified
