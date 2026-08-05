@@ -749,9 +749,8 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
                 }
             }
             Command::Papercut {
-                message: message.ok_or_else(|| {
-                    UsageError::new("AKR-C003", "papercut requires a message")
-                })?,
+                message: message
+                    .ok_or_else(|| UsageError::new("AKR-C003", "papercut requires a message"))?,
                 agent,
                 namespace,
             }
@@ -1159,7 +1158,10 @@ pub fn help() -> String {
             "finish a milestone; --check <id>=<evidence-ref>",
         ),
         ("abandon", "abandon a planning record; --reason is required"),
-        ("papercut", "log a small friction, in the moment; -m <agent>"),
+        (
+            "papercut",
+            "log a small friction, in the moment; -m <agent>",
+        ),
         (
             "evidence add",
             "record what was observed; --result, --method",

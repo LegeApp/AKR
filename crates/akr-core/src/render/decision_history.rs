@@ -12,9 +12,7 @@
 
 use super::common::{heading_text, one_line, required_prose};
 use super::{RenderContext, banner};
-use crate::model::{
-    Class, ContentSlot, ContentValue, Kind, LogicalKey, Record, Relation, Segment,
-};
+use crate::model::{Class, ContentSlot, ContentValue, Kind, LogicalKey, Record, Relation, Segment};
 
 /// Renders `DECISION-HISTORY.md`.
 #[must_use]
@@ -36,7 +34,10 @@ pub fn render_decision_history(cx: RenderContext<'_>) -> String {
         let include = record.kind == Kind::Decision
             || (record.kind.class() == Class::Normative && record.is_terminal());
         if include {
-            by_key.entry(record.id.key.clone()).or_default().push(record);
+            by_key
+                .entry(record.id.key.clone())
+                .or_default()
+                .push(record);
         }
     }
 
@@ -58,7 +59,10 @@ pub fn render_decision_history(cx: RenderContext<'_>) -> String {
 }
 
 fn revision_blocks<'a>(cx: RenderContext<'a>, record: &'a Record) -> Vec<String> {
-    let mut blocks = vec![format!("### {}", heading_text(record)), metadata_line(record)];
+    let mut blocks = vec![
+        format!("### {}", heading_text(record)),
+        metadata_line(record),
+    ];
     if let Some(body) = required_prose(record) {
         blocks.push(body);
     }

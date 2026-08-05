@@ -270,10 +270,7 @@ pub fn input_schema(name: &str) -> Option<Value> {
                 ),
                 (
                     "result",
-                    enumeration(
-                        "What was observed.",
-                        &["pass", "fail", "inconclusive"],
-                    ),
+                    enumeration("What was observed.", &["pass", "fail", "inconclusive"]),
                 ),
                 (
                     "method",
@@ -282,8 +279,14 @@ pub fn input_schema(name: &str) -> Option<Value> {
                         &["manual", "command", "observation"],
                     ),
                 ),
-                ("command", string("The exact command that was run, for method command.")),
-                ("artifact", string("A repository path to the artefact, if one exists.")),
+                (
+                    "command",
+                    string("The exact command that was run, for method command."),
+                ),
+                (
+                    "artifact",
+                    string("A repository path to the artefact, if one exists."),
+                ),
                 ("summary", string("One line on what was observed.")),
                 (
                     "observed_at",
@@ -292,7 +295,10 @@ pub fn input_schema(name: &str) -> Option<Value> {
                          HEAD.",
                     ),
                 ),
-                ("title", string("The one-line label. Defaults to the summary or the key.")),
+                (
+                    "title",
+                    string("The one-line label. Defaults to the summary or the key."),
+                ),
             ],
             &["key", "result", "method"],
         ),
@@ -502,12 +508,12 @@ fn acceptance_schema(description: &str) -> Value {
             "items",
             object(
                 vec![
-                    ("id", string("The check identifier, unique within the record.")),
-                    ("statement", string("The observable outcome.")),
                     (
-                        "method",
-                        string("manual, command or observation."),
+                        "id",
+                        string("The check identifier, unique within the record."),
                     ),
+                    ("statement", string("The observable outcome.")),
+                    ("method", string("manual, command or observation.")),
                     ("command", string("The exact command, for method command.")),
                     (
                         "verified_by",

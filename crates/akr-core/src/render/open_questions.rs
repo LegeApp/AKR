@@ -96,7 +96,14 @@ fn blocks_list(cx: RenderContext<'_>, record: &Record) -> Option<String> {
         .targets(Relation::Blocks)
         .iter()
         .filter_map(|r| ledger.resolve(r).ok().flatten())
-        .map(|target| format!("- `{}` {} `@{}`", target.state.name(), link(target), target.id))
+        .map(|target| {
+            format!(
+                "- `{}` {} `@{}`",
+                target.state.name(),
+                link(target),
+                target.id
+            )
+        })
         .collect();
     (!targets.is_empty()).then(|| format!("**Blocks**\n{}", targets.join("\n")))
 }

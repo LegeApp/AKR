@@ -257,9 +257,16 @@ fn check_block(value: &Value) -> Result<String, ToolError> {
         out.push_str(&format!("            command {}\n", quote(command)));
     }
     if let Some(Value::Array(refs)) = value.get("verified_by") {
-        let items: Vec<String> = refs.iter().filter_map(Value::as_str).map(reference).collect();
+        let items: Vec<String> = refs
+            .iter()
+            .filter_map(Value::as_str)
+            .map(reference)
+            .collect();
         if !items.is_empty() {
-            out.push_str(&format!("            verified_by [ {} ]\n", items.join(", ")));
+            out.push_str(&format!(
+                "            verified_by [ {} ]\n",
+                items.join(", ")
+            ));
         }
     }
     out.push_str("        }\n");

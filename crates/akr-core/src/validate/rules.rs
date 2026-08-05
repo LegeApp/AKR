@@ -1179,7 +1179,9 @@ fn descends(ledger: &Ledger, record: &Record, evidence: &Record) -> bool {
         .and_then(ContentValue::as_commit);
     if record.sources.iter().any(|s| s.kind == SourceKind::Legacy) {
         return match observed {
-            Some(commit) if ledger.facts.ancestry.has_facts() => ledger.facts.ancestry.knows(commit),
+            Some(commit) if ledger.facts.ancestry.has_facts() => {
+                ledger.facts.ancestry.knows(commit)
+            }
             _ => true,
         };
     }

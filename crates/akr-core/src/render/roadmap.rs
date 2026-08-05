@@ -502,7 +502,10 @@ pub(super) fn live_work(ledger: &Ledger) -> Vec<&Record> {
 }
 
 /// The key a work record is `part_of`, resolved.
-pub(super) fn parent_key(model: &ResolvedModel<'_>, record: &Record) -> Option<crate::model::LogicalKey> {
+pub(super) fn parent_key(
+    model: &ResolvedModel<'_>,
+    record: &Record,
+) -> Option<crate::model::LogicalKey> {
     record
         .targets(Relation::PartOf)
         .first()
@@ -526,4 +529,3 @@ pub(super) const fn state_rank(state: State) -> u8 {
         _ => 4,
     }
 }
-

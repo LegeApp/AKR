@@ -58,11 +58,7 @@ pub fn render_active_work(cx: RenderContext<'_>) -> String {
             continue;
         };
         let items = sorted_work(by_parent.remove(parent_id).unwrap_or_default());
-        blocks.push(format!(
-            "## {} `@{}`",
-            link(parent),
-            parent.id
-        ));
+        blocks.push(format!("## {} `@{}`", link(parent), parent.id));
         for item in &items {
             blocks.extend(work_blocks(cx, item));
         }
@@ -149,11 +145,7 @@ fn disposition_blocks(record: &Record, ledger: &Ledger) -> Vec<String> {
         let Some(target) = ledger.resolve(&disposition.target).ok().flatten() else {
             continue;
         };
-        let mut line = format!(
-            "- `@{}` — `{}`",
-            target.id,
-            disposition.outcome.name()
-        );
+        let mut line = format!("- `@{}` — `{}`", target.id, disposition.outcome.name());
         if let Some(into) = &disposition.into
             && let Some(into_target) = ledger.resolve(into).ok().flatten()
         {

@@ -388,7 +388,9 @@ pub fn citation_facts(ledger: &Ledger, owner: &RevisionId, evidence: &Record) ->
         .is_some_and(|record| record.sources.iter().any(|s| s.kind == SourceKind::Legacy));
     let descends = if is_legacy {
         match &observed_at {
-            Some(commit) if ledger.facts.ancestry.has_facts() => ledger.facts.ancestry.knows(commit),
+            Some(commit) if ledger.facts.ancestry.has_facts() => {
+                ledger.facts.ancestry.knows(commit)
+            }
             _ => true,
         }
     } else {

@@ -20,10 +20,7 @@ pub fn render_review_required(cx: RenderContext<'_>) -> String {
     let ledger = cx.ledger();
     let mut blocks: Vec<String> = Vec::new();
     blocks.push(banner(cx.model).trim_end().to_owned());
-    blocks.push(format!(
-        "# Review required — {}",
-        ledger.project.name
-    ));
+    blocks.push(format!("# Review required — {}", ledger.project.name));
     blocks.push(
         "What should not be trusted without re-checking: records the build flagged \
          `stale` or `at_risk`. Neither flag means a record is wrong (D-003); both mean \

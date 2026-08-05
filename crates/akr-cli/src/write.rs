@@ -319,7 +319,13 @@ pub fn papercut(
     let title = record.title.clone();
     render(
         session,
-        akr_core::ops::propose(context, &key, akr_core::model::Kind::Papercut, &title, Some(record)),
+        akr_core::ops::propose(
+            context,
+            &key,
+            akr_core::model::Kind::Papercut,
+            &title,
+            Some(record),
+        ),
     )
 }
 
