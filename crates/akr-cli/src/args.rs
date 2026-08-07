@@ -5,7 +5,10 @@
 //! contract is specific (`AKR-C001`–`AKR-C005` all exit 2), and a parser that produces
 //! its own error strings would have to be talked out of them.
 
-use akr_core::model::{Commit, Date, Glob};
+use akr_core::{
+    ingest::TableMode,
+    model::{Commit, Date, Glob},
+};
 use std::path::PathBuf;
 
 /// Output form.
@@ -103,8 +106,11 @@ pub enum Command {
         /// Also compare the committed views against a fresh render.
         views_current: bool,
     },
-    /// Run stages A–F.
-    Build,
+    /// Run stages A–F; `--check` renders in-memory without writing.
+    Build {
+        /// Verify generated outputs and lock without writing.
+        check: bool,
+    },
     /// Render one view to stdout.
     View {
         /// The catalogue name.
@@ -180,6 +186,116 @@ pub enum Command {
         tracking: Option<String>,
         /// Print what would be written and write nothing.
         dry_run: bool,
+    },
+    /// `akr ingest preview <path> [--source-kind <kind>] [--tables rows|support]`.
+    IngestPreview {
+        /// The source document.
+        path: PathBuf,
+        /// Source-kind provenance.
+        source_kind: String,
+        /// Table behavior.
+        tables: TableMode,
+    },
+    /// `akr ingest start <path> [--source-kind <kind>] [--tables rows|support]`.
+    IngestStart {
+        /// The source document.
+        path: PathBuf,
+        /// Source-kind provenance.
+        source_kind: String,
+        /// Table behavior.
+        tables: TableMode,
+    },
+    /// `akr ingest show <ingest-id> [--pending] [--limit n]`.
+    IngestShow {
+        /// The ingest identifier.
+        ingest_id: String,
+        /// Restrict to pending candidates.
+        pending_only: bool,
+        /// Maximum candidates.
+        limit: Option<usize>,
+    },
+    /// `akr ingest mark <ingest-id> <candidate-id> <disposition> ...`.
+    IngestMark {
+        /// The ingest identifier.
+        ingest_id: String,
+        /// Candidate being reviewed.
+        candidate_id: String,
+        /// The disposition character.
+        disposition: String,
+        /// One or more basis references.
+        basis: Vec<String>,
+        /// Optional target for existing record mapping.
+        target: Option<String>,
+        /// Optional promotion kind.
+        promote_kind: Option<String>,
+        /// Target for revise or attach-source promotion.
+        promote_target: Option<String>,
+        /// Mark a promote plan as attach_source.
+        promote_attach: bool,
+        /// Relations staged against the candidate.
+        relations: Vec<String>,
+        /// Optional note.
+        note: Option<String>,
+        /// Previous manifest version.
+        base_version: Option<usize>,
+    },
+    /// `akr ingest apply <ingest-id> [--base-version n]`.
+    IngestApply {
+        /// The ingest identifier.
+        ingest_id: String,
+        /// Previous manifest version.
+        base_version: Option<usize>,
+        /// Preview only if true.
+        dry_run: bool,
+    },
+    /// `akr ingest close <ingest-id> [--base-version n]`.
+    IngestClose {
+        /// The ingest identifier.
+        ingest_id: String,
+        /// Previous manifest version.
+        base_version: Option<usize>,
+    },
+    /// `akr source add <path> [--id <id>] [--title <t>] [--origin external|internal-reference] [--observed-at <commit>] [--scope <glob>]`.
+    SourceAdd {
+        /// The source file to register.
+        path: PathBuf,
+        /// Stable id for the source.
+        id: Option<String>,
+        /// Human title.
+        title: Option<String>,
+        /// Origin.
+        origin: Option<String>,
+        /// Observed commit/URL.
+        observed_at: Option<String>,
+        /// Scope glob.
+        scope: Option<String>,
+    },
+    /// `akr source list [--all-versions]`.
+    SourceList {
+        /// Include superseded sources.
+        all: bool,
+    },
+    /// `akr source get <id> [--whole|--lines a:b|--section "heading"]`.
+    SourceGet {
+        /// Source id.
+        id: String,
+        /// Whole file.
+        whole: bool,
+        /// Line range `a:b`.
+        lines: Option<String>,
+        /// Heading section.
+        section: Option<String>,
+    },
+    /// `akr source verify`.
+    SourceVerify,
+    /// `akr source supersede <old-id> <new-path> [--id <new-id>]`.
+    SourceSupersede {
+        /// Old source id.
+        old_id: String,
+        /// New file path.
+        new_path: PathBuf,
+        /// New id.
+        new_id: Option<String>,
     },
     /// `akr propose <key> --kind <kind>`.
     Propose {
@@ -284,7 +400,7 @@ impl Command {
             Self::Init { .. } => "init".to_owned(),
             Self::Fmt { .. } => "fmt".to_owned(),
             Self::Check { .. } => "check".to_owned(),
-            Self::Build => "build".to_owned(),
+            Self::Build { .. } => "build".to_owned(),
             Self::View { .. } => "view".to_owned(),
             Self::Get { .. } => "get".to_owned(),
             Self::Explain { .. } => "explain".to_owned(),
@@ -295,6 +411,17 @@ impl Command {
             Self::Context { .. } => "context".to_owned(),
             Self::Search { .. } => "search".to_owned(),
             Self::Import { .. } => "import".to_owned(),
+            Self::IngestPreview { .. }
+            | Self::IngestStart { .. }
+            | Self::IngestShow { .. }
+            | Self::IngestMark { .. }
+            | Self::IngestApply { .. }
+            | Self::IngestClose { .. } => "ingest".to_owned(),
+            Self::SourceAdd { .. }
+            | Self::SourceList { .. }
+            | Self::SourceGet { .. }
+            | Self::SourceVerify
+            | Self::SourceSupersede { .. } => "source".to_owned(),
             Self::Propose { .. } => "propose".to_owned(),
             Self::Revise { .. } => "revise".to_owned(),
             Self::Supersede { .. } => "supersede".to_owned(),
@@ -354,6 +481,8 @@ const COMMANDS: &[&str] = &[
     "impact",
     "why-current",
     "explain",
+    "ingest",
+    "source",
     "propose",
     "revise",
     "supersede",
@@ -547,8 +676,10 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
             }
         }
         "build" => {
-            known_flags(&[])?;
-            Command::Build
+            known_flags(&["--check"])?;
+            Command::Build {
+                check: flag_set("--check"),
+            }
         }
         "view" => {
             known_flags(&[])?;
@@ -668,6 +799,8 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
                 dry_run: flag_set("--dry-run"),
             }
         }
+        "ingest" => parse_ingest(name, &positional, tail)?,
+        "source" => parse_source(name, &positional, tail)?,
         "propose" => {
             known_flags(&["--kind", "--title", "--from", "--edit"])?;
             Command::Propose {
@@ -820,6 +953,274 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
     })
 }
 
+fn parse_ingest(
+    name: &str,
+    positional: &[&String],
+    tail: &[String],
+) -> Result<Command, UsageError> {
+    let known_flags = |allowed: &[&str], name: &str| -> Result<(), UsageError> {
+        for arg in tail.iter().filter(|a| a.starts_with("--")) {
+            let base = arg.split('=').next().unwrap_or(arg);
+            if !allowed.contains(&base) {
+                return Err(UsageError::new(
+                    "AKR-C002",
+                    format!("unknown flag {base:?} for command {name:?}"),
+                ));
+            }
+        }
+        Ok(())
+    };
+
+    let flag_set = |flag: &str| tail.iter().any(|a| a == flag);
+
+    let need = |index: usize, what: &str| -> Result<String, UsageError> {
+        positional
+            .get(index)
+            .map(|s| (*s).clone())
+            .ok_or_else(|| UsageError::new("AKR-C003", format!("ingest {name} requires {what}")))
+    };
+
+    let source_kind = option_value(tail, "--source-kind")
+        .unwrap_or_else(|| "internal".to_owned())
+        .to_lowercase();
+    if !matches!(source_kind.as_str(), "internal" | "external") {
+        return Err(UsageError::new(
+            "AKR-C004",
+            format!("--source-kind {source_kind:?} is not internal|external"),
+        ));
+    }
+
+    let tables = parse_table_mode(option_value(tail, "--tables"), name)?;
+
+    let sub = need(0, "a subcommand")?;
+    let sub = sub.as_str();
+    Ok(match sub {
+        "preview" => {
+            known_flags(&["--source-kind", "--tables"], "ingest preview")?;
+            Command::IngestPreview {
+                path: PathBuf::from(need(1, "a source document")?),
+                source_kind,
+                tables,
+            }
+        }
+        "start" => {
+            known_flags(&["--source-kind", "--tables"], "ingest start")?;
+            Command::IngestStart {
+                path: PathBuf::from(need(1, "a source document")?),
+                source_kind,
+                tables,
+            }
+        }
+        "show" => {
+            known_flags(&["--pending", "--limit"], "ingest show")?;
+            let limit = match option_value(tail, "--limit") {
+                Some(text) => Some(text.parse().map_err(|_| {
+                    UsageError::new(
+                        "AKR-C004",
+                        format!("--limit: {text:?} is not a positive integer"),
+                    )
+                })?),
+                None => None,
+            };
+            Command::IngestShow {
+                ingest_id: need(1, "an ingest id")?,
+                pending_only: flag_set("--pending"),
+                limit,
+            }
+        }
+        "mark" => {
+            known_flags(
+                &[
+                    "--basis",
+                    "--target",
+                    "--promote-kind",
+                    "--promote-target",
+                    "--promote-attach-source",
+                    "--relation",
+                    "--note",
+                    "--base-version",
+                ],
+                "ingest mark",
+            )?;
+            Command::IngestMark {
+                ingest_id: need(1, "an ingest id")?,
+                candidate_id: need(2, "a candidate id")?,
+                disposition: need(3, "a disposition")?,
+                basis: repeated(tail, "--basis"),
+                target: option_value(tail, "--target"),
+                promote_kind: option_value(tail, "--promote-kind"),
+                promote_target: option_value(tail, "--promote-target"),
+                promote_attach: flag_set("--promote-attach-source"),
+                relations: repeated(tail, "--relation"),
+                note: option_value(tail, "--note"),
+                base_version: option_value(tail, "--base-version")
+                    .and_then(|text| text.parse::<usize>().ok()),
+            }
+        }
+        "apply" => {
+            known_flags(&["--base-version", "--dry-run"], "ingest apply")?;
+            let base_version = option_value(tail, "--base-version")
+                .map(|text| {
+                    text.parse::<usize>().map_err(|_| {
+                        UsageError::new(
+                            "AKR-C004",
+                            format!("--base-version: {text:?} is not a positive integer"),
+                        )
+                    })
+                })
+                .transpose()?;
+            Command::IngestApply {
+                ingest_id: need(1, "an ingest id")?,
+                base_version,
+                dry_run: flag_set("--dry-run"),
+            }
+        }
+        "close" => {
+            known_flags(&["--base-version"], "ingest close")?;
+            Command::IngestClose {
+                ingest_id: need(1, "an ingest id")?,
+                base_version: option_value(tail, "--base-version")
+                    .map(|text| {
+                        text.parse().map_err(|_| {
+                            UsageError::new(
+                                "AKR-C004",
+                                format!("--base-version: {text:?} is not a positive integer"),
+                            )
+                        })
+                    })
+                    .transpose()?,
+            }
+        }
+        _ => {
+            return Err(UsageError::new(
+                "AKR-C001",
+                format!("unknown subcommand {sub:?} for command \"ingest\""),
+            )
+            .with_help("supported subcommands: preview, start, show, mark, apply, close"));
+        }
+    })
+}
+
+fn parse_source(
+    name: &str,
+    positional: &[&String],
+    tail: &[String],
+) -> Result<Command, UsageError> {
+    let need = |index: usize, what: &str| -> Result<String, UsageError> {
+        positional
+            .get(index)
+            .map(|s| (*s).clone())
+            .ok_or_else(|| UsageError::new("AKR-C003", format!("source {name} requires {what}")))
+    };
+    let sub = need(0, "a subcommand (add|list|get|verify|supersede)")?;
+    let sub = sub.as_str();
+    Ok(match sub {
+        "add" => {
+            let allowed = vec!["--id", "--title", "--origin", "--observed-at", "--scope"];
+            for arg in tail.iter().filter(|a| a.starts_with("--")) {
+                let base = arg.split('=').next().unwrap_or(arg);
+                if !allowed.contains(&base) {
+                    return Err(UsageError::new(
+                        "AKR-C002",
+                        format!("unknown flag {base:?} for command \"source add\""),
+                    ));
+                }
+            }
+            Command::SourceAdd {
+                path: PathBuf::from(need(1, "a source document")?),
+                id: option_value(tail, "--id"),
+                title: option_value(tail, "--title"),
+                origin: option_value(tail, "--origin"),
+                observed_at: option_value(tail, "--observed-at"),
+                scope: option_value(tail, "--scope"),
+            }
+        }
+        "list" => {
+            for arg in tail.iter().filter(|a| a.starts_with("--")) {
+                let base = arg.split('=').next().unwrap_or(arg);
+                if base != "--all-versions" {
+                    return Err(UsageError::new(
+                        "AKR-C002",
+                        format!("unknown flag {base:?} for command \"source list\""),
+                    ));
+                }
+            }
+            Command::SourceList {
+                all: tail.iter().any(|a| a == "--all-versions"),
+            }
+        }
+        "get" => {
+            for arg in tail.iter().filter(|a| a.starts_with("--")) {
+                let base = arg.split('=').next().unwrap_or(arg);
+                if !["--whole", "--lines", "--section"].contains(&base) {
+                    return Err(UsageError::new(
+                        "AKR-C002",
+                        format!("unknown flag {base:?} for command \"source get\""),
+                    ));
+                }
+            }
+            let has_lines = option_value(tail, "--lines").is_some();
+            let has_section = option_value(tail, "--section").is_some();
+            let has_whole = tail.iter().any(|a| a == "--whole");
+            if (has_lines as u8 + has_section as u8 + has_whole as u8) > 1 {
+                return Err(UsageError::new(
+                    "AKR-C005",
+                    "--whole, --lines and --section are mutually exclusive",
+                ));
+            }
+            Command::SourceGet {
+                id: need(1, "a source id")?,
+                whole: has_whole,
+                lines: option_value(tail, "--lines"),
+                section: option_value(tail, "--section"),
+            }
+        }
+        "verify" => {
+            for arg in tail.iter().filter(|a| a.starts_with("--")) {
+                return Err(UsageError::new(
+                    "AKR-C002",
+                    format!("unknown flag {arg:?} for command \"source verify\""),
+                ));
+            }
+            Command::SourceVerify
+        }
+        "supersede" => {
+            for arg in tail.iter().filter(|a| a.starts_with("--")) {
+                let base = arg.split('=').next().unwrap_or(arg);
+                if !["--id"].contains(&base) {
+                    return Err(UsageError::new(
+                        "AKR-C002",
+                        format!("unknown flag {base:?} for command \"source supersede\""),
+                    ));
+                }
+            }
+            Command::SourceSupersede {
+                old_id: need(1, "an existing source id")?,
+                new_path: PathBuf::from(need(2, "a new source document")?),
+                new_id: option_value(tail, "--id"),
+            }
+        }
+        _ => {
+            return Err(UsageError::new(
+                "AKR-C001",
+                format!("unknown subcommand {sub:?} for command \"source\""),
+            )
+            .with_help("supported subcommands: add, list, get, verify, supersede"));
+        }
+    })
+}
+
+fn parse_table_mode(value: Option<String>, name: &str) -> Result<TableMode, UsageError> {
+    match value.as_deref() {
+        None | Some("rows") => Ok(TableMode::Rows),
+        Some("support") => Ok(TableMode::Support),
+        Some(other) => Err(UsageError::new(
+            "AKR-C004",
+            format!("{name} --tables: {other:?} is not rows|support"),
+        )),
+    }
+}
+
 /// The value of `--flag value` or `--flag=value`.
 fn option_value(tail: &[String], flag: &str) -> Option<String> {
     let mut args = tail.iter();
@@ -919,11 +1320,12 @@ pub fn help_for(name: &str) -> Option<String> {
              \x20                      views (AKR-E011..E014) — the D-025 gate\n"
         }
         "build" => {
-            "akr build\n\
+            "akr build [--check]\n\
              \n\
              Runs stages A-F: everything `akr check` does, then the index cache, the\n\
              generated views, and akr.lock. Only files whose bytes change are rewritten.\n\
-             Nothing is written when any diagnostic is raised.\n"
+             In --check mode, nothing is written and the command fails on any diagnostic,\n\
+             including generated-view mismatches.\n"
         }
         "view" => {
             "akr view <name>\n\
@@ -1019,6 +1421,40 @@ pub fn help_for(name: &str) -> Option<String> {
              \x20                       document's first path segment\n\
              \x20   --tracking <key>    the tracking work record; created if absent\n\
              \x20   --dry-run           print what would be written, write nothing\n"
+        }
+        "source" => {
+            "akr source add <path> [--id <id>] [--title <title>] [--origin external|internal-reference] [--observed-at <commit>] [--scope <glob>]\n\
+             akr source list [--all-versions]\n\
+             akr source get <id> [--whole|--lines <a:b>|--section <heading>]\n\
+             akr source verify\n\
+             akr source supersede <old-id> <new-path> [--id <new-id>]\n\
+             \n\
+             Immutable source library in sources/. `add` copies the file to\n\
+             sources/external/<id>--<hash>.md, records its sha256 in\n\
+             sources/catalog.json, and creates no ledger records. `verify`\n\
+             recomputes hashes and reports AKR-S021 on mismatch; `check` runs\n\
+             the same verification. `supersede` adds a new version and preserves\n\
+             the old file; the catalog's `supersedes` field links them.\n\
+             \n\
+             FLAGS\n\
+             \x20   add --id, --title, --origin, --observed-at, --scope\n\
+             \x20   get --whole, --lines, --section\n\
+             \x20   list --all-versions\n"
+        }
+        "ingest" => {
+            "akr ingest preview <path> [--source-kind internal|external] [--tables rows|support]\n\
+             \n\
+             Candidate-oriented import of a Markdown source for manual review. Use `preview`
+             first, `start` to persist, `mark` to add dispositions, and `apply` to
+             execute staged operations.\n\
+             \n\
+             SUBCOMMANDS\n\
+             \x20   preview --path <path>   extract candidates (no manifest written)\n\
+             \x20   start <path>           create a new manifest and persist the source\n\
+             \x20   show <ingest-id>       review candidates and summary\n\
+             \x20   mark <ingest-id> <candidate-id> <disposition> ...\n\
+             \x20   apply <ingest-id>      apply ready promotion actions\n\
+             \x20   close <ingest-id>      finalize and stop accepting edits\n"
         }
         "propose" => {
             "akr propose <key> --kind <kind> [--title <text>] [--from <file>] [--edit]\n\
@@ -1161,7 +1597,7 @@ pub fn help() -> String {
         ("init", "scaffold a workspace"),
         ("fmt", "canonically format, or --check"),
         ("check", "run stages A-D; --review-clean, --views-current"),
-        ("build", "run stages A-F: index, views, lock"),
+        ("build", "run stages A-F: index, views, lock; --check"),
         ("view", "render one view to stdout"),
         ("get", "retrieve one record"),
         ("search", "full-text search (P7)"),
@@ -1177,7 +1613,12 @@ pub fn help() -> String {
         ("explain", "print a code, rule, or record-kind schema"),
         ("review-queue", "list the stale and at-risk records"),
         ("import", "draft proposed records from a legacy document"),
+        (
+            "ingest",
+            "extract candidates from markdown and review dispositions",
+        ),
         ("lock", "verify or rewrite akr.lock"),
+        ("source", "immutable source library in sources/"),
         ("propose", "create a record; --kind, --title, --from"),
         (
             "revise",

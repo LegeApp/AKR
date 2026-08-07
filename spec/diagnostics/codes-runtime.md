@@ -1,4 +1,4 @@
-# Diagnostic Registry — Runtime Stages (`AKR-I/E/X/G/C/M`)
+# Diagnostic Registry — Runtime Stages (`AKR-I/E/X/G/C/M/S`)
 
 This registry defines every diagnostic raised by the runtime half of the toolchain:
 index construction, view emission, context assembly, git and freshness, the command
@@ -201,6 +201,19 @@ import profile.
 | `AKR-M032` | legacy document archived while tracking incomplete | error | `{path} is archived but {key}/{revision} is in state {state}` | The archive step waits for `completed`, which by V-020 waits for every check to be satisfied. |
 | `AKR-M041` | import produced warnings under the strict profile | error | `import produced {n} warnings; rerun with --lenient after reviewing them` | `--lenient` is the only place warnings are downgraded (D-013), and it is opt-in per invocation. |
 | `AKR-M042` | imported record is not proposed | error | `{key}/{revision} was produced by import in state {state}; imports land as proposed` | Everything an importer writes is a proposal for human review. Questions land `open`, the inquiry class's only initial state (`docs/12` §3). |
+
+---
+
+## `AKR-S` — Source verification
+
+Source manifest and immutable source catalog checks.
+Normative document: [`../../docs/06-compiler-pipeline.md`](../../docs/06-compiler-pipeline.md).
+
+Reserved groups: `S021`–`S029` catalog and immutable-source checks.
+
+| Code | Title | Severity | Rule | Message template | Cause |
+| --- | --- | --- | --- | --- | --- |
+| `AKR-S021` | immutable source manifest invalid | error | — | `{path}: source manifest error: {detail}` | Source verification failed while loading `source` stage metadata; this blocks any further build work until corrected. |
 
 ---
 

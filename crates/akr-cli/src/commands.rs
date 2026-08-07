@@ -5,14 +5,15 @@
 //! until the last moment.
 
 use crate::args::Command;
+use crate::ingest;
 use crate::session::{
     EnvError, Exit, GRAMMAR_VERSION, Session, TOOL_VERSION, VOCABULARY_VERSION, diagnostic_json,
     is_fatal, report,
 };
 use akr_core::context::{Request, assemble, render_json, render_text};
-use akr_core::diagnostics::Diagnostic;
+use akr_core::diagnostics::{Diagnostic, RuleId, Subject};
 use akr_core::json::Value;
-use akr_core::model::{Date, Kind, Reference, Relation, RevisionId};
+use akr_core::model::{ContentSlot, ContentValue, Date, Kind, Reference, Relation, RevisionId};
 use akr_core::render::{View, check_views_current, render, write_views};
 use std::collections::BTreeSet;
 
@@ -101,7 +102,7 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
             review_clean,
             views_current,
         } => check(session, *review_clean, *views_current),
-        Command::Build => build(session),
+        Command::Build { check } => build(session, *check),
         Command::Fmt { check, paths } => crate::fmt::run(session, *check, paths),
         Command::View { name } => view(session, name),
         Command::Get {
@@ -143,6 +144,85 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
             tracking.as_deref(),
             *dry_run,
         ),
+        Command::IngestPreview {
+            path,
+            source_kind,
+            tables,
+        } => crate::ingest::preview(session, path, source_kind, *tables),
+        Command::IngestStart {
+            path,
+            source_kind,
+            tables,
+        } => crate::ingest::start(session, path, source_kind, *tables),
+        Command::IngestShow {
+            ingest_id,
+            pending_only,
+            limit,
+        } => crate::ingest::show(session, ingest_id, *pending_only, *limit),
+        Command::IngestMark {
+            ingest_id,
+            candidate_id,
+            disposition,
+            basis,
+            target,
+            promote_kind,
+            promote_target,
+            promote_attach,
+            relations,
+            note,
+            base_version,
+        } => crate::ingest::mark(
+            session,
+            ingest_id,
+            candidate_id,
+            disposition,
+            basis,
+            target.as_deref(),
+            promote_kind,
+            promote_target.as_ref(),
+            *promote_attach,
+            relations,
+            note.as_deref(),
+            *base_version,
+        ),
+        Command::IngestApply {
+            ingest_id,
+            base_version,
+            dry_run,
+        } => crate::ingest::apply(session, ingest_id, *base_version, *dry_run),
+        Command::IngestClose {
+            ingest_id,
+            base_version,
+        } => crate::ingest::close(session, ingest_id, *base_version),
+        Command::SourceAdd {
+            path,
+            id,
+            title,
+            origin,
+            observed_at,
+            scope,
+        } => crate::source::add(
+            session,
+            path,
+            id.as_deref(),
+            title.as_deref(),
+            origin.as_deref(),
+            observed_at.as_deref(),
+            scope.as_deref(),
+        ),
+        Command::SourceList { all } => crate::source::list(session, *all),
+        Command::SourceGet {
+            id,
+            whole,
+            lines,
+            section,
+        } => crate::source::get(session, id, *whole, lines.as_deref(), section.as_deref()),
+        Command::SourceVerify => crate::source::verify(session),
+        Command::SourceSupersede {
+            old_id,
+            new_path,
+            new_id,
+        } => crate::source::supersede(session, old_id, new_path, new_id.as_deref()),
         Command::Propose { .. }
         | Command::Revise { .. }
         | Command::Supersede { .. }
@@ -175,6 +255,19 @@ fn check(
     let mut diagnostics = session.diagnostics(&model);
     let queue = session.review_queue();
     diagnostics.extend(queue.diagnostics.clone());
+
+    // Immutable source library verification (AKR-S021).
+    for diag in akr_core::source::verify_catalog(&session.root) {
+        diagnostics.push(akr_core::diagnostics::Diagnostic {
+            code: akr_core::diagnostics::Code::new("AKR-S021"),
+            severity: akr_core::diagnostics::Severity::Error,
+            rule: None,
+            message: diag.to_string(),
+            primary: akr_core::diagnostics::Label::new(akr_core::diagnostics::Subject::Ledger),
+            notes: Vec::new(),
+            help: None,
+        });
+    }
 
     let mut text = String::new();
     text.push_str(&format!("akr check — {}\n", session.ledger.project.name));
@@ -493,42 +586,146 @@ fn days_from_civil(date: Date) -> i64 {
 // build
 // -------------------------------------------------------------------------------------
 
-fn build(session: &mut Session) -> Result<Output, EnvError> {
+fn build(session: &mut Session, check: bool) -> Result<Output, EnvError> {
     session.attach_lock();
     let model = session.resolve();
-    // Lock-currency diagnostics are excluded from the halt decision, and only here.
-    //
-    // `AKR-R051` and `AKR-R052` say the committed lock disagrees with the sources. The
-    // lock is exactly what this command is about to rewrite, so halting on them would make
-    // `akr build` refuse to do the one thing that clears them — and every write stales the
-    // lock by construction (D-014), so the tool would deadlock after the first `akr
-    // revise`. `akr check` still reports them, which is where a stale lock ought to be
-    // caught.
-    let diagnostics: Vec<akr_core::diagnostics::Diagnostic> = session
-        .diagnostics(&model)
-        .into_iter()
+    let mut diagnostics = session.diagnostics(&model);
+    let queue = session.review_queue();
+    let lock_path = session.akr_dir.join("akr.lock");
+    let lock = model.to_lock();
+    let rendered = lock.render();
+    let lock_changed = std::fs::read_to_string(&lock_path).ok().as_deref() != Some(&rendered);
+
+    if check {
+        let mut text = String::new();
+        text.push_str(&format!(
+            "akr build --check — {}\n",
+            session.ledger.project.name
+        ));
+        text.push_str(&summary_lines(session, &model));
+        text.push('\n');
+        text.push_str(&stage_lines(session, &model));
+        text.push('\n');
+        text.push_str(&resolve_detail(session, &model));
+        text.push('\n');
+        text.push_str("  build facts (not diagnostics):\n");
+        text.push_str(&format!(
+            "    {} records stale, {} at risk (see akr review-queue)\n",
+            queue.stale.len(),
+            queue.at_risk.len()
+        ));
+
+        let freshness = session.freshness(&queue);
+        let context = akr_core::render::RenderContext::new(&model, &freshness);
+        let view_diagnostics = check_views_current(&session.view_dir(), context).map_err(|e| {
+            EnvError::new("AKR-E001", format!("cannot read the view directory: {e}"))
+        })?;
+        let views_current = view_diagnostics.is_empty();
+        text.push_str(&format!(
+            "  stage E  emit (in memory)      {} views        {}\n",
+            View::ALL.len(),
+            if views_current { "ok" } else { "FAILED" }
+        ));
+        for &view in View::ALL {
+            let state = if view_diagnostics
+                .iter()
+                .any(|d| d.message.contains(view.file_name()))
+            {
+                "DIFFERS"
+            } else {
+                "current"
+            };
+            text.push_str(&format!("    {:<24} {state}\n", view.file_name()));
+        }
+        diagnostics.extend(view_diagnostics);
+
+        diagnostics.extend(build_lock_check_diagnostics(session, &lock));
+
+        let index_inputs = akr_core::store::IndexInputs {
+            model: &model,
+            queue: &queue,
+            spans: &session.spans,
+            diagnostics: &diagnostics,
+            today: &session.today.to_string(),
+        };
+        let index_path = temporary_index_path();
+        let index = match akr_core::store::build(&index_path, &index_inputs) {
+            Ok(stats) => {
+                text.push_str(&format!(
+                    "  stage F  index (in memory)   {} revisions, {} indexed    ok\n",
+                    stats.revisions, stats.indexed
+                ));
+                Some(stats)
+            }
+            Err(error) => {
+                text.push_str("  stage F  index (in memory)   FAILED\n");
+                diagnostics.push(error.diagnostic());
+                None
+            }
+        };
+        let _ = std::fs::remove_file(&index_path);
+
+        text.push_str(&format!(
+            "  lock check                   {}\n",
+            if lock_changed { "changed" } else { "current" }
+        ));
+
+        diagnostics.sort_by_key(Diagnostic::sort_key);
+        let fatal = diagnostics
+            .iter()
+            .filter(|d| is_fatal(d, session.global.profile))
+            .count();
+
+        if diagnostics.is_empty() {
+            text.push_str("no diagnostics\n");
+        } else {
+            let (rendered, _) = report(&diagnostics, &session.sources, session.global.profile);
+            text.push_str(&rendered);
+        }
+
+        let result = Value::object(vec![
+            ("check", Value::bool(true)),
+            ("views_written", Value::integer(0)),
+            ("views_current", Value::bool(views_current)),
+            ("lock_changed", Value::bool(lock_changed)),
+            (
+                "indexed",
+                Value::integer(index.map_or(0, |s| s.revisions as i64)),
+            ),
+            ("stale", Value::integer(queue.stale.len() as i64)),
+            ("at_risk", Value::integer(queue.at_risk.len() as i64)),
+        ]);
+        let exit = if fatal > 0 {
+            Exit::Diagnostics
+        } else {
+            Exit::Ok
+        };
+        return Ok(Output::text(text)
+            .with_result(result)
+            .with_diagnostics(diagnostics, exit));
+    }
+
+    // Only lock-currency diagnostics are excluded from the halt decision when the command is
+    // expected to write the lock; here, every error must stop the check.
+    let filtered: Vec<_> = diagnostics
+        .iter()
         .filter(|d| !is_lock_currency(d))
+        .cloned()
         .collect();
-    let fatal = diagnostics
+    let fatal = filtered
         .iter()
         .filter(|d| is_fatal(d, session.global.profile))
         .count();
     if fatal > 0 {
-        // The pipeline halts at the failing stage boundary and produces no output.
-        let (rendered, _) = report(&diagnostics, &session.sources, session.global.profile);
-        return Ok(Output::text(rendered).with_diagnostics(diagnostics, Exit::Diagnostics));
+        let (rendered, _) = report(&filtered, &session.sources, session.global.profile);
+        return Ok(Output::text(rendered).with_diagnostics(filtered, Exit::Diagnostics));
     }
 
-    let queue = session.review_queue();
     let freshness = session.freshness(&queue);
     let context = akr_core::render::RenderContext::new(&model, &freshness);
     let written = write_views(&session.view_dir(), context)
         .map_err(|e| EnvError::new("AKR-E001", format!("cannot write views: {e}")))?;
 
-    let lock = model.to_lock();
-    let lock_path = session.akr_dir.join("akr.lock");
-    let rendered = lock.render();
-    let lock_changed = std::fs::read_to_string(&lock_path).ok().as_deref() != Some(&rendered);
     if lock_changed {
         std::fs::write(&lock_path, &rendered)
             .map_err(|e| EnvError::new("AKR-C042", format!("cannot write akr.lock: {e}")))?;
@@ -574,6 +771,7 @@ fn build(session: &mut Session) -> Result<Output, EnvError> {
     }
 
     let result = Value::object(vec![
+        ("check", Value::bool(false)),
         ("views_written", Value::integer(written.len() as i64)),
         ("lock_changed", Value::bool(lock_changed)),
         ("stale", Value::integer(queue.stale.len() as i64)),
@@ -584,6 +782,49 @@ fn build(session: &mut Session) -> Result<Output, EnvError> {
         ),
     ]);
     Ok(Output::text(text).with_result(result))
+}
+
+fn build_lock_check_diagnostics(
+    session: &Session,
+    computed: &akr_core::lock::Lock,
+) -> Vec<Diagnostic> {
+    const V024: RuleId = RuleId(24);
+    let Some(text) = session.lock_text.as_deref() else {
+        return vec![
+            Diagnostic::error(
+                akr_core::diagnostics::codes::R052,
+                V024,
+                Subject::File(".akr/akr.lock".to_owned()),
+                "akr.lock is missing".to_owned(),
+            )
+            .help("run `akr build`"),
+        ];
+    };
+
+    let recorded = match akr_core::lock::Lock::parse(text) {
+        Ok(lock) => lock,
+        Err(error) => {
+            return vec![
+                Diagnostic::error(
+                    akr_core::diagnostics::codes::R052,
+                    V024,
+                    Subject::File(".akr/akr.lock".to_owned()),
+                    format!("akr.lock does not parse: {error}"),
+                )
+                .help("run `akr build`; never hand-merge a lock"),
+            ];
+        }
+    };
+
+    akr_core::lock::currency_diagnostics(&recorded, computed, ".akr/akr.lock")
+}
+
+fn temporary_index_path() -> std::path::PathBuf {
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or_default();
+    std::env::temp_dir().join(format!("akr-build-check-{suffix}.sqlite",))
 }
 
 /// Runs stage E, honouring `--no-rebuild`.
@@ -1634,8 +1875,17 @@ fn search(
     };
     let path = akr_core::store::cache_path(&session.akr_dir);
     let stale = akr_core::store::is_stale_against(&path, &session.source_graph());
-    let hits = akr_core::store::search(&path, &request)
-        .map_err(|error| EnvError::new(error.code.as_str(), error.message))?;
+    let hits = if stale {
+        // Validate that the current query still parses and stays within the query's expected
+        // shape, but preserve correctness by scanning the resolved ledger instead of relying on
+        // stale rows.
+        akr_core::store::search(&path, &request)
+            .map_err(|error| EnvError::new(error.code.as_str(), error.message))?;
+        ledger_search(session, &request)
+    } else {
+        akr_core::store::search(&path, &request)
+            .map_err(|error| EnvError::new(error.code.as_str(), error.message))?
+    };
 
     // Columns are padded to the widest cell, as `docs/07-cli.md` §6 shows them. Results are
     // read down the page rather than across, and ragged columns make that work.
@@ -1676,6 +1926,7 @@ fn search(
                 ("kind", Value::string(hit.kind.clone())),
                 ("state", Value::string(hit.state.clone())),
                 ("title", Value::string(hit.title.clone())),
+                ("score", Value::string(format!("{:.2}", hit.score))),
             ])
         })
         .collect();
@@ -1684,7 +1935,132 @@ fn search(
         ("results", Value::array(results)),
         ("count", Value::integer(hits.len() as i64)),
         ("index_stale", Value::bool(stale)),
+        ("cache_stale", Value::bool(stale)),
+        (
+            "backend",
+            Value::string(if stale { "ledger_scan" } else { "fts_index" }),
+        ),
+        ("ledger_revision", Value::string(session.source_graph())),
+        (
+            "cache_revision",
+            Value::string(
+                akr_core::store::cached_source_graph_hash(&path)
+                    .map(|hash| format!("sha256:{hash}"))
+                    .unwrap_or_else(|| "unknown".to_owned()),
+            ),
+        ),
     ])))
+}
+
+#[cfg(feature = "fts5")]
+fn ledger_search(
+    session: &Session,
+    request: &akr_core::store::Request,
+) -> Vec<akr_core::store::Hit> {
+    let query = request.query.to_lowercase();
+    let limit = request.limit.unwrap_or(20).min(100);
+    let terms: Vec<String> = query
+        .split_whitespace()
+        .map(|term| term.trim_matches(|c: char| !c.is_alphanumeric()).to_owned())
+        .filter(|term| !term.is_empty())
+        .collect();
+
+    let mut hits: Vec<akr_core::store::Hit> = Vec::new();
+    if terms.is_empty() {
+        return hits;
+    }
+
+    'record: for record in session.ledger.records() {
+        if !record.file.as_ref().is_some_and(|text| !text.is_empty()) || !record.is_live() {
+            continue;
+        }
+        if !request.kinds.is_empty() && !request.kinds.iter().any(|kind| kind == record.kind.name())
+        {
+            continue;
+        }
+        if !request.states.is_empty()
+            && !request
+                .states
+                .iter()
+                .any(|state| state == record.state.name())
+        {
+            continue;
+        }
+
+        let mut score = 0.0;
+        let searchable: Vec<(f64, String)> = record
+            .claims
+            .iter()
+            .map(|claim| (3.0, claim.text.to_lowercase()))
+            .collect();
+        let title = record.title.to_lowercase();
+        let body = akr_core::context::body_of(record)
+            .unwrap_or_default()
+            .to_lowercase();
+        let aliases = record
+            .content
+            .iter()
+            .filter_map(|(slot, value)| {
+                if slot == &ContentSlot::Aliases {
+                    match value {
+                        ContentValue::Strings(items) => Some(items.join(" ").to_lowercase()),
+                        _ => None,
+                    }
+                } else {
+                    None
+                }
+            })
+            .collect::<String>();
+
+        for term in &terms {
+            let mut touched = false;
+            if record.id.key.to_string().to_lowercase().contains(term) {
+                touched = true;
+                score += 1.0;
+            }
+            if title.contains(term) {
+                touched = true;
+                score += 4.0;
+            }
+            if body.contains(term) {
+                touched = true;
+                score += 2.0;
+            }
+            if aliases.contains(term) {
+                touched = true;
+                score += 2.0;
+            }
+            for (weight, claim) in &searchable {
+                if claim.contains(term) {
+                    touched = true;
+                    score += *weight;
+                    break;
+                }
+            }
+            if !touched {
+                continue 'record;
+            }
+        }
+
+        if score > 0.0 {
+            hits.push(akr_core::store::Hit {
+                key: record.id.key.to_string(),
+                rev: record.id.revision,
+                kind: record.kind.name().to_owned(),
+                state: record.state.name().to_owned(),
+                title: record.title.to_owned(),
+                score,
+            })
+        }
+    }
+
+    hits.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.key.cmp(&b.key))
+    });
+    hits.into_iter().take(limit).collect()
 }
 
 /// The same command in a binary built without FTS5.

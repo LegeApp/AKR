@@ -19,6 +19,8 @@ pub mod args;
 pub mod commands;
 pub mod fmt;
 pub mod import;
+pub mod ingest;
 pub mod init;
 pub mod session;
+pub mod source;
 pub mod write;

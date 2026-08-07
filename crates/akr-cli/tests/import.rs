@@ -332,6 +332,30 @@ fn deleting_the_document_after_import_turns_up_m022_on_check() {
     assert_eq!(lenient.code, 0, "{}", lenient.output());
 }
 
+#[test]
+fn import_works_when_run_from_a_non_workspace_directory() {
+    let example = with_corpus("import-out-of-tree");
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_akr"));
+    let output = command
+        .args([
+            "--lenient",
+            "--dir",
+            example.root().to_string_lossy().as_ref(),
+        ])
+        .args(["import", "docs/legacy/OLD-NOTES.md", "--namespace", "sys"])
+        .current_dir(std::env::temp_dir())
+        .output()
+        .expect("the akr binary runs");
+    let status = output.status.code().unwrap_or(-1);
+    let out = String::from_utf8_lossy(&output.stdout);
+    let err = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(status, 0, "{out}{err}");
+    assert!(
+        out.contains("created sys.requirement.determinism/1"),
+        "{out}"
+    );
+}
+
 // -------------------------------------------------------------------------------------
 // the other example
 // -------------------------------------------------------------------------------------

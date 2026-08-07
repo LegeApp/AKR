@@ -38,12 +38,12 @@ pub fn run(
     tracking: Option<&str>,
     dry_run: bool,
 ) -> Result<Output, EnvError> {
-    let document = repo_relative(session, path);
+    let source = resolve_source(session, path);
+    let document = source.document.clone();
     let strict = session.global.profile == Profile::Strict;
 
     // Phase 1 — read.
-    let absolute = session.root.join(&document);
-    if !absolute.exists() {
+    if !source.absolute.exists() {
         return Ok(diagnostics_output(
             session,
             vec![error(
@@ -52,7 +52,8 @@ pub fn run(
             )],
         ));
     }
-    let extension = path
+    let extension = source
+        .absolute
         .extension()
         .map(|e| e.to_string_lossy().into_owned())
         .unwrap_or_default();
@@ -68,13 +69,13 @@ pub fn run(
             ],
         ));
     };
-    let text = std::fs::read_to_string(&absolute)
+    let text = std::fs::read_to_string(&source.absolute)
         .map_err(|e| EnvError::new("AKR-C011", format!("cannot read {document}: {e}")))?;
     let extraction = extract(&text, format);
 
     // Phase 2 — plan.
     let namespace = namespace.map_or_else(|| namespace_of(&document), str::to_owned);
-    let mut warnings = link_warnings(session, &document, &extraction);
+    let mut warnings = link_warnings(session, &source, &extraction);
     if extraction.claims.is_empty() {
         warnings.push(warning(
             migration::M011,
@@ -98,7 +99,8 @@ pub fn run(
     let tracking = match tracking {
         Some(text) => crate::write::parse_key(text)?,
         None => {
-            let stem = path
+            let stem = source
+                .absolute
                 .file_stem()
                 .map(|s| s.to_string_lossy().into_owned())
                 .unwrap_or_default();
@@ -180,7 +182,7 @@ pub fn run(
 
     // Phase 3 — write, as one operation.
     let request = ImportRequest {
-        document: document.clone(),
+        document: source.document,
         records,
         tracking,
     };
@@ -284,9 +286,38 @@ fn plan_json(records: &[ImportedRecord], tracking: &LogicalKey, written: bool) -
     ])
 }
 
+struct SourceLocation {
+    absolute: PathBuf,
+    document: String,
+    in_workspace: bool,
+}
+
+fn resolve_source(session: &Session, path: &Path) -> SourceLocation {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        session.root.join(path)
+    };
+    let root = &session.root;
+    let normalised = normalise(&absolute);
+    let document = normalised
+        .strip_prefix(root)
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_else(|_| normalised.to_string_lossy().replace('\\', "/"));
+    SourceLocation {
+        in_workspace: normalised.starts_with(root),
+        absolute,
+        document,
+    }
+}
+
 /// `AKR-M022` for every relative link in the document that resolves to nothing.
-fn link_warnings(session: &Session, document: &str, extraction: &Extraction) -> Vec<Diagnostic> {
-    let base = Path::new(document).parent().unwrap_or(Path::new(""));
+fn link_warnings(
+    session: &Session,
+    source: &SourceLocation,
+    extraction: &Extraction,
+) -> Vec<Diagnostic> {
+    let base = source.absolute.parent().unwrap_or(Path::new(""));
     let head = session
         .commit
         .as_ref()
@@ -294,14 +325,20 @@ fn link_warnings(session: &Session, document: &str, extraction: &Extraction) -> 
     let mut out = Vec::new();
     for link in &extraction.links {
         let target = normalise(&base.join(&link.target));
-        if !session.root.join(&target).exists() {
+        let check = if source.in_workspace || target.is_absolute() {
+            target.clone()
+        } else {
+            session.root.join(&target)
+        };
+        if !check.exists() {
             out.push(warning(
                 migration::M022,
                 format!(
                     "source path \"{}\" does not exist at {head} ({document}:{}:{})",
                     target.display(),
                     link.line,
-                    link.column
+                    link.column,
+                    document = source.document
                 ),
             ));
         }
@@ -322,31 +359,6 @@ fn normalise(path: &Path) -> PathBuf {
         }
     }
     out
-}
-
-/// The document's path relative to the workspace root, kept as given when outside it.
-fn repo_relative(session: &Session, path: &Path) -> String {
-    let joined = if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .map(|cwd| cwd.join(path))
-            .unwrap_or_else(|_| path.to_path_buf())
-    };
-    let root = session
-        .root
-        .canonicalize()
-        .unwrap_or_else(|_| session.root.clone());
-    // Source paths are repository paths, and a repository path is written with `/` on
-    // every platform — git, the freshness globs, and the M022 existence check all
-    // compare against that form. `to_string_lossy` alone would store `\` on Windows.
-    joined
-        .canonicalize()
-        .ok()
-        .and_then(|p| p.strip_prefix(&root).map(Path::to_path_buf).ok())
-        .unwrap_or_else(|| path.to_path_buf())
-        .to_string_lossy()
-        .replace('\\', "/")
 }
 
 /// The default namespace: the document's first path segment (`docs/12` §3).

@@ -282,12 +282,38 @@ Exit 1.
 ### `akr build`
 
 ```
-akr build [--at <commit>] [--today <date>]
+akr build [--check] [--at <commit>] [--today <date>]
 ```
 
 Runs stages A–F: everything `akr check` does, then the index, then the views, then
 `akr.lock`. The exact sequence is [`06-compiler-pipeline.md`](06-compiler-pipeline.md)
-§13. Only files whose bytes change are rewritten, so a no-op build produces no diff.
+§13. With `--check`, all stages still run, but outputs are validated in-memory and no
+files are written.
+
+```
+$ akr build --check
+akr build --check — save-your-skin
+  42 records, 40 revisions, 19 files
+  commit e806b3f, grammar 0.1, vocabulary 0.1
+
+  stage A  parse         42 revisions        ok
+  stage B  type-check    42 revisions        ok
+  stage C  link          118 references      ok
+  stage D  resolve       40 heads            ok
+  stage E  emit (in memory)      6 views        ok
+    roadmap                  current
+    active-work              current
+    review-required          current
+    current-state            current
+    open-questions           current
+    decision-history         current
+  stage F  index (in memory)   40 revisions, 37 indexed    ok
+  lock check                   unchanged
+
+  no diagnostics
+```
+
+`--check` exits 1 on parity errors and 0 when everything matches current sources.
 
 ```
 $ akr build
@@ -840,13 +866,11 @@ the only thing that notices them promptly. Run it as a notification, not a gate.
 ### Release
 
 ```bash
-akr build
-akr lock --check
-git diff --exit-code docs/generated/ akr.lock
+scripts/verify-distribution.sh
 ```
 
-Together these assert that the committed views and lock are exactly what the current
-sources produce.
+Runs the full distribution verification: tracked files, all tests, design coherence checks,
+and build parity via `akr build --check`.
 
 ---
 

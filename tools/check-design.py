@@ -21,12 +21,12 @@ Two severities, mirroring AKR's own:
     warning  a documentation gap that breaks nothing — most often a registered
              diagnostic code that no specification document cites yet, which
              `spec/diagnostics/README.md` §6 explicitly permits. Reported always;
-             fails the run only under --pedantic.
+             fails the run only under --strict.
 
-Checks whose inputs are missing report SKIPPED rather than failing, so the tool is
+Checks whose inputs are missing report SKIPPED unless --strict is set.
 useful while the design set is still being written.
 
-    python3 tools/check-design.py [--root DIR] [--verbose] [--pedantic]
+    python3 tools/check-design.py [--root DIR] [--verbose] [--strict]
 """
 
 import argparse
@@ -756,8 +756,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--root", default=ROOT)
     ap.add_argument("--verbose", "-v", action="store_true")
+    ap.add_argument("--strict", action="store_true",
+                    help="alias for --pedantic; treat warnings as errors")
     ap.add_argument("--pedantic", action="store_true",
-                    help="treat warnings as errors")
+                    help=argparse.SUPPRESS)
     args = ap.parse_args()
     ROOT = os.path.abspath(args.root)
 
@@ -767,9 +769,13 @@ def main():
         except Exception as exc:  # a checker bug must not look like a design fault
             fail(name, "checker raised %s: %s" % (type(exc).__name__, exc))
 
-    if args.pedantic:
+    strict = args.strict or args.pedantic
+
+    if strict:
         failures.extend(warnings)
         del warnings[:]
+        failures.extend(skipped)
+        del skipped[:]
 
     by_check = {}
     for name, msg in failures:
@@ -809,7 +815,7 @@ def main():
                 print("      ? %s" % m)
         elif cautions:
             print("      ? %d warning(s); rerun with --verbose to list, "
-                  "--pedantic to fail on them" % len(cautions))
+                  "--strict to fail on them" % len(cautions))
     print()
     if failures:
         print("%d error(s) in %d check(s)." % (len(failures), len(by_check)))

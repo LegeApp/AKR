@@ -30,6 +30,7 @@ came from resolve before reading a word of the message.
 | `G` | Git / freshness — watches, `observed_at`, impact | `spec/diagnostics/codes-runtime.md` | Writer B |
 | `C` | CLI / config — invocation, `project.akr`, workspace layout | `spec/diagnostics/codes-runtime.md` | Writer B |
 | `M` | Migration — `akr import` and legacy disposition | `spec/diagnostics/codes-runtime.md` | Writer B |
+| `S` | Source verification — immutable source catalog | `spec/diagnostics/codes-runtime.md` | Writer B |
 
 Every code is defined in **exactly one** registry. The two registries are disjoint by
 stage letter, so they are never edited by both authors and never merge-conflict.
@@ -106,6 +107,20 @@ AKR-R001` prints the registry entry.
   reports uncited codes as warnings (`--pedantic` promotes them to failures).
   *(Amended 2026-08-03 by the lead: the original both-directions-hard rule would have
   failed the design set over 46 reserved language-stage codes.)*
+
+The following language and runtime diagnostics are currently registered but intentionally
+not yet cited in the normative prose:
+
+- `AKR-S021`
+- `AKR-F002`, `AKR-F003`, `AKR-F004`, `AKR-F005`, `AKR-F006`, `AKR-F007`,
+  `AKR-F008`, `AKR-F009`, `AKR-F010`, `AKR-F011`
+- `AKR-L003`, `AKR-L011`, `AKR-L032`, `AKR-L033`, `AKR-L041`, `AKR-L042`
+- `AKR-P004`, `AKR-P005`, `AKR-P006`, `AKR-P007`, `AKR-P008`, `AKR-P009`,
+  `AKR-P013`, `AKR-P014`, `AKR-P016`, `AKR-P017`, `AKR-P018`, `AKR-P024`, `AKR-P026`,
+  `AKR-P033`, `AKR-P034`, `AKR-P045`, `AKR-P046`
+- `AKR-R016`, `AKR-R017`
+- `AKR-T003`, `AKR-T004`, `AKR-T005`, `AKR-T006`, `AKR-T007`, `AKR-T012`,
+  `AKR-T013`, `AKR-T014`, `AKR-T032`, `AKR-T033`, `AKR-T034`
 
 ## 7. Rule identifiers
 

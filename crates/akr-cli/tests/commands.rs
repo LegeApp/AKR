@@ -141,6 +141,26 @@ fn build_is_idempotent() {
 }
 
 #[test]
+fn build_check_detects_view_drift() {
+    let example = Example::materialise("build-check");
+    let build = example.run(&["build"]);
+    assert_eq!(build.code, 0, "{}", build.output());
+
+    let roadmap = example.root().join("docs/generated/ROADMAP.md");
+    let mut text = std::fs::read_to_string(&roadmap).expect("roadmap view exists");
+    text.push_str("\n<!-- drift introduced by build-check test -->\n");
+    std::fs::write(&roadmap, text).expect("mutate view");
+
+    let check = example.run(&["build", "--check"]);
+    assert_eq!(check.code, 1, "{}", check.output());
+    assert!(
+        check.stdout.contains("DIFFERS") || check.stderr.contains("AKR-E011"),
+        "{}",
+        check.output()
+    );
+}
+
+#[test]
 fn lock_check_agrees_with_the_lock_the_tool_writes() {
     let example = Example::materialise("lock-check");
     assert_eq!(example.run(&["lock", "--check"]).code, 0);
