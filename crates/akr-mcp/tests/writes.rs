@@ -414,7 +414,7 @@ fn no_tool_can_reach_the_sqlite_cache() {
         assert!(!schema.to_lowercase().contains("sqlite"), "{}", tool.name);
         assert!(!schema.to_lowercase().contains("select "), "{}", tool.name);
     }
-    assert_eq!(akr_mcp::schema::TOOLS.len(), 11);
+    assert_eq!(akr_mcp::schema::TOOLS.len(), 13);
 }
 
 #[test]

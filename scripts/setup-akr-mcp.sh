@@ -12,7 +12,7 @@ One-time setup for the AKR MCP server across:
 - Claude MCP registration
 
 Options:
-  --repo-dir DIR   AKR repo root (default: script directory)
+  --repo-dir DIR   AKR repo root (default: parent directory of this script)
   --dry-run        Print changes without writing
   --debug          Use target/debug/akr-mcp instead of release
   --no-claude      Skip Claude registration
@@ -22,7 +22,7 @@ Options:
 USAGE
 }
 
-REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DRY_RUN=0
 DO_CLAUDE=1
 DO_CODEX=1

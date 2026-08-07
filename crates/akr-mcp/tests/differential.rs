@@ -91,6 +91,18 @@ fn cli_result(example: &Example, args: &[&str]) -> Value {
     document.get("result").cloned().unwrap_or(Value::Null)
 }
 
+fn without_search_overlays(value: Value) -> Value {
+    match value {
+        Value::Object(fields) => Value::Object(
+            fields
+                .into_iter()
+                .filter(|(name, _)| name != "planning_candidates" && name != "recommended_context")
+                .collect(),
+        ),
+        _ => value,
+    }
+}
+
 // -------------------------------------------------------------------------------------
 // Exit criterion 4
 // -------------------------------------------------------------------------------------
@@ -212,7 +224,11 @@ fn knowledge_search_and_akr_search_agree() {
     let example = Example::materialise("differential-search");
     assert_eq!(example.run(&["build"]).code, 0);
 
-    let tool = call(&example, "knowledge.search", r#"{"query":"projection"}"#);
+    let tool = without_search_overlays(call(
+        &example,
+        "knowledge.search",
+        r#"{"query":"projection"}"#,
+    ));
     let cli = cli_result(&example, &["search", "projection"]);
     assert_eq!(tool.to_pretty(), cli.to_pretty());
     assert!(
@@ -234,7 +250,7 @@ fn knowledge_search_and_akr_search_agree() {
         &example,
         &["search", "day", "--kind", "milestone", "--limit", "3"],
     );
-    assert_eq!(tool.to_pretty(), cli.to_pretty());
+    assert_eq!(without_search_overlays(tool).to_pretty(), cli.to_pretty());
 }
 
 #[test]
@@ -406,7 +422,7 @@ fn every_declared_tool_has_a_schema_and_an_implementation() {
         .and_then(|r| r.get("tools"))
         .and_then(Value::as_array)
         .expect("a tool list");
-    assert_eq!(tools.len(), 11, "the catalogue is closed for 0.1");
+    assert_eq!(tools.len(), 13, "the catalogue is closed for 0.1");
 
     for tool in tools {
         let name = tool.get("name").and_then(Value::as_str).expect("a name");
@@ -464,4 +480,54 @@ fn a_notification_gets_no_response_and_a_bad_line_does_not_end_the_session() {
         Some(-32700)
     );
     assert_eq!(responses[1].get("id").and_then(Value::as_integer), Some(7));
+}
+
+#[test]
+fn both_supported_protocol_versions_are_accepted() {
+    let example = Example::materialise("differential-protocol");
+
+    let responses = rpc(
+        &example,
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\"}}\n\
+         {\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2026-07-28\"}}\n\
+         {\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"server/discover\",\"params\":{\"protocolVersion\":\"2026-07-28\"}}\n",
+    );
+
+    let legacy = responses[0]
+        .get("result")
+        .and_then(|r| r.get("protocolVersion"))
+        .and_then(Value::as_str)
+        .expect("legacy initialize result");
+    assert_eq!(legacy, "2024-11-05");
+
+    let current = responses[1]
+        .get("result")
+        .and_then(|r| r.get("protocolVersion"))
+        .and_then(Value::as_str)
+        .expect("current initialize result");
+    assert_eq!(current, "2026-07-28");
+
+    let discover = responses[2]
+        .get("result")
+        .and_then(|value| match value {
+            Value::Object(fields) => Some(fields),
+            _ => None,
+        })
+        .expect("discover result");
+    assert_eq!(
+        discover
+            .iter()
+            .find(|(name, _)| name == "protocolVersion")
+            .and_then(|(_, value)| value.as_str())
+            .expect("discover protocol"),
+        "2026-07-28"
+    );
+    assert!(
+        discover
+            .iter()
+            .find(|(name, _)| name == "supportedProtocols")
+            .and_then(|(_, value)| value.as_array())
+            .is_some(),
+        "{discover:?}",
+    );
 }

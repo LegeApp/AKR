@@ -224,6 +224,19 @@ pub fn is_stale_against(path: &Path, expected: &str) -> bool {
     stored.is_some_and(|found| found != expected)
 }
 
+/// The `source_graph_hash` that the on-disk cache is currently stamped with, if any.
+#[must_use]
+pub fn cached_source_graph_hash(path: &Path) -> Option<String> {
+    let connection = rusqlite::Connection::open(path).ok()?;
+    connection
+        .query_row(
+            "SELECT value FROM meta WHERE key = 'source_graph_hash'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+}
+
 /// Opens the cache, refusing a file that is not one.
 fn open(path: &Path) -> Result<rusqlite::Connection, IndexError> {
     let existed = path.exists();

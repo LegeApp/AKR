@@ -781,7 +781,8 @@ fn apply_budget(
     request: &Request,
 ) -> Result<(), ContextError> {
     let mandatory = mandatory_tokens(bundle, model);
-    bundle.estimated_tokens = total_tokens(bundle, model);
+    let mut truncated: BTreeSet<RevisionId> = BTreeSet::new();
+    bundle.estimated_tokens = total_tokens(bundle, model, &truncated);
 
     let Some(budget) = request.budget else {
         return Ok(());
@@ -803,13 +804,11 @@ fn apply_budget(
             if bundle.estimated_tokens <= budget {
                 break;
             }
-            bundle.truncated.push(entry.id().clone());
-            bundle.estimated_tokens = total_tokens(bundle, model)
-                .saturating_sub(bundle.truncated.len().saturating_mul(20));
+            truncated.insert(entry.id().clone());
+            bundle.estimated_tokens = total_tokens(bundle, model, &truncated);
         }
     }
-    bundle.truncated.sort();
-    bundle.truncated.dedup();
+    bundle.truncated = truncated.into_iter().collect();
     Ok(())
 }
 
@@ -819,27 +818,33 @@ fn tokens_of(text: &str) -> usize {
     text.split_whitespace().count() * 4 / 3
 }
 
-fn record_tokens(model: &ResolvedModel<'_>, id: &RevisionId) -> usize {
+fn record_tokens(model: &ResolvedModel<'_>, id: &RevisionId, include_prose: bool) -> usize {
     let Some(record) = model.ledger().get(id) else {
         return 0;
     };
     let mut total = tokens_of(&record.title) + 12;
-    for value in record.content.values() {
-        if let ContentValue::Prose(text) | ContentValue::Text(text) = value {
-            total += tokens_of(text);
+    if include_prose {
+        for value in record.content.values() {
+            if let ContentValue::Prose(text) | ContentValue::Text(text) = value {
+                total += tokens_of(text);
+            }
         }
-    }
-    for claim in &record.claims {
-        total += tokens_of(&claim.text);
+        for claim in &record.claims {
+            total += tokens_of(&claim.text);
+        }
     }
     total
 }
 
-fn total_tokens(bundle: &Bundle, model: &ResolvedModel<'_>) -> usize {
+fn total_tokens(
+    bundle: &Bundle,
+    model: &ResolvedModel<'_>,
+    truncated: &BTreeSet<RevisionId>,
+) -> usize {
     bundle
         .members()
         .iter()
-        .map(|id| record_tokens(model, id))
+        .map(|id| record_tokens(model, id, !truncated.contains(id)))
         .sum()
 }
 
@@ -847,11 +852,11 @@ fn total_tokens(bundle: &Bundle, model: &ResolvedModel<'_>) -> usize {
 /// contradictions and staleness. Prose is excluded, because prose is what truncates.
 fn mandatory_tokens(bundle: &Bundle, model: &ResolvedModel<'_>) -> usize {
     let structural = bundle.members().len() * 12;
-    let goal = record_tokens(model, &bundle.goal);
+    let goal = record_tokens(model, &bundle.goal, true);
     let plan: usize = bundle
         .section(Section::PlanOfRecord)
         .iter()
-        .map(|entry| record_tokens(model, entry.id()))
+        .map(|entry| record_tokens(model, entry.id(), true))
         .sum();
     structural + goal + plan + bundle.acceptance.len() * 24 + bundle.contradictions.len() * 24
 }

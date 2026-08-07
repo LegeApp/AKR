@@ -32,8 +32,8 @@ fn main() -> std::process::ExitCode {
                 println!(
                     "akr-mcp — the AKR knowledge tools over MCP\n\n\
                      USAGE\n    akr-mcp [--dir <path>]\n\n\
-                     Speaks JSON-RPC 2.0 over stdio, one document per line. The nine tools \
-                     of docs/08-mcp.md §2\nare listed by `tools/list`; every one of them \
+                     Speaks JSON-RPC 2.0 over stdio, one document per line. The MCP tools \
+                     of docs/08-mcp.md §2 are listed by `tools/list`; every one of them \
                      calls the function `akr` calls.\n"
                 );
                 return std::process::ExitCode::SUCCESS;

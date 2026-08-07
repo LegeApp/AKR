@@ -183,7 +183,10 @@ fn render_records(
             "\n{}\n",
             header_line(record, marker.as_deref(), qualifier)
         ));
-        if let Some(body) = body_of(record) {
+        let truncated = bundle.truncated.contains(&record.id);
+        if truncated {
+            out.push_str("  (prose truncated to fit the budget)\n");
+        } else if let Some(body) = body_of(record) {
             out.push_str(&indent(body, 2));
         }
         // D-026: operator commentary on a planning record. Informational only, and shown
@@ -205,7 +208,7 @@ fn render_records(
         if section == Section::PlanOfRecord {
             out.push_str(&dispositions_of(record, model));
         }
-        if section == Section::Normative {
+        if section == Section::Normative && !truncated {
             out.push_str(&claim_lines(record, 2));
         }
         let relations = relation_lines(record, model, freshness, 2);
@@ -214,9 +217,6 @@ fn render_records(
         }
         if section == Section::WorkItems || section == Section::Observations {
             out.push_str(&risk_lines(record, freshness, 2));
-        }
-        if bundle.truncated.contains(&record.id) {
-            out.push_str("  (prose truncated to fit the budget)\n");
         }
     }
     out

@@ -28,6 +28,16 @@ pub const TOOLS: &[Tool] = &[
         writes: false,
     },
     Tool {
+        name: "knowledge.start",
+        description: "Orient a new task to nearby planning records before proposing context.",
+        writes: false,
+    },
+    Tool {
+        name: "knowledge.explain",
+        description: "Explain a diagnostic code, rule identifier, or record kind.",
+        writes: false,
+    },
+    Tool {
         name: "knowledge.get",
         description: "Retrieve one record by reference, with its relations, freshness and \
                       canonical source text.",
@@ -116,6 +126,21 @@ pub fn input_schema(name: &str) -> Option<Value> {
             ],
             &["query"],
         ),
+        "knowledge.start" => object(
+            vec![
+                ("task", string("What the agent should start working on.")),
+                ("paths", string_array("Path globs the work will touch.")),
+                ("budget_tokens", integer("Approximate token budget.")),
+            ],
+            &["task"],
+        ),
+        "knowledge.explain" => object(
+            vec![(
+                "subject",
+                string("Diagnostic code, rule id, or record kind to explain."),
+            )],
+            &["subject"],
+        ),
         "knowledge.get" => object(
             vec![
                 (
@@ -138,7 +163,6 @@ pub fn input_schema(name: &str) -> Option<Value> {
                 ),
                 ("paths", string_array("Path globs the work will touch.")),
                 ("budget_tokens", integer("Approximate token budget.")),
-                ("format", enumeration("json or text.", &["json", "text"])),
             ],
             &["goal"],
         ),
@@ -190,6 +214,7 @@ pub fn input_schema(name: &str) -> Option<Value> {
                     "acceptance",
                     acceptance_schema("Required to propose a milestone (V-008)."),
                 ),
+                ("sources", sources_schema()),
             ],
             &["key", "kind", "title"],
         ),
@@ -212,6 +237,7 @@ pub fn input_schema(name: &str) -> Option<Value> {
                         "Replaces the acceptance block. Omit to keep the head's checks.",
                     ),
                 ),
+                ("sources", sources_schema()),
                 (
                     "base_rev",
                     integer(
@@ -328,6 +354,26 @@ pub fn input_schema(name: &str) -> Option<Value> {
         _ => return None,
     };
     Some(schema)
+}
+
+/// The output schema for each tool.
+pub fn output_schema(name: &str) -> Option<Value> {
+    match name {
+        "knowledge.search"
+        | "knowledge.start"
+        | "knowledge.explain"
+        | "knowledge.get"
+        | "knowledge.context"
+        | "knowledge.impact"
+        | "knowledge.validate"
+        | "knowledge.propose"
+        | "knowledge.revise"
+        | "knowledge.supersede"
+        | "knowledge.complete"
+        | "knowledge.evidence_add"
+        | "knowledge.papercut" => Some(Value::object(vec![("type", Value::string("object"))])),
+        _ => None,
+    }
 }
 
 /// `kind`: the closed enumeration of D-001, with each kind's required content slots in
@@ -494,6 +540,57 @@ fn relations_schema() -> Value {
             Value::string("relation name -> array of references."),
         ),
         ("additionalProperties", string_array("References.")),
+    ])
+}
+
+fn source_schema() -> Value {
+    Value::object(vec![
+        ("type", Value::string("object")),
+        (
+            "description",
+            Value::string("One source attribution for the record."),
+        ),
+        (
+            "properties",
+            Value::Object(
+                vec![
+                    (
+                        "kind".to_owned(),
+                        enumeration(
+                            "legacy, external or internal",
+                            &["legacy", "external", "internal"],
+                        ),
+                    ),
+                    (
+                        "path".to_owned(),
+                        string("Path to the source file this record was authored from."),
+                    ),
+                    ("url".to_owned(), string("URL to the source material.")),
+                    (
+                        "excerpt".to_owned(),
+                        string("Excerpt of the source material associated with this record."),
+                    ),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+        ),
+        (
+            "required",
+            Value::array(vec![Value::string("kind".to_owned())]),
+        ),
+        ("additionalProperties", Value::bool(false)),
+    ])
+}
+
+fn sources_schema() -> Value {
+    Value::object(vec![
+        ("type", Value::string("array")),
+        (
+            "description",
+            Value::string("Source attributions for the record."),
+        ),
+        ("items", source_schema()),
     ])
 }
 

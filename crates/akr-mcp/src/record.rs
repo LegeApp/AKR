@@ -123,6 +123,54 @@ pub fn to_source(
         }
     }
 
+    if let Some(Value::Array(sources)) = payload.get("sources") {
+        for source in sources {
+            let Value::Object(fields) = source else {
+                return Err(ToolError::new(
+                    "AKR-C004",
+                    "each source entry must be an object",
+                ));
+            };
+            let kind = fields
+                .iter()
+                .find_map(|(name, value)| (name == "kind").then_some(value))
+                .and_then(Value::as_str)
+                .ok_or_else(|| ToolError::new("AKR-C004", "each source needs a `kind`"))?;
+            if !matches!(kind, "legacy" | "external" | "internal") {
+                return Err(ToolError::new(
+                    "AKR-C004",
+                    format!(
+                        "`source.kind` must be one of legacy, external, internal, found {kind:?}"
+                    ),
+                ));
+            }
+            out.push_str("    source {\n");
+            out.push_str(&format!("        kind {kind}\n"));
+            if let Some(path) = fields
+                .iter()
+                .find_map(|(name, value)| (name == "path").then_some(value))
+                .and_then(Value::as_str)
+            {
+                out.push_str(&format!("        path {}\n", quote(path)));
+            }
+            if let Some(url) = fields
+                .iter()
+                .find_map(|(name, value)| (name == "url").then_some(value))
+                .and_then(Value::as_str)
+            {
+                out.push_str(&format!("        url {}\n", quote(url)));
+            }
+            if let Some(excerpt) = fields
+                .iter()
+                .find_map(|(name, value)| (name == "excerpt").then_some(value))
+                .and_then(Value::as_str)
+            {
+                out.push_str(&format!("        excerpt {}\n", prose(excerpt, 8)));
+            }
+            out.push_str("    }\n");
+        }
+    }
+
     if let Some(author) = payload.get("author").and_then(Value::as_str) {
         out.push_str(&format!("    author {}\n", quote(author)));
     }

@@ -6,8 +6,9 @@
 //! newline is unambiguous, greppable, and replayable from a file, which is what
 //! `tests/differential.rs` does.
 //!
-//! Three methods: `initialize`, `tools/list`, `tools/call`. Notifications — a request with
-//! no `id` — are acknowledged by producing no response, as JSON-RPC requires.
+//! Four methods: `initialize`, `server/discover`, `tools/list`, `tools/call`.
+//! Notifications — a request with no `id` — are acknowledged by producing no response, as
+//! JSON-RPC requires.
 //!
 //! # Tool failures are results, not transport errors
 //!
@@ -20,11 +21,15 @@ use akr_core::json::{Value, parse};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
-use crate::schema::{TOOLS, input_schema};
+use crate::schema::{TOOLS, input_schema, output_schema};
 use crate::tools;
 
-/// The protocol version this server implements.
-pub const PROTOCOL_VERSION: &str = "2024-11-05";
+/// The legacy protocol version this server still accepts.
+pub const PROTOCOL_LEGACY: &str = "2024-11-05";
+/// The current protocol version this server now negotiates.
+pub const PROTOCOL_CURRENT: &str = "2026-07-28";
+/// Supported protocol versions, in preference order.
+pub const SUPPORTED_PROTOCOLS: &[&str] = &[PROTOCOL_CURRENT, PROTOCOL_LEGACY];
 
 /// The server's own version, matching the tool version the CLI reports.
 pub const SERVER_VERSION: &str = "0.1.0";
@@ -58,7 +63,8 @@ impl Server {
         let id = id.filter(|value| !value.is_null())?;
 
         let result = match method {
-            "initialize" => Ok(self.initialize()),
+            "initialize" => Ok(self.initialize(&params)),
+            "server/discover" => Ok(self.server_discover(&params)),
             "tools/list" => Ok(Self::tools_list()),
             "tools/call" => Ok(self.tools_call(&params)),
             "ping" => Ok(Value::Object(Vec::new())),
@@ -85,9 +91,10 @@ impl Server {
         })
     }
 
-    fn initialize(&self) -> Value {
+    fn initialize(&self, params: &Value) -> Value {
+        let protocol_version = select_protocol(params);
         Value::object(vec![
-            ("protocolVersion", Value::string(PROTOCOL_VERSION)),
+            ("protocolVersion", Value::string(protocol_version)),
             (
                 "capabilities",
                 Value::object(vec![("tools", Value::Object(Vec::new()))]),
@@ -110,6 +117,41 @@ impl Server {
         ])
     }
 
+    fn server_discover(&self, params: &Value) -> Value {
+        let protocol_version = select_protocol(params);
+        Value::object(vec![
+            ("protocolVersion", Value::string(protocol_version)),
+            (
+                "serverInfo",
+                Value::object(vec![
+                    ("name", Value::string("akr-mcp")),
+                    ("version", Value::string(SERVER_VERSION)),
+                ]),
+            ),
+            (
+                "capabilities",
+                Value::object(vec![("tools", Value::Object(Vec::new()))]),
+            ),
+            (
+                "instructions",
+                Value::string(format!(
+                    "AKR knowledge ledger at {}. Call knowledge.context before touching \
+                     code, and knowledge.validate before handing work back.",
+                    self.root.display()
+                )),
+            ),
+            (
+                "supportedProtocols",
+                Value::array(
+                    SUPPORTED_PROTOCOLS
+                        .iter()
+                        .map(|version| Value::string(version.to_string()))
+                        .collect(),
+                ),
+            ),
+        ])
+    }
+
     fn tools_list() -> Value {
         Value::object(vec![(
             "tools",
@@ -123,6 +165,10 @@ impl Server {
                             (
                                 "inputSchema",
                                 input_schema(tool.name).unwrap_or(Value::Object(Vec::new())),
+                            ),
+                            (
+                                "outputSchema",
+                                output_schema(tool.name).unwrap_or(Value::Object(Vec::new())),
                             ),
                             (
                                 "annotations",
@@ -153,8 +199,8 @@ impl Server {
             .unwrap_or(Value::Object(Vec::new()));
 
         match tools::call(&self.root, name, &arguments) {
-            Ok(payload) => content(&payload, false),
-            Err(error) => content(&error.to_json(), true),
+            Ok(payload) => content(payload.text(), payload.structured(), false),
+            Err(error) => content(None, &error.to_json(), true),
         }
     }
 }
@@ -164,18 +210,35 @@ impl Server {
 /// Both, deliberately. `content` is what a client that only knows about text will show a
 /// model; `structuredContent` is what a client that understands the schema will parse.
 /// Emitting one and not the other would make the server work well with half the runtimes.
-fn content(payload: &Value, is_error: bool) -> Value {
+fn content(text: Option<&str>, structured: &Value, is_error: bool) -> Value {
+    let text = text
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| structured.to_pretty());
     Value::object(vec![
         (
             "content",
             Value::array(vec![Value::object(vec![
                 ("type", Value::string("text")),
-                ("text", Value::string(payload.to_pretty())),
+                ("text", Value::string(text)),
             ])]),
         ),
-        ("structuredContent", payload.clone()),
+        ("resultType", Value::string("tool")),
+        ("structuredContent", structured.clone()),
         ("isError", Value::bool(is_error)),
     ])
+}
+
+fn select_protocol(parameters: &Value) -> &'static str {
+    parameters
+        .get("protocolVersion")
+        .and_then(Value::as_str)
+        .and_then(|requested| {
+            SUPPORTED_PROTOCOLS
+                .iter()
+                .copied()
+                .find(|protocol| *protocol == requested)
+        })
+        .unwrap_or(PROTOCOL_LEGACY)
 }
 
 /// Reads newline-delimited JSON-RPC from `input` and writes responses to `output`.

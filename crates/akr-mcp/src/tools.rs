@@ -15,7 +15,7 @@ use akr_cli::args::{Command, Format, Global, Profile};
 use akr_cli::commands::{self, Output};
 use akr_cli::session::{EnvError, Exit, Session};
 use akr_core::json::Value;
-use akr_core::model::{Glob, LogicalKey};
+use akr_core::model::{Glob, Kind, LogicalKey, ScopeTerm, scopes_overlap};
 use std::path::{Path, PathBuf};
 
 use crate::errors::{Class, ToolError, class_of, first_error_code};
@@ -30,13 +30,49 @@ pub fn is_write(name: &str) -> bool {
         .is_some_and(|tool| tool.writes)
 }
 
+/// The payload that returns to the MCP protocol.
+#[must_use]
+pub enum ToolResult {
+    /// Human-readable + structured text output.
+    Read {
+        /// Exact CLI output.
+        text: String,
+        /// Structured `result` payload.
+        structured: Value,
+    },
+    /// Structured-only output.
+    Structured(Value),
+}
+
+impl ToolResult {
+    /// Returns a reference to the structured payload for MCP transport.
+    #[must_use]
+    pub fn structured(&self) -> &Value {
+        match self {
+            Self::Read { structured, .. } => structured,
+            Self::Structured(structured) => structured,
+        }
+    }
+
+    /// Returns the human-readable text, when this result came from a read tool.
+    #[must_use]
+    pub fn text(&self) -> Option<&str> {
+        match self {
+            Self::Read { text, .. } => Some(text.as_str()),
+            Self::Structured(_) => None,
+        }
+    }
+}
+
 /// Runs a tool.
 ///
 /// # Errors
 /// [`ToolError`] carrying §5's class, summary and diagnostic array.
-pub fn call(root: &Path, name: &str, arguments: &Value) -> Result<Value, ToolError> {
+pub fn call(root: &Path, name: &str, arguments: &Value) -> Result<ToolResult, ToolError> {
     match name {
         "knowledge.search" => search(root, arguments),
+        "knowledge.start" => start(root, arguments),
+        "knowledge.explain" => explain(root, arguments),
         "knowledge.get" => get(root, arguments),
         "knowledge.context" => context(root, arguments),
         "knowledge.impact" => impact(root, arguments),
@@ -58,20 +94,75 @@ pub fn call(root: &Path, name: &str, arguments: &Value) -> Result<Value, ToolErr
 // read tools
 // -------------------------------------------------------------------------------------
 
-fn search(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
+fn search(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let query = required_str(arguments, "query")?;
-    run_read(
-        root,
-        &Command::Search {
-            query: query.to_owned(),
-            kinds: string_list(arguments, "kinds"),
-            states: string_list(arguments, "states"),
-            limit: arguments
-                .get("limit")
-                .and_then(Value::as_integer)
-                .and_then(|n| usize::try_from(n).ok()),
-        },
-    )
+    let command = Command::Search {
+        query: query.to_owned(),
+        kinds: string_list(arguments, "kinds"),
+        states: string_list(arguments, "states"),
+        limit: arguments
+            .get("limit")
+            .and_then(Value::as_integer)
+            .and_then(|n| usize::try_from(n).ok()),
+    };
+    let mut session = open(root, false)?;
+    let output = commands::run(&mut session, &command).map_err(environment)?;
+    let text = output.text.clone();
+    let mut structured = finish(&session, output)?;
+    let candidates = search_planning_candidates(&session, &structured, &[]);
+    let recommended_context = search_recommended_context(&structured, &[], None);
+    if let Value::Object(fields) = &mut structured {
+        if let Some(recommended_context) = recommended_context {
+            fields.push(("recommended_context".to_owned(), recommended_context));
+        } else if !candidates.is_empty() {
+            fields.push(("planning_candidates".to_owned(), Value::array(candidates)));
+        }
+    }
+    Ok(ToolResult::Read { text, structured })
+}
+
+fn start(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
+    let task = required_str(arguments, "task")?;
+    let paths: Vec<Glob> = arguments
+        .get("paths")
+        .and_then(Value::as_array)
+        .unwrap_or_default()
+        .iter()
+        .filter_map(Value::as_str)
+        .map(Glob::new)
+        .collect();
+    let budget = arguments
+        .get("budget_tokens")
+        .and_then(Value::as_integer)
+        .and_then(|value| usize::try_from(value).ok());
+    let command = Command::Search {
+        query: task.to_owned(),
+        kinds: vec!["milestone".into(), "work".into(), "track".into()],
+        states: Vec::new(),
+        limit: None,
+    };
+    let mut session = open(root, false)?;
+    let output = commands::run(&mut session, &command).map_err(environment)?;
+    let mut structured = finish(&session, output)?;
+    let candidates = search_planning_candidates(&session, &structured, &paths);
+    let recommended_context = search_recommended_context(&structured, &paths, budget);
+    if let Value::Object(fields) = &mut structured {
+        if !candidates.is_empty() {
+            fields.push(("planning_candidates".to_owned(), Value::array(candidates)));
+        }
+        if let Some(recommended_context) = recommended_context {
+            fields.push(("recommended_context".to_owned(), recommended_context));
+        }
+    }
+    Ok(ToolResult::Structured(structured))
+}
+
+fn explain(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
+    let subject = required_str(arguments, "subject")?;
+    let command = Command::Explain {
+        subject: subject.to_owned(),
+    };
+    run_read(root, command)
 }
 
 /// A JSON array of strings, or nothing.
@@ -86,25 +177,73 @@ fn string_list(arguments: &Value, field: &str) -> Vec<String> {
         .collect()
 }
 
-fn get(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
-    let reference = required_str(arguments, "ref")?;
-    run_read(
-        root,
-        &Command::Get {
-            reference: reference.to_owned(),
-            history: flag(arguments, "history"),
-            // §3's sample shows relations, so they are on by default here where the CLI
-            // makes them opt-in: an agent pays for a second call, a human pays for a
-            // wider terminal.
-            relations: arguments
-                .get("relations")
-                .and_then(Value::as_bool)
-                .unwrap_or(true),
-        },
-    )
+fn search_planning_candidates(session: &Session, result: &Value, paths: &[Glob]) -> Vec<Value> {
+    let model = session.resolve();
+    let request_scope: Vec<ScopeTerm> = paths.iter().cloned().map(ScopeTerm::Path).collect();
+    let mut out = Vec::new();
+    for hit in result
+        .get("results")
+        .and_then(Value::as_array)
+        .unwrap_or(&[])
+    {
+        let kind = hit.get("kind").and_then(Value::as_str).unwrap_or_default();
+        if !matches!(kind, "milestone" | "work" | "track") {
+            continue;
+        }
+        let key = hit.get("key").and_then(Value::as_str).unwrap_or_default();
+        let title = hit.get("title").and_then(Value::as_str).unwrap_or_default();
+        let state = hit.get("state").and_then(Value::as_str).unwrap_or_default();
+        let rev = hit.get("rev").and_then(Value::as_integer);
+        let reference = match (rev, rev.is_some_and(|rev| rev >= 0)) {
+            (Some(rev), true) => format!("@{key}/{rev}"),
+            _ => format!("@{key}"),
+        };
+        let path_overlap = if request_scope.is_empty() {
+            false
+        } else if let Ok(reference) = akr_core::model::Reference::parse(&reference) {
+            session
+                .ledger
+                .resolve(&reference)
+                .ok()
+                .flatten()
+                .is_some_and(|record| {
+                    scopes_overlap(
+                        &record.scope,
+                        &request_scope,
+                        &model.ledger().part_of_index(),
+                    )
+                })
+        } else {
+            false
+        };
+        out.push(Value::object(vec![
+            ("reference", Value::string(reference)),
+            ("title", Value::string(title.to_owned())),
+            ("kind", Value::string(kind.to_owned())),
+            ("state", Value::string(state.to_owned())),
+            ("path_overlap", Value::bool(path_overlap)),
+        ]));
+    }
+    out
 }
 
-fn context(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
+fn get(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
+    let reference = required_str(arguments, "ref")?;
+    let command = Command::Get {
+        reference: reference.to_owned(),
+        history: flag(arguments, "history"),
+        // §3's sample shows relations, so they are on by default here where the CLI
+        // makes them opt-in: an agent pays for a second call, a human pays for a
+        // wider terminal.
+        relations: arguments
+            .get("relations")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+    };
+    run_read(root, command)
+}
+
+fn context(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let goal = required_str(arguments, "goal")?;
     let paths: Vec<Glob> = arguments
         .get("paths")
@@ -120,17 +259,25 @@ fn context(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
         .and_then(|n| usize::try_from(n).ok());
     // The same `Command::Context` the binary builds from `--goal`, `--paths` and
     // `--budget`, so §1's invariant holds by construction rather than by agreement.
-    run_read(
-        root,
-        &Command::Context {
-            goal: goal.to_owned(),
-            paths,
-            budget,
-        },
-    )
+    let command = Command::Context {
+        goal: goal.to_owned(),
+        paths,
+        budget,
+    };
+    let mut session = open(root, false)?;
+    let output = match commands::run(&mut session, &command) {
+        Ok(output) => output,
+        Err(error) if error.code == "AKR-X001" => {
+            return Err(unresolved_goal(error, &session, goal, &command));
+        }
+        Err(error) => return Err(environment(error)),
+    };
+    let text = output.text.clone();
+    let structured = finish(&session, output)?;
+    Ok(ToolResult::Read { text, structured })
 }
 
-fn impact(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
+fn impact(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let reference = arguments.get("ref").and_then(Value::as_str);
     let git_diff = arguments.get("git_diff").and_then(Value::as_str);
     match (reference, git_diff) {
@@ -142,13 +289,13 @@ fn impact(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
             "AKR-C005",
             "`ref` and `git_diff` are mutually exclusive",
         )),
-        _ => run_read(
-            root,
-            &Command::Impact {
+        _ => {
+            let command = Command::Impact {
                 reference: reference.map(ToOwned::to_owned),
                 git_diff: git_diff.map(ToOwned::to_owned),
-            },
-        ),
+            };
+            run_read(root, command)
+        }
     }
 }
 
@@ -157,7 +304,7 @@ fn impact(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
 /// The one read tool whose payload is not the command's `result` verbatim: `akr check`
 /// reports the pipeline's stage counts, and an agent wants a verdict. Both are computed
 /// from the same [`Output`], so they cannot disagree.
-fn validate(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
+fn validate(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let mut session = open(root, false)?;
     let command = Command::Check {
         review_clean: flag(arguments, "review_clean"),
@@ -173,18 +320,18 @@ fn validate(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
     ]);
     // Never an error: `knowledge.validate` reports a verdict, and a ledger with
     // diagnostics is a fact about the ledger rather than a failure of the call.
-    Ok(Value::object(vec![
+    Ok(ToolResult::Structured(Value::object(vec![
         ("ok", Value::bool(output.exit == Exit::Ok)),
         ("diagnostics", Value::array(diagnostics)),
         ("counts", counts),
-    ]))
+    ])))
 }
 
 // -------------------------------------------------------------------------------------
 // write tools
 // -------------------------------------------------------------------------------------
 
-fn propose(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
+fn propose(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let session = open(root, true)?;
     let key = required_str(arguments, "key")?;
     let kind_name = required_str(arguments, "kind")?;
@@ -204,14 +351,14 @@ fn propose(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
     )?;
     let template = record::parse(&source, &parsed)?;
     let context = write_context(&session);
-    write_result(
+    Ok(ToolResult::Structured(write_result(
         &session,
         &parsed,
         akr_core::ops::propose(&context, &parsed, kind, title, Some(template)),
-    )
+    )?))
 }
 
-fn revise(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
+fn revise(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let session = open(root, true)?;
     let key = required_str(arguments, "key")?;
     let parsed = key_of(key)?;
@@ -259,14 +406,14 @@ fn revise(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
         replace_with: Some(Box::new(replacement)),
     };
     let context = write_context(&session);
-    write_result(
+    Ok(ToolResult::Structured(write_result(
         &session,
         &parsed,
         akr_core::ops::revise(&context, &parsed, akr_core::ops::ReviseMode::Auto, &edits),
-    )
+    )?))
 }
 
-fn supersede(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
+fn supersede(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let session = open(root, true)?;
     let key = required_str(arguments, "old_key")?;
     let parsed = key_of(key)?;
@@ -280,14 +427,14 @@ fn supersede(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
     }
     let dispositions = dispositions(arguments)?;
     let context = write_context(&session);
-    write_result(
+    Ok(ToolResult::Structured(write_result(
         &session,
         &parsed,
         akr_core::ops::supersede(&context, &parsed, &dispositions),
-    )
+    )?))
 }
 
-fn complete(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
+fn complete(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let session = open(root, true)?;
     let key = required_str(arguments, "key")?;
     let parsed = key_of(key)?;
@@ -307,11 +454,11 @@ fn complete(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
         }
     }
     let context = write_context(&session);
-    write_result(
+    Ok(ToolResult::Structured(write_result(
         &session,
         &parsed,
         akr_core::ops::complete(&context, &parsed, &checks),
-    )
+    )?))
 }
 
 /// `knowledge.evidence_add`, over the same [`akr_core::evidence::AddEvidence`] request
@@ -319,7 +466,7 @@ fn complete(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
 ///
 /// The schema deliberately has no field for what the evidence verifies (D-016): the link
 /// is authored on the check (`verified_by`) or supplied to `knowledge.complete`.
-fn evidence_add(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
+fn evidence_add(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let session = open(root, true)?;
     let key = required_str(arguments, "key")?;
     let parsed = key_of(key)?;
@@ -398,7 +545,7 @@ fn evidence_add(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
 
     let record = request.to_record();
     let context = write_context(&session);
-    write_result(
+    Ok(ToolResult::Structured(write_result(
         &session,
         &parsed,
         akr_core::ops::propose(
@@ -408,12 +555,12 @@ fn evidence_add(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
             &title,
             Some(record),
         ),
-    )
+    )?))
 }
 
 /// `knowledge.papercut`, over the same [`akr_core::papercut`] request `akr papercut`
 /// builds (D-027). The message is the whole ceremony.
-fn papercut(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
+fn papercut(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let session = open(root, true)?;
     let message = required_str(arguments, "message")?;
     let agent = required_str(arguments, "agent")?;
@@ -436,7 +583,7 @@ fn papercut(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
     let record = request.to_record(key.clone());
     let title = record.title.clone();
     let context = write_context(&session);
-    write_result(
+    Ok(ToolResult::Structured(write_result(
         &session,
         &key,
         akr_core::ops::propose(
@@ -446,7 +593,7 @@ fn papercut(root: &Path, arguments: &Value) -> Result<Value, ToolError> {
             &title,
             Some(record),
         ),
-    )
+    )?))
 }
 
 // -------------------------------------------------------------------------------------
@@ -464,14 +611,245 @@ fn open(root: &Path, _writing: bool) -> Result<Session, ToolError> {
     Session::open(&global).map_err(environment)
 }
 
-/// Runs a read command and returns its `result` object verbatim.
+/// Runs a read command, keeping both CLI text and JSON.
 ///
 /// Verbatim is the point. §1's invariant is that a tool and its command produce the same
 /// answer, and the cheapest way to keep that true is for the tool to add nothing.
-fn run_read(root: &Path, command: &Command) -> Result<Value, ToolError> {
+fn run_read(root: &Path, command: Command) -> Result<ToolResult, ToolError> {
     let mut session = open(root, false)?;
-    let output = commands::run(&mut session, command).map_err(environment)?;
-    finish(&session, output)
+    let output = commands::run(&mut session, &command).map_err(environment)?;
+    let text = output.text.clone();
+    let structured = finish(&session, output)?;
+    Ok(ToolResult::Read { text, structured })
+}
+
+#[derive(Debug)]
+struct ContextCandidate {
+    key: String,
+    reference: String,
+    title: String,
+    kind: String,
+    state: String,
+    path_overlap: bool,
+}
+
+fn unresolved_goal(error: EnvError, session: &Session, goal: &str, command: &Command) -> ToolError {
+    let mut candidates = context_candidates(session, goal, command);
+    candidates.truncate(20);
+    let mut diagnostics = vec![Value::object(vec![
+        ("code", Value::string(error.code)),
+        ("severity", Value::string("error")),
+        ("message", Value::string(error.message.clone())),
+    ])];
+    if let Some(first) = candidates.first() {
+        let total = candidates.len();
+        let plural = if total == 1 {
+            "candidate"
+        } else {
+            "candidates"
+        };
+        diagnostics.push(Value::object(vec![
+            ("code", Value::string("AKR-X001")),
+            ("severity", Value::string("info")),
+            (
+                "message",
+                Value::string(format!("planning goal candidates ({total} {plural})")),
+            ),
+            (
+                "next",
+                Value::object(vec![
+                    ("tool", Value::string("knowledge.context")),
+                    (
+                        "arguments",
+                        Value::object({
+                            let mut args = Vec::with_capacity(3);
+                            if let Command::Context { paths, budget, .. } = command {
+                                args.push(("goal", Value::string(first.key.clone())));
+                                if !paths.is_empty() {
+                                    args.push((
+                                        "paths",
+                                        Value::array(
+                                            paths
+                                                .iter()
+                                                .map(|path| Value::string(path.as_str()))
+                                                .collect(),
+                                        ),
+                                    ));
+                                }
+                                if let Some(budget) = budget {
+                                    args.push((
+                                        "budget_tokens",
+                                        Value::integer(i64::try_from(*budget).unwrap_or(i64::MAX)),
+                                    ));
+                                }
+                            }
+                            args
+                        }),
+                    ),
+                ]),
+            ),
+                (
+                    "path_overlap_hint",
+                    Value::string(format!(
+                        "preferred entries have path_overlap = true; use context goal={} with an exact key",
+                        first.key
+                    )),
+                ),
+            ("candidates", Value::array(context_candidates_as_json(&candidates))),
+        ]));
+        ToolError {
+            class: class_of(error.code),
+            summary: error.message,
+            diagnostics,
+            wrote: false,
+        }
+    } else {
+        ToolError::new(error.code, error.message)
+    }
+}
+
+fn context_candidates(session: &Session, goal: &str, command: &Command) -> Vec<ContextCandidate> {
+    let paths = match command {
+        Command::Context { paths, .. } => paths.as_slice(),
+        _ => &[],
+    };
+    let model = session.resolve();
+    let request_scope: Vec<ScopeTerm> = paths.iter().cloned().map(ScopeTerm::Path).collect();
+    let goal = goal.trim_start_matches('@').to_ascii_lowercase();
+    let mut out = Vec::new();
+    for record in model.ledger().records() {
+        if !matches!(record.kind, Kind::Milestone | Kind::Work | Kind::Track) {
+            continue;
+        }
+        if !model.is_head(&record.id) {
+            continue;
+        }
+        if !record.is_live() {
+            continue;
+        }
+        let title = record.title.to_lowercase();
+        let key = record.id.key.to_string().to_ascii_lowercase();
+        let score = usize::from(key.contains(&goal)) * 8
+            + usize::from(title.contains(&goal)) * 4
+            + usize::from(
+                record
+                    .id
+                    .key
+                    .segments()
+                    .iter()
+                    .any(|segment| goal.contains(&segment.as_str().to_ascii_lowercase())),
+            ) * 2;
+        let path_overlap = if request_scope.is_empty() {
+            false
+        } else {
+            scopes_overlap(
+                &record.scope,
+                &request_scope,
+                &model.ledger().part_of_index(),
+            )
+        };
+        if score > 0 {
+            out.push((
+                score,
+                ContextCandidate {
+                    key: record.id.key.to_string(),
+                    reference: record.id.to_string(),
+                    title: record.title.clone(),
+                    kind: record.kind.name().to_owned(),
+                    state: record.state.name().to_owned(),
+                    path_overlap,
+                },
+            ));
+        }
+    }
+    out.sort_by(|a, b| {
+        b.0.cmp(&a.0).then_with(|| {
+            b.1.path_overlap
+                .cmp(&a.1.path_overlap)
+                .then_with(|| a.1.reference.cmp(&b.1.reference))
+        })
+    });
+    out.into_iter().map(|(_, candidate)| candidate).collect()
+}
+
+fn search_recommended_context(
+    result: &Value,
+    paths: &[Glob],
+    budget_tokens: Option<usize>,
+) -> Option<Value> {
+    let results = result.get("results")?.as_array()?;
+    if results.is_empty() {
+        return None;
+    }
+    let top = results.first()?;
+    let goal = top.get("key")?.as_str()?;
+    let top_kind = top.get("kind")?.as_str()?;
+    if !matches!(top_kind, "milestone" | "work" | "track") {
+        return None;
+    }
+    let top_score = search_score(top)?;
+    if let Some(second) = results.get(1)
+        && let Some(second_score) = search_score(second)
+        && top_score <= second_score + 0.5
+    {
+        return None;
+    }
+    let mut arguments = vec![("goal".to_owned(), Value::string(goal.to_owned()))];
+    if !paths.is_empty() {
+        arguments.push((
+            "paths".to_owned(),
+            Value::array(
+                paths
+                    .iter()
+                    .map(|path| Value::string(path.as_str()))
+                    .collect(),
+            ),
+        ));
+    }
+    if let Some(budget) = budget_tokens {
+        arguments.push((
+            "budget_tokens".to_owned(),
+            Value::integer(i64::try_from(budget).unwrap_or(i64::MAX)),
+        ));
+    }
+    Some(Value::Object(vec![
+        ("tool".to_owned(), Value::string("knowledge.context")),
+        (
+            "arguments".to_owned(),
+            Value::Object(
+                arguments
+                    .into_iter()
+                    .map(|(name, value)| (name, value))
+                    .collect(),
+            ),
+        ),
+    ]))
+}
+
+fn search_score(result: &Value) -> Option<f64> {
+    match result.get("score") {
+        Some(Value::String(text)) => text.parse().ok(),
+        Some(Value::Integer(value)) => Some(*value as f64),
+        _ => None,
+    }
+}
+
+fn context_candidates_as_json(candidates: &[ContextCandidate]) -> Vec<Value> {
+    candidates
+        .iter()
+        .map(|candidate| {
+            Value::object(vec![
+                (
+                    "reference",
+                    Value::string(format!("@{}", candidate.reference)),
+                ),
+                ("title", Value::string(candidate.title.clone())),
+                ("kind", Value::string(candidate.kind.clone())),
+                ("state", Value::string(candidate.state.clone())),
+                ("path_overlap", Value::bool(candidate.path_overlap)),
+            ])
+        })
+        .collect()
 }
 
 fn finish(session: &Session, output: Output) -> Result<Value, ToolError> {
