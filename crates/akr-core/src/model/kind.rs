@@ -248,7 +248,7 @@ const EVIDENCE_SLOTS: &[ContentSlotSpec] = &[
 const ASSESSMENT_SLOTS: &[ContentSlotSpec] = &[req(C::Statement), opt(C::Confidence), opt(C::AsOf)];
 // D-027: both slots are filled by the tooling — no `watches`, so a papercut never
 // enters the review queue.
-const PAPERCUT_SLOTS: &[ContentSlotSpec] = &[req(C::Statement), req(C::ObservedAt)];
+const PAPERCUT_SLOTS: &[ContentSlotSpec] = &[req(C::Statement), req(C::ObservedAt), opt(C::Collated)];
 const PLAN_SLOTS: &[ContentSlotSpec] = &[req(C::Intent), opt(C::Target), opt(C::Note)];
 const TRACK_SLOTS: &[ContentSlotSpec] = &[req(C::Intent), opt(C::Cadence), opt(C::Note)];
 const QUESTION_SLOTS: &[ContentSlotSpec] = &[req(C::Question), opt(C::Resolution)];
@@ -298,6 +298,7 @@ pub enum ContentSlot {
     Question,
     Resolution,
     Note,
+    Collated,
 }
 
 impl ContentSlot {
@@ -329,6 +330,7 @@ impl ContentSlot {
         Self::Question,
         Self::Resolution,
         Self::Note,
+        Self::Collated,
     ];
 
     /// The slot name as written in source (snake_case, D-005).
@@ -361,6 +363,7 @@ impl ContentSlot {
             Self::Question => "question",
             Self::Resolution => "resolution",
             Self::Note => "note",
+            Self::Collated => "collated",
         }
     }
 

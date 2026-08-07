@@ -245,6 +245,15 @@ pub enum Command {
         /// The namespace for the key; needed only when the project declares several.
         namespace: Option<String>,
     },
+    /// `akr papercut collate [--projects <dir>] [--namespace <ns>]` (D-030).
+    PapercutCollate {
+        /// A directory of sibling workspaces to scan; defaults to the siblings of the
+        /// workspace root.
+        projects: Option<PathBuf>,
+        /// The namespace for the master record's key; needed only when the project
+        /// declares several.
+        namespace: Option<String>,
+    },
     /// `akr evidence add <key>`.
     EvidenceAdd {
         /// The evidence key.
@@ -292,6 +301,7 @@ impl Command {
             Self::Complete { .. } => "complete".to_owned(),
             Self::Abandon { .. } => "abandon".to_owned(),
             Self::Papercut { .. } => "papercut".to_owned(),
+            Self::PapercutCollate { .. } => "papercut collate".to_owned(),
             Self::EvidenceAdd { .. } => "evidence add".to_owned(),
         }
     }
@@ -712,6 +722,22 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
             }
         }
         "papercut" => {
+            // `collate` as the sole positional is the collation subcommand (D-030). A
+            // message logged with `-m` may legitimately be the word "collate", so a flag
+            // that supplies the agent keeps this on the logging path.
+            let collate_subcommand = tail
+                .iter()
+                .find(|a| !a.starts_with('-'))
+                .map(String::as_str)
+                == Some("collate")
+                && !tail.iter().any(|a| a == "-m" || a == "--agent");
+            if collate_subcommand {
+                known_flags(&["--projects", "--namespace"])?;
+                return Ok(Command::PapercutCollate {
+                    projects: option_value(tail, "--projects").map(PathBuf::from),
+                    namespace: option_value(tail, "--namespace"),
+                });
+            }
             // Parsed by hand: `-m` takes a value, and the generic positional filter
             // would otherwise mistake that value for the message.
             let mut message: Option<String> = None;
@@ -1064,6 +1090,7 @@ pub fn help_for(name: &str) -> Option<String> {
         }
         "papercut" => {
             "akr papercut -m <agent> \"message\" [--namespace <ns>]\n\
+             akr papercut collate [--projects <dir>] [--namespace <ns>]\n\
              \n\
              Logs a small friction hit while working — a tool call that missed and had\n\
              to be retried, a confusing setup step, a flaky command, a stale cache, a\n\
@@ -1076,8 +1103,15 @@ pub fn help_for(name: &str) -> Option<String> {
              the date are filled in automatically, and the aggregate is rendered to\n\
              docs/generated/PAPERCUTS.md by `akr build`.\n\
              \n\
+             `collate` reads the live papercut heads of every workspace under a scan\n\
+             directory (default: the siblings of the workspace root) and gathers those\n\
+             not already absorbed into one master papercut record, whose collated slot\n\
+             is the dedup set for the next run (D-030). Sister projects are read, never\n\
+             written.\n\
+             \n\
              FLAGS\n\
-             \x20   -m, --agent <name>    required; who hit it (a model or harness name)\n\
+             \x20   -m, --agent <name>    required to log; who hit it (a model or harness name)\n\
+             \x20   --projects <dir>      collate: a directory of sibling workspaces to scan\n\
              \x20   --namespace <ns>      only needed when the project declares several\n"
         }
         "evidence" | "evidence add" => {

@@ -150,6 +150,15 @@ pub fn run(session: &Session, command: &Command) -> Result<Output, EnvError> {
             agent.as_deref(),
             namespace.as_deref(),
         ),
+        Command::PapercutCollate {
+            projects,
+            namespace,
+        } => papercut_collate(
+            session,
+            &context,
+            projects.as_deref(),
+            namespace.as_deref(),
+        ),
         Command::EvidenceAdd {
             key,
             result,
@@ -314,6 +323,90 @@ pub fn papercut(
         agent,
         observed_at: commit,
         created_at: Some(session.today),
+    };
+    let record = request.to_record(key.clone());
+    let title = record.title.clone();
+    render(
+        session,
+        akr_core::ops::propose(
+            context,
+            &key,
+            akr_core::model::Kind::Papercut,
+            &title,
+            Some(record),
+        ),
+    )
+}
+
+/// `akr papercut collate`, over [`akr_core::papercut::collate`] (D-030).
+///
+/// Reads the live papercut heads of every workspace under a scan directory — the
+/// siblings of the workspace root, or `--projects` — and proposes one master papercut
+/// record for every key not already listed in a live collation's `collated` slot. The
+/// sisters are read, never written. Nothing new is not a refusal: the command exits 0
+/// and writes nothing.
+fn papercut_collate(
+    session: &Session,
+    context: &WriteContext,
+    projects: Option<&Path>,
+    namespace: Option<&str>,
+) -> Result<Output, EnvError> {
+    let scan_dir = match projects {
+        Some(path) => path.to_path_buf(),
+        None => session
+            .root
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| EnvError::new("AKR-G001", "cannot find the siblings of the workspace root"))?,
+    };
+    if !scan_dir.is_dir() {
+        return Err(EnvError::new(
+            "AKR-C011",
+            format!("{} is not a directory to scan", scan_dir.display()),
+        ));
+    }
+
+    let already = akr_core::papercut::collate::already_collated(&session.ledger);
+    let collate = akr_core::papercut::collate::collect(&scan_dir, &session.root, &already);
+
+    if collate.entries.is_empty() {
+        let mut text = format!("scanned {} — nothing new to collate\n", collate.source);
+        if !collate.skipped.is_empty() {
+            text.push_str(&format!(
+                "  {} workspace{} did not load and were skipped\n",
+                collate.skipped.len(),
+                if collate.skipped.len() == 1 { "" } else { "s" }
+            ));
+        }
+        return Ok(Output::plain(
+            text,
+            Value::object(vec![
+                ("scanned", Value::integer(collate.projects.len() as i64)),
+                ("collated", Value::integer(0)),
+            ]),
+        ));
+    }
+
+    let commit = session.commit.clone().ok_or_else(|| {
+        EnvError::new(
+            "AKR-G001",
+            "no commit to record: not inside a git repository",
+        )
+    })?;
+    let message = format!(
+        "collated {} papercuts from {}",
+        collate.entries.len(),
+        collate.projects.join(", ")
+    );
+    let key = akr_core::papercut::allocate_key(&session.ledger, namespace, &message)
+        .map_err(|e| EnvError::new("AKR-C004", e.to_string()))?;
+    let request = akr_core::papercut::collate::CollateRequest {
+        source: collate.source,
+        projects: collate.projects,
+        entries: collate.entries,
+        observed_at: commit,
+        created_at: session.today,
+        author: context.author.clone(),
     };
     let record = request.to_record(key.clone());
     let title = record.title.clone();

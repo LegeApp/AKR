@@ -942,3 +942,42 @@ intended meaning without weakening it: real redefinitions still move the gate.
 `crates/akr-core/src/git/mod.rs` (`last_change_of`, `hash_at`),
 `docs/05-validation-rules.md` (V-020), `docs/10-freshness-and-git.md` (the descendant
 rule), `crates/akr-core/tests/git_queries.rs`.
+
+---
+
+## D-030 — Sister projects' papercuts collate into one master record in the owning ledger
+
+*Amendment, 2026-08-07.*
+
+**Question.** Papercuts are logged per project, each in its own ledger (D-027). An AKR
+installation that also dogfoods on sibling repositories therefore scatters frictions
+across as many ledgers as there are projects. The aggregate view `PAPERCUTS.md` shows
+only the owning ledger's, so the sanding-down signal the kind exists to provide is
+invisible across the set. How are the sisters' papercuts gathered into the AKR ledger —
+read, summarised, deduplicated — without violating the rule that a write touches exactly
+one ledger?
+
+**Resolution.** `akr papercut collate` reads the live papercut heads of every workspace
+under a scan directory — the direct subdirectories of `--projects <dir>`, defaulting to
+the siblings of the workspace root — and proposes one master `papercut` record in the
+owning ledger for every key not already absorbed. The absorbed keys land in a new,
+optional `collated` slot (`string[]`) on the master record; that slot *is* the dedup
+set, so the next run skips any key it names and, when nothing is new, exits 0 having
+written nothing. A sister workspace that fails to load is recorded as skipped, not
+fatal. The sisters are read, never written: no lock is staled in another project, no
+record is added there, and the V-001 cross-ledger-reference problem never arises.
+
+The master record is a normal papercut — `statement` and `observed_at` as D-027 fixes,
+`state verified` — with `collated` as the one additional slot, so it renders in
+`PAPERCUTS.md` like any other and is searchable through the same index.
+
+**Rationale.** The alternatives were: writing to the sisters (rejected — a write is
+one-ledger by design, and a staled lock in a project nobody is reading is invisible
+trouble), and a derived file that lists keys without a record to hold them (rejected —
+it recreates the untyped pile D-027 exists to replace and gives the dedup set no
+durable, validated home). Making the absorbed keys structured `collated` content keeps
+the dedup check a plain ledger read and the master record a first-class citizen.
+
+**Honored by.** `spec/tables/vocabulary.json` (the `collated` slot, vocabulary 0.2),
+`crates/akr-core/src/papercut/collate.rs`, `crates/akr-cli/src/write.rs`,
+`crates/akr-cli/src/args.rs`, `docs/07-cli.md` §6.

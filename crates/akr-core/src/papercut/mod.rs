@@ -17,6 +17,8 @@ use crate::model::{
 };
 use std::collections::BTreeMap;
 
+pub mod collate;
+
 /// What to log. The message is the only thing the caller has to say.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LogPapercut {

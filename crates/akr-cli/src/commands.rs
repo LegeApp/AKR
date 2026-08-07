@@ -149,6 +149,7 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
         | Command::Complete { .. }
         | Command::Abandon { .. }
         | Command::Papercut { .. }
+        | Command::PapercutCollate { .. }
         | Command::EvidenceAdd { .. } => crate::write::run(session, command),
         Command::Help
         | Command::HelpFor { .. }

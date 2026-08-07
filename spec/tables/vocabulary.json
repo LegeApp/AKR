@@ -1,6 +1,6 @@
 {
   "$comment": "AKR frozen vocabulary spine. Machine-readable form of decisions D-001, D-002, D-004, D-005, D-010, D-012, D-013, D-016 and D-017 in docs/DECISIONS.md. Human-readable tables in docs/02-data-model.md are checked against this file by tools/check-design.py. This file is authoritative for names; the prose documents are authoritative for meaning.",
-  "vocabulary_version": "0.1",
+  "vocabulary_version": "0.2",
   "grammar_version": "0.1",
 
   "value_types": {
@@ -242,7 +242,9 @@
       "purpose": "Records a small friction hit while working: what was being done, what got in the way, and optionally a guess at the cause or fix (D-027).",
       "content_slots": [
         {"name": "statement", "type": "prose", "required": true},
-        {"name": "observed_at", "type": "commit", "required": true}
+        {"name": "observed_at", "type": "commit", "required": true},
+        {"name": "collated", "type": "string[]", "required": false,
+         "doc": "Source papercut keys this collation record absorbed from sister projects; written by `akr papercut collate`, the dedup set for the next run (D-030)."}
       ],
       "note": "Filled automatically by `akr papercut` and knowledge.papercut: the agent lands in author, the date in created_at, observed_at defaults to HEAD. No watches, so a papercut never goes stale (D-027)."
     },

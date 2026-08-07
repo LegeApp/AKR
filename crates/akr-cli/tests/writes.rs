@@ -370,3 +370,91 @@ fn the_json_form_carries_the_structured_refusal() {
     assert!(text.contains("\"id\": \"no-placeholder-assets\""), "{text}");
     assert!(text.contains("\"exit_code\": 1"), "{text}");
 }
+
+// -------------------------------------------------------------------------------------
+// `akr papercut collate` (D-030): one master record, sisters never written
+// -------------------------------------------------------------------------------------
+
+/// Lays down a minimal `.akr` workspace holding one live papercut, next to the example's
+/// own temp root, and returns the scan directory the command should point at.
+fn sibling_workspaces(example: &Example) -> std::path::PathBuf {
+    let scan = example
+        .root()
+        .parent()
+        .expect("a temp root has a parent")
+        .join(format!("collate-scan-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&scan);
+    for (project, slug) in [("alpha", "alpha-annoyance"), ("beta", "beta-friction")] {
+        let akr = scan.join(project).join(".akr");
+        let records = akr.join("records").join(project);
+        std::fs::create_dir_all(&records).expect("sibling records dir");
+        std::fs::write(
+            akr.join("project.akr"),
+            format!(
+                "akr 0.1\nproject {project}\n\nnamespace {project} \"{project} knowledge.\"\n\n\
+                 defaults {{\n    review_after_days 90\n    view_output \"docs/generated\"\n}}\n"
+            ),
+        )
+        .expect("sibling project.akr");
+        std::fs::write(
+            records.join("papercuts.akr"),
+            format!(
+                "akr 0.1\nproject {project}\n\nrecord {project}.papercut.{slug}/1 : papercut {{\n    \
+                 title \"{project} friction\"\n    state verified\n    statement \"\"\"\n        A \
+                 {project}-side friction worth logging.\n        \"\"\"\n    observed_at \
+                 git:0123456789abcdef0123456789abcdef01234567\n    author \"test\"\n    created_at \
+                 2026-08-07\n}}\n"
+            ),
+        )
+        .expect("sibling papercuts.akr");
+    }
+    scan
+}
+
+#[test]
+fn papercut_collate_gathers_sister_papercuts_once() {
+    let example = Example::materialise("write-collate");
+    let scan = sibling_workspaces(&example);
+    let projects = scan.to_str().expect("utf-8 scan dir");
+
+    let run = example.run(&["papercut", "collate", "--projects", projects, "--namespace", "sys"]);
+    assert_eq!(run.code, 0, "{}", run.output());
+    assert!(
+        run.stdout.contains("created sys.papercut.collated-2-papercuts-from-alpha-beta/1"),
+        "{}",
+        run.stdout
+    );
+    assert!(run.stdout.contains("wrote"), "{}", run.stdout);
+
+    let source = example.read_file(".akr/records/sys/papercuts.akr");
+    assert!(source.contains("collated [ "), "{source}");
+    assert!(
+        source.contains("alpha.papercut.alpha-annoyance"),
+        "{source}"
+    );
+    assert!(source.contains("beta.papercut.beta-friction"), "{source}");
+    // The statement lists each absorbed papercut with its owning project.
+    assert!(source.contains("- alpha @alpha.papercut.alpha-annoyance"), "{source}");
+    assert!(source.contains("- beta @beta.papercut.beta-friction"), "{source}");
+
+    // The sisters were only read: neither workspace grew anything.
+    assert!(
+        !std::fs::read_to_string(scan.join("alpha/.akr/records/alpha/papercuts.akr"))
+            .expect("alpha source")
+            .contains("collated"),
+        "the sister ledger must be untouched"
+    );
+
+    // A rerun is a no-op: the keys are already in a live collation's `collated` slot.
+    let again = example.run(&["papercut", "collate", "--projects", projects, "--namespace", "sys"]);
+    assert_eq!(again.code, 0, "{}", again.output());
+    assert!(again.stdout.contains("nothing new to collate"), "{}", again.output());
+    let source = example.read_file(".akr/records/sys/papercuts.akr");
+    assert_eq!(
+        source.matches("record sys.papercut.collated").count(),
+        1,
+        "a second run must not add another master record:\n{source}"
+    );
+
+    let _ = std::fs::remove_dir_all(&scan);
+}

@@ -523,7 +523,7 @@ impl Ctx {
                     .filter_map(|v| self.reference(v))
                     .collect(),
             ),
-            ContentSlot::Aliases => ContentValue::Strings(
+            ContentSlot::Aliases | ContentSlot::Collated => ContentValue::Strings(
                 self.array(value)
                     .iter()
                     .filter_map(|v| match v {

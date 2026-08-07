@@ -20,7 +20,7 @@ pub const TOOL_VERSION: &str = "0.1.0";
 /// The grammar version this build speaks.
 pub const GRAMMAR_VERSION: &str = "0.1";
 /// The vocabulary version this build was checked against.
-pub const VOCABULARY_VERSION: &str = "0.1";
+pub const VOCABULARY_VERSION: &str = "0.2";
 
 /// Process exit statuses (`docs/07-cli.md` §3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

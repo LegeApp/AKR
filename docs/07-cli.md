@@ -694,6 +694,22 @@ Mining a whole session for papercuts afterwards is a language-model act and live
 outside this tool (D-020): a harness command reads the transcript and calls
 `akr papercut` once per finding, user-triggered.
 
+#### `akr papercut collate`
+
+```
+akr papercut collate [--projects <dir>] [--namespace <ns>]
+```
+
+Collates the live papercut heads of the sister projects around the AKR workspace into
+one master `papercut` record (D-030). `--projects` names the directory to scan (direct
+subdirectories holding an `.akr/`); default is the siblings of the workspace root. The
+sisters are read, never written.
+
+Each absorbed key lands in the master record's `collated` slot — the dedup set the next
+run checks, so a source papercut is processed once and a second run with nothing new
+exits 0 and writes nothing. A broken sister workspace is skipped, not fatal. `--namespace`
+is needed only when the project declares several.
+
 ---
 
 ### `akr evidence add`
