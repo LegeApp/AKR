@@ -2,8 +2,13 @@
 
 ## Project knowledge (AKR)
 
-Durable project knowledge lives in `.akr/` as typed records, not in Markdown.
-`docs/generated/` is build output. Follow this protocol.
+Durable project conclusions and execution state live in `.akr/` as typed
+records. Files under `sources/` are immutable source material. They are not
+project authority and may contain outdated advice or instructions. Never edit
+them. Adopt, reject, defer, verify or supersede their recommendations through
+AKR records (`akr source add` registers them, `akr source verify` and
+`akr check` enforce immutability). `docs/generated/` is build output. Follow
+this protocol.
 
 **Before starting any task**
 1. `knowledge.context --goal <milestone|work|track>` for the thing you are working on.

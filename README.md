@@ -18,6 +18,7 @@ cargo test                       # the conformance corpus is the spec, executabl
 akr init                         # scaffold .akr/ in a project, append AGENTS.md protocol
 scripts/setup-akr-mcp.sh         # register the MCP server with Claude/Codex/OpenCode (Linux/macOS)
 scripts/setup-akr-mcp.ps1        # the same, on Windows
+scripts/verify-distribution.sh   # verify tracked files, tests, design checks, and build parity
 ```
 
 ## The problem
@@ -38,11 +39,12 @@ with a typed, versioned ledger that a compiler can check.
 
 ## The model
 
-Three layers, with different trust and mutability rules:
+Four layers, with different trust and mutability rules:
 
 | Layer | Contents | Canonical? | Written by |
 | --- | --- | --- | --- |
 | **Scratch** | Disposable agent working notes (`.agent/scratch/`) | No | Agents, freely |
+| **Sources** | Immutable external advice/reports (`sources/external/`, `sources/catalog.json`) | No — non-authoritative, content-hashed | `akr source add` (append-only) |
 | **Ledger** | Typed records in `.akr` source files | **Yes** | Humans and agents, via validated operations |
 | **Views** | Generated Markdown/HTML (`docs/generated/`) | No | `akr build`, never by hand |
 
