@@ -4,9 +4,9 @@ project akr
 build {
     tool "akr 0.1.0"
     grammar "0.1"
-    vocabulary "0.1"
-    commit git:2c639edb09a2f4bf45c39451a88e878a1063f7e4
-    source_graph "sha256:0218d75af6cd33fc033c82cd3f30db8affbaab229bae60b1ad95f2e76df8816c"
+    vocabulary "0.2"
+    commit git:fb8ec6e5dcaa91b0e0f988935489d55c8badade5
+    source_graph "sha256:d39f315eaa35818931e4a6c86928ad5a6e5fe95115f5c64e6f02b627fb354ac0"
 }
 
 source ".akr/project.akr" {
@@ -20,8 +20,8 @@ source ".akr/records/akr/evidence.akr" {
 }
 
 source ".akr/records/akr/papercuts.akr" {
-    hash "sha256:b4fc7bbb3f6b22ddb5fc40d9984585f2c297d54a8a1858679eade73f78d58340"
-    records 6
+    hash "sha256:71ca3551e91841c837b91264aa14e205f2977beb5c89138d2d758fc09403bdb1"
+    records 7
 }
 
 source ".akr/records/akr/work.akr" {
@@ -57,6 +57,11 @@ seal @akr.papercut.calling-the-knowledge-papercut-mcp-tool/1 {
 seal @akr.papercut.cargo-fmt-check-fails-on-the-committed-tree/1 {
     state verified
     hash "sha256:f664184b56b7cc3cbcc71b18c54dca3acfc21b0797acf7074dce53611d9dc460"
+}
+
+seal @akr.papercut.collated-18-papercuts-from-kitchen-concept-lege/1 {
+    state verified
+    hash "sha256:400f9620560f042c1732878794a91bc46dea5e495e4d2953e7abc195f656a97d"
 }
 
 seal @akr.papercut.historical-port-design-gap-recovered-from-a/1 {
