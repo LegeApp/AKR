@@ -4,10 +4,10 @@
 //! audits and reports live in `sources/external/` as immutable, content-hashed
 //! files. This module manages the catalog and the file-system invariants.
 //!
-//! The catalog is `sources/catalog.json` — a deterministic, append-only list
-//! of [`SourceDocument`] entries. Every entry carries a SHA-256 content hash;
-//! verification recomputes it and reports `AKR-S021` on mismatch. The older
-//! file remains when a source is superseded.
+//! The catalog is `sources/catalog.json` — a deterministic list of
+//! [`SourceDocument`] entries. Registered bytes are immutable while present,
+//! but a document may be finalized into retained cited fragments or metadata
+//! only. The older entry remains when a source is superseded.
 //!
 //! [`chunk`] turns those exact bytes into retrieval units. Chunking is derived and
 //! rebuildable: it can only affect how well search finds a passage, never what the
@@ -27,6 +27,38 @@ pub enum SourceOrigin {
     External,
     /// Reference material the project keeps but does not maintain.
     InternalReference,
+}
+
+/// What source material remains available after registration or finalization.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceAvailability {
+    /// The complete registered document is available at [`SourceDocument::path`].
+    Full,
+    /// Only exact cited ranges and their retained context are available.
+    CitedOnly,
+    /// The source's identity remains, but no source bytes are retained.
+    MetadataOnly,
+}
+
+impl SourceAvailability {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::CitedOnly => "cited-only",
+            Self::MetadataOnly => "metadata-only",
+        }
+    }
+
+    #[must_use]
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "full" => Some(Self::Full),
+            "cited-only" => Some(Self::CitedOnly),
+            "metadata-only" => Some(Self::MetadataOnly),
+            _ => None,
+        }
+    }
 }
 
 impl SourceOrigin {
@@ -73,6 +105,23 @@ pub struct SourceDocument {
     pub scope: Option<String>,
     /// Previous version this supersedes, if any.
     pub supersedes: Option<String>,
+    /// Whether the full document, cited fragments, or only metadata remains.
+    pub availability: SourceAvailability,
+    /// Content-addressed fragments retained after finalization.
+    pub fragments: Vec<RetainedFragment>,
+}
+
+/// A content-addressed source fragment retained for one or more exact citations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetainedFragment {
+    /// Exact ranges in the original document that this fragment supports.
+    pub cited_ranges: Vec<crate::model::SourceRange>,
+    /// The captured semantic context containing those ranges.
+    pub captured_range: crate::model::SourceRange,
+    /// Hash of the captured bytes.
+    pub content_hash: String,
+    /// Hash-derived fragment identifier, also used as the blob name.
+    pub blob: String,
 }
 
 /// Verification diagnostic.
@@ -89,6 +138,15 @@ pub enum SourceDiagnostic {
     MissingFile { id: String, path: String },
     /// Catalog itself unreadable.
     CatalogError(String),
+    /// A cited-only catalog entry has lost a retained fragment.
+    MissingFragment { id: String, blob: String },
+    /// A retained fragment no longer matches its content hash.
+    FragmentHashMismatch {
+        id: String,
+        blob: String,
+        expected: String,
+        found: String,
+    },
 }
 
 impl std::fmt::Display for SourceDiagnostic {
@@ -108,6 +166,19 @@ impl std::fmt::Display for SourceDiagnostic {
                 "AKR-S021 registered source file is missing\nsource: {id}\npath: {path}"
             ),
             Self::CatalogError(msg) => write!(f, "AKR-S021 catalog error: {msg}"),
+            Self::MissingFragment { id, blob } => write!(
+                f,
+                "AKR-S021 retained source fragment is missing\nsource: {id}\nfragment: {blob}"
+            ),
+            Self::FragmentHashMismatch {
+                id,
+                blob,
+                expected,
+                found,
+            } => write!(
+                f,
+                "AKR-S021 retained source fragment hash mismatch\nsource: {id}\nfragment: {blob}\nexpected: {expected}\nfound: {found}"
+            ),
         }
     }
 }
@@ -124,6 +195,19 @@ pub fn catalog_path(workspace_root: &Path) -> PathBuf {
 #[must_use]
 pub fn external_dir(workspace_root: &Path) -> PathBuf {
     workspace_root.join("sources").join("external")
+}
+
+/// Canonical fragment path for a content hash.
+#[must_use]
+pub fn fragment_path(workspace_root: &Path, blob: &str) -> PathBuf {
+    let hash = blob.strip_prefix("sha256:").unwrap_or(blob);
+    let prefix = hash.get(..2).unwrap_or("00");
+    workspace_root
+        .join(".akr")
+        .join("source-fragments")
+        .join("sha256")
+        .join(prefix)
+        .join(format!("{hash}.blob"))
 }
 
 /// Computes `sha256:` + hex for bytes.
@@ -185,7 +269,7 @@ fn parse_document(v: &serde_json_value::Value) -> Result<SourceDocument, SourceD
         ))
     })?;
     let media_type = get_str("media_type", true)?.unwrap();
-    let path = get_str("path", true)?.unwrap();
+    let path = get_str("path", false)?.unwrap_or_default();
     let content_hash = get_str("content_hash", true)?.unwrap();
     let byte_len = match obj.get("byte_len") {
         Some(serde_json_value::Value::Number(n)) => n.as_u64().unwrap_or(0),
@@ -195,6 +279,15 @@ fn parse_document(v: &serde_json_value::Value) -> Result<SourceDocument, SourceD
     let observed_at = get_str("observed_at", false)?;
     let scope = get_str("scope", false)?;
     let supersedes = get_str("supersedes", false)?;
+    let availability = match get_str("availability", false)? {
+        None => SourceAvailability::Full,
+        Some(value) => SourceAvailability::from_str(&value).ok_or_else(|| {
+            SourceDiagnostic::CatalogError(format!(
+                "source {id:?} has an unknown availability; expected full|cited-only|metadata-only"
+            ))
+        })?,
+    };
+    let fragments = parse_fragments(obj.get("fragments"), &id)?;
     Ok(SourceDocument {
         id,
         title,
@@ -207,7 +300,75 @@ fn parse_document(v: &serde_json_value::Value) -> Result<SourceDocument, SourceD
         observed_at,
         scope,
         supersedes,
+        availability,
+        fragments,
     })
+}
+
+fn parse_fragments(
+    value: Option<&serde_json_value::Value>,
+    id: &str,
+) -> Result<Vec<RetainedFragment>, SourceDiagnostic> {
+    let Some(serde_json_value::Value::Array(items)) = value else {
+        return Ok(Vec::new());
+    };
+    let mut fragments = Vec::new();
+    for item in items {
+        let obj = item.as_object().ok_or_else(|| {
+            SourceDiagnostic::CatalogError(format!("source {id:?} fragment must be an object"))
+        })?;
+        let text = |key: &str| {
+            obj.get(key)
+                .and_then(|value| match value {
+                    serde_json_value::Value::String(value) => Some(value.clone()),
+                    _ => None,
+                })
+                .ok_or_else(|| SourceDiagnostic::CatalogError(format!("fragment missing {key:?}")))
+        };
+        let range = |value: &serde_json_value::Value| -> Result<crate::model::SourceRange, SourceDiagnostic> {
+            let obj = value.as_object().ok_or_else(|| {
+                SourceDiagnostic::CatalogError(format!("source {id:?} fragment range must be an object"))
+            })?;
+            let number = |key: &str| {
+                obj.get(key)
+                    .and_then(|value| match value {
+                        serde_json_value::Value::Number(value) => value.as_u64(),
+                        _ => None,
+                    })
+                    .ok_or_else(|| SourceDiagnostic::CatalogError(format!("fragment range missing {key:?}")))
+            };
+            Ok(crate::model::SourceRange {
+                start_byte: number("start_byte")?,
+                end_byte: number("end_byte")?,
+                start_line: u32::try_from(number("start_line")?).unwrap_or(u32::MAX),
+                end_line: u32::try_from(number("end_line")?).unwrap_or(u32::MAX),
+                excerpt_hash: obj
+                    .get("excerpt_hash")
+                    .and_then(|value| match value {
+                        serde_json_value::Value::String(value) => Some(value.clone()),
+                        _ => None,
+                    }),
+            })
+        };
+        let captured_range = range(obj.get("captured_range").ok_or_else(|| {
+            SourceDiagnostic::CatalogError(format!("source {id:?} fragment missing captured_range"))
+        })?)?;
+        let cited_values = obj
+            .get("cited_ranges")
+            .and_then(serde_json_value::Value::as_array)
+            .ok_or_else(|| {
+                SourceDiagnostic::CatalogError(format!(
+                    "source {id:?} fragment missing cited_ranges"
+                ))
+            })?;
+        fragments.push(RetainedFragment {
+            cited_ranges: cited_values.iter().map(range).collect::<Result<_, _>>()?,
+            captured_range,
+            content_hash: text("content_hash")?,
+            blob: text("blob")?,
+        });
+    }
+    Ok(fragments)
 }
 
 /// Serializes catalog deterministically (sorted by id).
@@ -262,11 +423,76 @@ pub fn serialize_catalog(docs: &[SourceDocument]) -> String {
                 serde_json_value::Value::String(v.clone()),
             );
         }
+        obj.insert(
+            "availability".into(),
+            serde_json_value::Value::String(d.availability.as_str().to_owned()),
+        );
+        if !d.fragments.is_empty() {
+            let fragments = d
+                .fragments
+                .iter()
+                .map(|fragment| {
+                    let mut item = serde_json_value::Map::new();
+                    item.insert(
+                        "cited_ranges".into(),
+                        serde_json_value::Value::Array(
+                            fragment.cited_ranges.iter().map(range_json).collect(),
+                        ),
+                    );
+                    item.insert(
+                        "captured_range".into(),
+                        range_json(&fragment.captured_range),
+                    );
+                    item.insert(
+                        "content_hash".into(),
+                        serde_json_value::Value::String(fragment.content_hash.clone()),
+                    );
+                    item.insert(
+                        "blob".into(),
+                        serde_json_value::Value::String(fragment.blob.clone()),
+                    );
+                    serde_json_value::Value::Object(item)
+                })
+                .collect();
+            obj.insert(
+                "fragments".into(),
+                serde_json_value::Value::Array(fragments),
+            );
+        }
         parts.push(serde_json_value::Value::Object(obj));
     }
     let v = serde_json_value::Value::Array(parts);
     // pretty with 2 spaces, deterministic
     serde_json_value::to_string_pretty(&v).unwrap_or_else(|_| "[]".into()) + "\n"
+}
+
+fn range_json(range: &crate::model::SourceRange) -> serde_json_value::Value {
+    let mut obj = serde_json_value::Map::new();
+    obj.insert(
+        "start_byte".into(),
+        serde_json_value::Value::Number(serde_json_value::Number::from(range.start_byte)),
+    );
+    obj.insert(
+        "end_byte".into(),
+        serde_json_value::Value::Number(serde_json_value::Number::from(range.end_byte)),
+    );
+    obj.insert(
+        "start_line".into(),
+        serde_json_value::Value::Number(serde_json_value::Number::from(u64::from(
+            range.start_line,
+        ))),
+    );
+    obj.insert(
+        "end_line".into(),
+        serde_json_value::Value::Number(serde_json_value::Number::from(u64::from(range.end_line))),
+    );
+    if let Some(hash) = &range.excerpt_hash {
+        obj.insert(
+            "excerpt_hash".into(),
+            serde_json_value::Value::String(hash.clone()),
+        );
+    }
+    serde_json_value::Value::Object(obj)
 }
 
 /// Saves catalog atomically (write temp then rename).
@@ -345,6 +571,9 @@ pub fn load_corpus(workspace_root: &Path) -> Result<Vec<LoadedSource>, SourceDia
     let catalog = load_catalog(workspace_root)?;
     let mut out = Vec::with_capacity(catalog.len());
     for document in catalog {
+        if document.availability != SourceAvailability::Full {
+            continue;
+        }
         let file = workspace_root.join(&document.path);
         let bytes = std::fs::read(&file).map_err(|_| SourceDiagnostic::MissingFile {
             id: document.id.clone(),
@@ -365,6 +594,104 @@ pub fn load_corpus(workspace_root: &Path) -> Result<Vec<LoadedSource>, SourceDia
         });
     }
     Ok(out)
+}
+
+/// Reads and verifies a retained fragment blob.
+pub fn read_fragment(
+    workspace_root: &Path,
+    document: &SourceDocument,
+    fragment: &RetainedFragment,
+) -> Result<Vec<u8>, SourceDiagnostic> {
+    let path = fragment_path(workspace_root, &fragment.blob);
+    let bytes = std::fs::read(&path).map_err(|_| SourceDiagnostic::MissingFragment {
+        id: document.id.clone(),
+        blob: fragment.blob.clone(),
+    })?;
+    let found = hash_bytes(&bytes);
+    if found != fragment.content_hash || found != fragment.blob {
+        return Err(SourceDiagnostic::FragmentHashMismatch {
+            id: document.id.clone(),
+            blob: fragment.blob.clone(),
+            expected: fragment.content_hash.clone(),
+            found,
+        });
+    }
+    Ok(bytes)
+}
+
+fn contains_range(outer: &crate::model::SourceRange, inner: &crate::model::SourceRange) -> bool {
+    outer.start_byte <= inner.start_byte && outer.end_byte >= inner.end_byte
+}
+
+/// Resolves one citation from either the full source or retained fragments.
+pub fn resolve_citation(
+    workspace_root: &Path,
+    source: &crate::model::Source,
+) -> Result<Option<Vec<u8>>, String> {
+    let Some(document_id) = &source.document else {
+        return Ok(None);
+    };
+    let catalog = load_catalog(workspace_root).map_err(|e| e.to_string())?;
+    let document = catalog
+        .iter()
+        .find(|document| &document.id == document_id)
+        .ok_or_else(|| format!("cites source {document_id:?}, which is not registered"))?;
+    let Some(range) = &source.range else {
+        return Ok(None);
+    };
+    match document.availability {
+        SourceAvailability::Full => {
+            let bytes = std::fs::read(workspace_root.join(&document.path))
+                .map_err(|_| format!("source {:?} file is missing", document.id))?;
+            if hash_bytes(&bytes) != document.content_hash {
+                return Err(format!(
+                    "source {:?} bytes do not match their content hash",
+                    document.id
+                ));
+            }
+            let start = usize::try_from(range.start_byte).unwrap_or(usize::MAX);
+            let end = usize::try_from(range.end_byte).unwrap_or(usize::MAX);
+            let selected = bytes
+                .get(start..end)
+                .ok_or_else(|| format!("source {:?} citation is out of bounds", document.id))?;
+            Ok(Some(selected.to_vec()))
+        }
+        SourceAvailability::CitedOnly => {
+            for fragment in &document.fragments {
+                if !fragment.cited_ranges.iter().any(|cited| cited == range)
+                    || !contains_range(&fragment.captured_range, range)
+                {
+                    continue;
+                }
+                let captured =
+                    read_fragment(workspace_root, document, fragment).map_err(|e| e.to_string())?;
+                let relative_start = usize::try_from(
+                    range
+                        .start_byte
+                        .saturating_sub(fragment.captured_range.start_byte),
+                )
+                .unwrap_or(usize::MAX);
+                let relative_end = usize::try_from(
+                    range
+                        .end_byte
+                        .saturating_sub(fragment.captured_range.start_byte),
+                )
+                .unwrap_or(usize::MAX);
+                let selected = captured.get(relative_start..relative_end).ok_or_else(|| {
+                    format!("retained fragment for {:?} is incomplete", document.id)
+                })?;
+                return Ok(Some(selected.to_vec()));
+            }
+            Err(format!(
+                "source {:?} exact citation was not retained",
+                document.id
+            ))
+        }
+        SourceAvailability::MetadataOnly => Err(format!(
+            "source {:?} retains metadata only; exact citation text is unavailable",
+            document.id
+        )),
+    }
 }
 
 /// A record's citation into the source library, checked against the library.
@@ -400,6 +727,8 @@ pub enum CitationProblem {
         recorded: (u32, u32),
         actual: (u32, u32),
     },
+    /// The catalog retains metadata or fragments that do not cover this citation.
+    TextUnavailable { document: String, reason: String },
 }
 
 impl std::fmt::Display for CitationProblem {
@@ -446,6 +775,12 @@ impl std::fmt::Display for CitationProblem {
                  covers lines {}-{}",
                 recorded.0, recorded.1, actual.0, actual.1
             ),
+            Self::TextUnavailable { document, reason } => {
+                write!(
+                    f,
+                    "source {document:?} citation text is unavailable: {reason}"
+                )
+            }
         }
     }
 }
@@ -519,6 +854,118 @@ pub fn check_citation(
     problems
 }
 
+/// Checks one citation against the catalog and its full or retained bytes.
+#[must_use]
+pub fn check_citation_at(
+    workspace_root: &Path,
+    source: &crate::model::Source,
+) -> Vec<CitationProblem> {
+    let Some(document) = &source.document else {
+        return Vec::new();
+    };
+    let catalog = match load_catalog(workspace_root) {
+        Ok(catalog) => catalog,
+        Err(error) => {
+            return vec![CitationProblem::TextUnavailable {
+                document: document.clone(),
+                reason: error.to_string(),
+            }];
+        }
+    };
+    let Some(entry) = catalog.iter().find(|entry| &entry.id == document) else {
+        return vec![CitationProblem::UnknownDocument {
+            document: document.clone(),
+        }];
+    };
+    if entry.availability == SourceAvailability::Full {
+        return match load_corpus(workspace_root) {
+            Ok(corpus) => check_citation(source, &corpus),
+            Err(error) => vec![CitationProblem::TextUnavailable {
+                document: document.clone(),
+                reason: error.to_string(),
+            }],
+        };
+    }
+    let Some(range) = &source.range else {
+        return Vec::new();
+    };
+    let Some(fragment) = entry.fragments.iter().find(|fragment| {
+        fragment.cited_ranges.iter().any(|cited| cited == range)
+            && contains_range(&fragment.captured_range, range)
+    }) else {
+        return vec![CitationProblem::TextUnavailable {
+            document: document.clone(),
+            reason: if entry.availability == SourceAvailability::MetadataOnly {
+                "the document is metadata-only".into()
+            } else {
+                "the exact range was not retained".into()
+            },
+        }];
+    };
+    let bytes = match read_fragment(workspace_root, entry, fragment) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            return vec![CitationProblem::TextUnavailable {
+                document: document.clone(),
+                reason: error.to_string(),
+            }];
+        }
+    };
+    let start = usize::try_from(
+        range
+            .start_byte
+            .saturating_sub(fragment.captured_range.start_byte),
+    )
+    .unwrap_or(usize::MAX);
+    let end = usize::try_from(
+        range
+            .end_byte
+            .saturating_sub(fragment.captured_range.start_byte),
+    )
+    .unwrap_or(usize::MAX);
+    let Some(slice) = bytes.get(start..end) else {
+        return vec![CitationProblem::TextUnavailable {
+            document: document.clone(),
+            reason: "retained fragment does not contain the requested bytes".into(),
+        }];
+    };
+    let mut problems = Vec::new();
+    if std::str::from_utf8(&bytes[..start]).is_err() || std::str::from_utf8(&bytes[..end]).is_err()
+    {
+        problems.push(CitationProblem::RangeNotOnBoundary {
+            document: document.clone(),
+            start: range.start_byte,
+            end: range.end_byte,
+        });
+        return problems;
+    }
+    if let Some(expected) = &range.excerpt_hash {
+        let found = hash_bytes(slice);
+        if &found != expected {
+            problems.push(CitationProblem::ExcerptHashMismatch {
+                document: document.clone(),
+                expected: expected.clone(),
+                found,
+            });
+        }
+    }
+    let start_line = fragment.captured_range.start_line.saturating_add(
+        u32::try_from(bytes[..start].iter().filter(|byte| **byte == b'\n').count())
+            .unwrap_or(u32::MAX),
+    );
+    let end_line = start_line.saturating_add(
+        u32::try_from(slice.iter().filter(|byte| **byte == b'\n').count()).unwrap_or(u32::MAX),
+    );
+    if (range.start_line, range.end_line) != (start_line, end_line) {
+        problems.push(CitationProblem::LinesDisagree {
+            document: document.clone(),
+            recorded: (range.start_line, range.end_line),
+            actual: (start_line, end_line),
+        });
+    }
+    problems
+}
+
 /// Verifies every catalog entry's file hash.
 #[must_use]
 pub fn verify_catalog(workspace_root: &Path) -> Vec<SourceDiagnostic> {
@@ -528,6 +975,22 @@ pub fn verify_catalog(workspace_root: &Path) -> Vec<SourceDiagnostic> {
     };
     let mut diags = Vec::new();
     for doc in &docs {
+        if doc.availability == SourceAvailability::CitedOnly {
+            for fragment in &doc.fragments {
+                if !fragment_path(workspace_root, &fragment.blob).is_file() {
+                    diags.push(SourceDiagnostic::MissingFragment {
+                        id: doc.id.clone(),
+                        blob: fragment.blob.clone(),
+                    });
+                } else if let Err(error) = read_fragment(workspace_root, doc, fragment) {
+                    diags.push(error);
+                }
+            }
+            continue;
+        }
+        if doc.availability == SourceAvailability::MetadataOnly {
+            continue;
+        }
         let file = workspace_root.join(&doc.path);
         if !file.is_file() {
             diags.push(SourceDiagnostic::MissingFile {
@@ -714,5 +1177,88 @@ fn convert(v: crate::json::Value) -> serde_json_value::Value {
             }
             serde_json_value::Value::Object(map)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Source, SourceKind, SourceRange};
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    fn temp_root(name: &str) -> std::path::PathBuf {
+        static NEXT: AtomicU32 = AtomicU32::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "akr-source-{name}-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).expect("temp root");
+        path
+    }
+
+    #[test]
+    fn cited_only_fragments_resolve_without_the_original_file() {
+        let root = temp_root("cited-only");
+        let text = "prefix\nadopt this recommendation\nsuffix\n";
+        let selected = "adopt this recommendation";
+        let range = SourceRange {
+            start_byte: 7,
+            end_byte: 7 + selected.len() as u64,
+            start_line: 2,
+            end_line: 2,
+            excerpt_hash: Some(hash_bytes(selected.as_bytes())),
+        };
+        let captured = SourceRange {
+            start_byte: 0,
+            end_byte: text.len() as u64,
+            start_line: 1,
+            end_line: 3,
+            excerpt_hash: Some(hash_bytes(text.as_bytes())),
+        };
+        let blob = hash_bytes(text.as_bytes());
+        let document = SourceDocument {
+            id: "audit".into(),
+            title: "Audit".into(),
+            origin: SourceOrigin::External,
+            media_type: "text/markdown".into(),
+            path: "sources/external/audit.md".into(),
+            content_hash: hash_bytes(text.as_bytes()),
+            byte_len: text.len() as u64,
+            added_at: "2026-08-08".into(),
+            observed_at: None,
+            scope: None,
+            supersedes: None,
+            availability: SourceAvailability::CitedOnly,
+            fragments: vec![RetainedFragment {
+                cited_ranges: vec![range.clone()],
+                captured_range: captured,
+                content_hash: blob.clone(),
+                blob,
+            }],
+        };
+        save_catalog(&root, &[document]).expect("catalog");
+        let fragment = fragment_path(&root, &hash_bytes(text.as_bytes()));
+        std::fs::create_dir_all(fragment.parent().expect("fragment parent")).expect("parent");
+        std::fs::write(&fragment, text).expect("fragment");
+
+        let citation = Source {
+            kind: SourceKind::External,
+            role: None,
+            path: None,
+            url: None,
+            excerpt: None,
+            document: Some("audit".into()),
+            range: Some(range),
+            use_note: None,
+        };
+        assert!(check_citation_at(&root, &citation).is_empty());
+        assert_eq!(
+            resolve_citation(&root, &citation).expect("resolve"),
+            Some(selected.as_bytes().to_vec())
+        );
+        assert!(verify_catalog(&root).is_empty());
+        let _ = std::fs::remove_dir_all(root);
     }
 }

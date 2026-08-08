@@ -1,0 +1,205 @@
+akr 0.1
+project akr
+
+record akr.decision.change-transaction-not-commit-kind/1 : decision {
+    title "AKR leads intent, git seals the snapshot, and the bridge is a change transaction"
+    state active
+    scope [
+        path "crates/akr-cli/src/change.rs",
+        path "crates/akr-core/src/change/**",
+        path "crates/akr-core/src/git/**",
+        path "docs/16-change-protocol.md"
+    ]
+    decision """
+        No new record kind. The bridge is AKR work record -> local change transaction -> staged
+        git tree -> generated commit -> trailers. The transaction lives at
+        `$(git rev-parse --git-path akr/current-change.akr)`: local to the worktree, safe to
+        discard, absent from search and context, never committed. The staged tree, not the
+        working tree, is the synchronisation boundary. `akr diff --staged` computes a semantic
+        delta by parsing the HEAD ledger and the index ledger and comparing them, never `git
+        diff` text, so a reformat or reorder is not a semantic change. `akr change prepare
+        --staged` refuses a material code change that names neither a work record nor an
+        explicit `--untracked-reason`, and records the staged tree id so a tree that moves
+        afterwards invalidates the preparation. `akr git commit` generates the message and hands
+        the index to git; AKR does not implement an object store. The durable link is commit
+        trailers -- AKR-Change, AKR-Work, AKR-Evidence, AKR-Decision, AKR-Graph, AKR-Tree --
+        which point from the commit to the records, survive rebases and cherry-picks, and can be
+        rebuilt by walking history. Evidence names the code it verified through an
+        implementation digest over the staged tree's sorted (path, mode, blob) triples, excluding
+        `.akr/**` and `docs/generated/**`, which breaks the cycle of the digest changing when the
+        digest is written down. A commit still never completes work; the transaction consumes
+        AKR state transitions and never invents them.
+        """
+    context """
+        An agent finished and verified a substantial change while every corresponding work
+        record still said proposed. A later check caught the divergence, but only because
+        someone ran it. Tooling should make the synchronised path easier than the unsynchronised
+        one -- the question was whether that needs a `commit` record kind.
+        """
+    consequences """
+        A durable `commit` kind was rejected: one work record takes many commits, one commit
+        advances several work records, rebasing changes every object id, and a commit hash
+        cannot be written into a file contained in that same commit without an amendment loop.
+        Hooks were considered as the primary mechanism and rejected as the primary mechanism
+        too, since they are bypassable; `akr git install-hooks` writes thin wrappers around
+        `akr git-hook`, which runs the same verification an author can run by hand, and CI
+        remains the final authority.
+        """
+    supported_by [ @akr.evidence.p11-change-protocol-suite/1 ]
+}
+
+record akr.decision.external-sources-immutable-library/1 : decision {
+    title "External sources are an immutable library, indexed separately, cited by byte range"
+    state superseded
+    scope [
+        path "crates/akr-cli/src/source.rs",
+        path "crates/akr-core/src/source/**",
+        path "crates/akr-core/src/store/sources.rs",
+        path "docs/15-external-sources.md",
+        path "sources/**",
+        path "spec/schema/sources.sql"
+    ]
+    decision """
+        Outside advice is held in three layers with one responsibility each. The immutable
+        source library, `sources/`, holds exact outside bytes: `akr source add` content-hashes
+        a document, copies it under `sources/external/`, and adds a catalog entry, creating no
+        records; editing a registered file is AKR-S021 from both `akr source verify` and
+        `akr check`, and the only correction is registering a superseding version. The derived
+        source index, `.akr/cache/sources.sqlite`, holds rebuildable, non-authoritative semantic
+        chunks — heading paths, byte and line ranges, normalised search text, expanded technical
+        symbols, ranked by BM25 — on its own generation, `source_corpus_hash`, distinct from the
+        ledger's `source_graph_hash`, so a record write never rechunks the corpus and a
+        registration never re-resolves the ledger. The ledger holds only the project's
+        interpretation: records cite the library through a `source` block naming `document` plus
+        `start_byte`, `end_byte`, `start_line`, `end_line` and an optional `excerpt_hash` —
+        all-or-nothing, checked by `akr check` (AKR-S022) — never by chunk id, because chunk
+        boundaries are allowed to move and provenance is not.
+        """
+    context """
+        A first attempt at ingesting an outside advisor report fragmented it into one proposed
+        record per heading, kept only the first paragraph of each, and let the original be
+        deleted: the detail was gone, the fragments were never reviewed, the graph did not
+        connect them, and the work board filled with unadopted headings. Markdown is the right
+        format for the first reading of a rich technical audit; the question was what AKR should
+        hold instead, and how a record should point at the part of a report it was written about.
+        """
+    consequences """
+        Sparse adoption is the default: a record exists only because the project adopted,
+        rejected, deferred or decided to track something in the material, and everything else
+        stays readable in the report rather than becoming unreviewed project state.
+        """
+    supported_by [
+        @akr.evidence.p10-chunk-unit-suite/1,
+        @akr.evidence.p10-source-library-suite/1
+    ]
+}
+
+record akr.decision.external-sources-immutable-library/2 : decision {
+    title "External sources are immutable while registered and explicitly finalizable"
+    state proposed
+    scope [
+        path "crates/akr-cli/src/source.rs",
+        path "crates/akr-core/src/source/**",
+        path "crates/akr-core/src/store/sources.rs",
+        path "docs/15-external-sources.md",
+        path "sources/**",
+        path "spec/schema/sources.sql"
+    ]
+    decision """
+        Outside advice is held in three layers with one responsibility each. The source
+        library is non-authoritative and content-hashed: registered bytes are immutable while
+        present, but registration is not permanent. `akr source add` copies a document under
+        `sources/external/` and creates no records. `akr source finalize` can transition a
+        document from `full` to `cited-only`, retaining exact cited ranges in shared
+        content-addressed `.akr/source-fragments/` blobs, or to `metadata-only` when no exact
+        citations remain. The catalog tombstone retains title, origin, identity and the full
+        document hash; the original Markdown may leave the active source tree.
+
+        The derived source index, `.akr/cache/sources.sqlite`, holds rebuildable,
+        non-authoritative semantic chunks on its own generation, distinct from the ledger's
+        `source_graph_hash`. Full sources are searchable; finalized fragments are explicit
+        provenance, not ordinary project search results. The ledger holds the project's
+        interpretation: records cite a document and exact byte range, optionally with a role
+        and `use` note explaining what the project adopted. A record must remain semantically
+        self-contained when its provenance blocks are hidden. `akr check` resolves exact
+        citations from the full document or retained fragments and refuses a citation whose
+        bytes are unavailable. Lineage-only references are valid in `metadata-only` state.
+
+        Finalization does not rewrite records, duplicate excerpts into them, change a work
+        state, satisfy evidence, or imply that outside advice was implemented. It is a source
+        retention transition, separate from provenance interpretation and work completion.
+        """
+    context """
+        The first source-library design made registered Markdown permanently undeletable in
+        order to preserve exact citations. Use across multiple projects showed that advisor
+        reports are often temporary intake documents, while the exact passages that records
+        cite still need portable provenance. Literal absorption into every record would create
+        revision noise and duplicate overlapping prose, so shared retained fragments preserve
+        exact resolution without making ordinary context packets larger.
+        """
+    consequences """
+        Source cleanup is explicit and inspectable through `source status`, `source dependents`
+        and `source finalize --dry-run`. Full documents remain appropriate for standards and
+        references that may yield future records; cited-only is the normal final state for
+        advisor reports; metadata-only is permitted only for lineage references. A missing full
+        source is an error, a missing retained fragment is an error, and a metadata-only exact
+        citation is an error. Git history may retain the removed Markdown, but portable AKR
+        fragments do not depend on that history.
+        """
+    supersedes [ @akr.decision.external-sources-immutable-library/1 ]
+    supported_by [
+        @akr.evidence.p10-chunk-unit-suite/1,
+        @akr.evidence.p10-source-library-suite/1
+    ]
+}
+
+record akr.decision.mcp-budgeted-and-instrumented/1 : decision {
+    title "The MCP surface is budgeted and instrumented"
+    state active
+    scope [ path "crates/akr-mcp/**" ]
+    decision """
+        knowledge.get takes summary|body|canonical, defaulting to body. Every MCP result is
+        measured across both halves and one over its hard limit is withheld rather than
+        shortened, with its counts and a ready-made narrower call. akr-mcp --surface read omits
+        the write tools; --accounting appends one JSON line per call. The server publishes its
+        vocabulary version and reports a workspace disagreement as a named skew. Recorded as
+        D-034.
+        """
+    supported_by [ @akr.evidence.mcp-budget-and-skew-suite ]
+}
+
+record akr.decision.papercut-subject-and-collation/1 : decision {
+    title "A papercut says what it was about"
+    state active
+    scope [
+        path "crates/akr-core/src/papercut/**",
+        path "crates/akr-core/src/render/papercuts.rs"
+    ]
+    decision """
+        A papercut gains an optional `about` slot naming what the friction was with, when that
+        is not this project. `akr papercut collate --about <subject>` gathers only the sisters'
+        papercuts aimed at one subject, and counts what the filter left behind rather than
+        dropping it silently. A collation carries each source papercut's full statement, not a
+        truncated title; PAPERCUTS.md renders a collation as one summary line and gives
+        subject-bearing papercuts their own heading. Recorded as D-033.
+        """
+    supported_by [ @akr.evidence.papercut-subject-suite ]
+}
+
+record akr.decision.query-words-dirty-tree-ancestry/1 : decision {
+    title "A query is words; a dirty tree is a fact"
+    state active
+    scope [
+        path "crates/akr-cli/src/session.rs",
+        path "crates/akr-core/src/git/**",
+        path "crates/akr-core/src/store/search.rs"
+    ]
+    decision """
+        akr search escapes its query into quoted terms by default, with raw FTS5 behind --fts
+        and never over MCP. AKR-G004 is exempt from the strict promotion, as staleness is
+        under D-024. ancestry_over uses one cat-file --batch-check and one rev-list
+        --topo-order instead of a comparison sort whose comparator forked git. Recorded as
+        D-035.
+        """
+    supported_by [ @akr.evidence.sister-papercut-fixes ]
+}

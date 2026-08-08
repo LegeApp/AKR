@@ -90,6 +90,48 @@ fn editing_a_registered_source_is_an_error() {
 }
 
 #[test]
+fn a_source_can_be_finalized_without_changing_records() {
+    let example = Example::materialise("source-finalize-metadata");
+    let id = register(&example);
+    let path = example
+        .run(&["source", "list"])
+        .stdout
+        .split_whitespace()
+        .last()
+        .expect("a source path")
+        .to_owned();
+    let status = example.run(&["source", "status", &id]);
+    assert_eq!(status.code, 0, "{}", status.output());
+    assert!(
+        status.stdout.contains("availability     full"),
+        "{}",
+        status.output()
+    );
+
+    let finalized = example.run(&[
+        "source",
+        "finalize",
+        &id,
+        "--retain",
+        "metadata",
+        "--remove-file",
+    ]);
+    assert_eq!(finalized.code, 0, "{}", finalized.output());
+    assert!(
+        !example.root().join(&path).exists(),
+        "the full source should be removed"
+    );
+    assert!(
+        example
+            .run(&["source", "status", &id])
+            .stdout
+            .contains("availability     metadata-only")
+    );
+    assert_eq!(example.run(&["source", "verify"]).code, 0);
+    assert_eq!(example.run(&["check"]).code, 0);
+}
+
+#[test]
 fn a_search_finds_the_section_and_says_it_is_not_authoritative() {
     let example = Example::materialise("source-search");
     register(&example);

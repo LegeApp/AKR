@@ -362,6 +362,29 @@ pub enum Command {
         /// New id.
         new_id: Option<String>,
     },
+    /// `akr source status <id>`.
+    SourceStatus {
+        /// Source id.
+        id: String,
+    },
+    /// `akr source dependents <id>`.
+    SourceDependents {
+        /// Source id.
+        id: String,
+    },
+    /// `akr source finalize <id> [--retain cited|metadata] [--context exact|block] [--remove-file] [--dry-run]`.
+    SourceFinalize {
+        /// Source id.
+        id: String,
+        /// Retention mode.
+        retain: String,
+        /// Context policy.
+        context: String,
+        /// Remove the full source file after replacement is durable.
+        remove_file: bool,
+        /// Report the plan without changing files.
+        dry_run: bool,
+    },
     /// `akr diff --staged` — the semantic delta between HEAD and the git index.
     DiffStaged,
     /// `akr change begin ...` — open a change transaction in this worktree.
@@ -547,7 +570,10 @@ impl Command {
             | Self::SourceGetChunk { .. }
             | Self::SourceSearch { .. }
             | Self::SourceVerify
-            | Self::SourceSupersede { .. } => "source".to_owned(),
+            | Self::SourceSupersede { .. }
+            | Self::SourceStatus { .. }
+            | Self::SourceDependents { .. }
+            | Self::SourceFinalize { .. } => "source".to_owned(),
             Self::Propose { .. } => "propose".to_owned(),
             Self::Revise { .. } => "revise".to_owned(),
             Self::Supersede { .. } => "supersede".to_owned(),
@@ -1434,12 +1460,66 @@ fn parse_source(
                 new_id: option_value(tail, "--id"),
             }
         }
+        "status" => {
+            if tail.iter().any(|arg| arg.starts_with("--")) {
+                return Err(UsageError::new(
+                    "AKR-C002",
+                    "source status does not accept flags",
+                ));
+            }
+            Command::SourceStatus {
+                id: need(1, "a source id")?,
+            }
+        }
+        "dependents" => {
+            if tail.iter().any(|arg| arg.starts_with("--")) {
+                return Err(UsageError::new(
+                    "AKR-C002",
+                    "source dependents does not accept flags",
+                ));
+            }
+            Command::SourceDependents {
+                id: need(1, "a source id")?,
+            }
+        }
+        "finalize" => {
+            for arg in tail.iter().filter(|a| a.starts_with("--")) {
+                let base = arg.split('=').next().unwrap_or(arg);
+                if !["--retain", "--context", "--remove-file", "--dry-run"].contains(&base) {
+                    return Err(UsageError::new(
+                        "AKR-C002",
+                        format!("unknown flag {base:?} for command \"source finalize\""),
+                    ));
+                }
+            }
+            let retain = option_value(tail, "--retain").unwrap_or_else(|| "cited".into());
+            if !["cited", "metadata"].contains(&retain.as_str()) {
+                return Err(UsageError::new(
+                    "AKR-C004",
+                    "source finalize --retain must be cited or metadata",
+                ));
+            }
+            let context = option_value(tail, "--context").unwrap_or_else(|| "block".into());
+            if !["exact", "block"].contains(&context.as_str()) {
+                return Err(UsageError::new(
+                    "AKR-C004",
+                    "source finalize --context must be exact or block",
+                ));
+            }
+            Command::SourceFinalize {
+                id: need(1, "a source id")?,
+                retain,
+                context,
+                remove_file: tail.iter().any(|arg| arg == "--remove-file"),
+                dry_run: tail.iter().any(|arg| arg == "--dry-run"),
+            }
+        }
         _ => {
             return Err(UsageError::new(
                 "AKR-C001",
                 format!("unknown subcommand {sub:?} for command \"source\""),
             )
-            .with_help("supported subcommands: add, list, get, verify, supersede"));
+            .with_help("supported subcommands: add, list, get, verify, supersede, status, dependents, finalize"));
         }
     })
 }
@@ -1739,8 +1819,11 @@ pub fn help_for(name: &str) -> Option<String> {
              akr source get <id> [--whole|--lines <a:b>|--section <heading>]\n\
              akr source get --chunk <chunk-id> [--neighbors <n>]\n\
              akr source search <query> [--literal|--fts] [--document <id>] [--all-versions] [--limit <n>]\n\
-             akr source verify\n\
-             akr source supersede <old-id> <new-path> [--id <new-id>]\n\
+            akr source verify\n\
+            akr source supersede <old-id> <new-path> [--id <new-id>]\n\
+             akr source status <id>\n\
+             akr source dependents <id>\n\
+             akr source finalize <id> [--retain cited|metadata] [--context exact|block] [--remove-file] [--dry-run]\n\
              \n\
              Immutable source library in sources/. `add` copies the file to\n\
              sources/external/<id>--<hash>.md, records its sha256 in\n\

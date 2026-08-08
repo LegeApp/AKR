@@ -234,6 +234,9 @@ fn emit_source(out: &mut String, source: &Source) {
         SourceKind::Internal => "internal",
     };
     let _ = writeln!(out, "        kind {kind}");
+    if let Some(role) = source.role {
+        let _ = writeln!(out, "        role {}", role.as_str());
+    }
     if let Some(document) = &source.document {
         let _ = writeln!(out, "        document \"{}\"", escape(document));
     }
@@ -254,6 +257,9 @@ fn emit_source(out: &mut String, source: &Source) {
     }
     if let Some(excerpt) = &source.excerpt {
         emit_prose(out, 2, "excerpt", excerpt);
+    }
+    if let Some(use_note) = &source.use_note {
+        emit_prose(out, 2, "use", use_note);
     }
     out.push_str("    }\n");
 }

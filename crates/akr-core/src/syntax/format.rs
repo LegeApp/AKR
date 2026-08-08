@@ -220,6 +220,7 @@ fn block_slot_order(container: &str, slot: &str) -> Option<usize> {
         "check" => &["statement", "method", "command", "verified_by"],
         "source" => &[
             "kind",
+            "role",
             "document",
             "path",
             "url",
@@ -229,6 +230,7 @@ fn block_slot_order(container: &str, slot: &str) -> Option<usize> {
             "end_line",
             "excerpt_hash",
             "excerpt",
+            "use",
         ],
         "disposition" => &["outcome", "into", "note"],
         _ => return None,

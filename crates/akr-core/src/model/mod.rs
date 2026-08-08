@@ -26,7 +26,7 @@ pub use ledger::{
 };
 pub use record::{
     Acceptance, Check, CheckMethod, Claim, ContentValue, Disposition, EvidenceResult, Outcome,
-    Record, Source, SourceKind, SourceRange,
+    Record, Source, SourceKind, SourceRange, SourceRole,
 };
 pub use refs::{RefMode, Reference, RevisionId};
 pub use relation::{Cardinality, Domain, Range, Relation};

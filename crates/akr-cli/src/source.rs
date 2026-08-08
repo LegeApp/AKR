@@ -1,13 +1,17 @@
 //! `akr source *` — immutable source library in `sources/`.
 //!
-//! `sources/` is append-only, content-hashed. Agents and humans must never
-//! edit files there; `akr source verify` (and `akr check`) report `AKR-S021`
-//! on mismatch, and `akr source supersede` is the only mutation path.
+//! Registered bytes under `sources/` are content-hashed and immutable while
+//! present. `akr source verify` (and `akr check`) report `AKR-S021` on
+//! mismatch; `akr source finalize` is the controlled path to retained
+//! fragments or metadata-only lineage.
 
 use crate::commands::Output;
 use crate::session::{EnvError, Exit, Session};
 use akr_core::json::Value;
-use akr_core::source::{self, SourceDiagnostic, SourceDocument, SourceOrigin};
+use akr_core::model::SourceRange;
+use akr_core::source::{
+    self, RetainedFragment, SourceAvailability, SourceDiagnostic, SourceDocument, SourceOrigin,
+};
 use std::path::{Path, PathBuf};
 
 /// `akr source add <path> ...`
@@ -86,6 +90,8 @@ pub fn add(
         observed_at: observed_at.map(ToOwned::to_owned),
         scope: scope.map(ToOwned::to_owned),
         supersedes: None,
+        availability: SourceAvailability::Full,
+        fragments: Vec::new(),
     };
     catalog.push(doc.clone());
     source::save_catalog(&workspace_root, &catalog).map_err(|d| to_env(d))?;
@@ -115,9 +121,10 @@ pub fn list(session: &Session, all: bool) -> Result<Output, EnvError> {
                 continue;
             }
             text.push_str(&format!(
-                "{}  {}  {}  {}\n",
+                "{}  {}  {}  {}  {}\n",
                 doc.id,
                 doc.origin.as_str(),
+                doc.availability.as_str(),
                 doc.content_hash,
                 doc.path
             ));
@@ -305,6 +312,33 @@ pub fn get(
         .iter()
         .find(|d| d.id == id)
         .ok_or_else(|| EnvError::new("AKR-C042", format!("source {id:?} not found")))?;
+    if doc.availability != SourceAvailability::Full {
+        if doc.availability == SourceAvailability::MetadataOnly {
+            return Err(EnvError::new(
+                "AKR-S022",
+                format!("source {id:?} retains metadata only; no source text is available"),
+            ));
+        }
+        let mut output = String::new();
+        for fragment in &doc.fragments {
+            let bytes = source::read_fragment(&session.root, doc, fragment).map_err(to_env)?;
+            output.push_str(&String::from_utf8_lossy(&bytes));
+            if !output.ends_with('\n') {
+                output.push('\n');
+            }
+        }
+        return Ok(Output::plain(
+            output.clone(),
+            Value::object(vec![
+                ("id".into(), Value::string(doc.id.clone())),
+                (
+                    "availability".into(),
+                    Value::string(doc.availability.as_str().to_owned()),
+                ),
+                ("text".into(), Value::string(output)),
+            ]),
+        ));
+    }
     let file = session.root.join(&doc.path);
     let bytes = std::fs::read(&file)
         .map_err(|e| EnvError::new("AKR-C042", format!("cannot read {}: {e}", file.display())))?;
@@ -449,6 +483,8 @@ pub fn supersede(
         observed_at: None,
         scope: old.scope.clone(),
         supersedes: Some(old_id.to_owned()),
+        availability: SourceAvailability::Full,
+        fragments: Vec::new(),
     };
     catalog.push(doc.clone());
     source::save_catalog(&workspace_root, &catalog).map_err(|d| to_env(d))?;
@@ -552,10 +588,309 @@ fn doc_to_json(d: &SourceDocument) -> Value {
         ("title".into(), Value::string(d.title.clone())),
         ("origin".into(), Value::string(d.origin.as_str().to_owned())),
         ("path".into(), Value::string(d.path.clone())),
+        (
+            "availability".into(),
+            Value::string(d.availability.as_str().to_owned()),
+        ),
         ("content_hash".into(), Value::string(d.content_hash.clone())),
         ("byte_len".into(), Value::integer(d.byte_len as i64)),
         ("added_at".into(), Value::string(d.added_at.clone())),
+        (
+            "retained_fragments".into(),
+            Value::integer(d.fragments.len() as i64),
+        ),
     ])
+}
+
+fn source_references(session: &Session, id: &str) -> Vec<(String, Option<SourceRange>)> {
+    session
+        .ledger
+        .records()
+        .iter()
+        .flat_map(|record| {
+            record.sources.iter().filter_map(|source| {
+                (source.document.as_deref() == Some(id))
+                    .then(|| (record.id.to_string(), source.range.clone()))
+            })
+        })
+        .collect()
+}
+
+/// `akr source status <id>`.
+pub fn status(session: &Session, id: &str) -> Result<Output, EnvError> {
+    let catalog = source::load_catalog(&session.root).map_err(to_env)?;
+    let doc = catalog
+        .iter()
+        .find(|doc| doc.id == id)
+        .ok_or_else(|| EnvError::new("AKR-C042", format!("source {id:?} not found")))?;
+    let references = source_references(session, id);
+    let exact = references
+        .iter()
+        .filter(|(_, range)| range.is_some())
+        .count();
+    let lineage = references.len() - exact;
+    let captured_bytes: usize = doc
+        .fragments
+        .iter()
+        .map(|fragment| {
+            fragment
+                .captured_range
+                .end_byte
+                .saturating_sub(fragment.captured_range.start_byte) as usize
+        })
+        .sum();
+    let text = format!(
+        "{}\n\navailability     {}\nfull bytes        {}\nexact references  {}\nlineage refs      {}\nretained fragments {}\nretained bytes    {}\n",
+        doc.id,
+        doc.availability.as_str(),
+        doc.byte_len,
+        exact,
+        lineage,
+        doc.fragments.len(),
+        captured_bytes,
+    );
+    Ok(Output::plain(
+        text,
+        Value::object(vec![
+            ("source".into(), doc_to_json(doc)),
+            ("exact_references".into(), Value::integer(exact as i64)),
+            ("lineage_references".into(), Value::integer(lineage as i64)),
+        ]),
+    ))
+}
+
+/// `akr source dependents <id>`.
+pub fn dependents(session: &Session, id: &str) -> Result<Output, EnvError> {
+    let catalog = source::load_catalog(&session.root).map_err(to_env)?;
+    if !catalog.iter().any(|doc| doc.id == id) {
+        return Err(EnvError::new(
+            "AKR-C042",
+            format!("source {id:?} not found"),
+        ));
+    }
+    let references = source_references(session, id);
+    let mut text = format!("{id}\n\n");
+    if references.is_empty() {
+        text.push_str("no record references\n");
+    } else {
+        for (record, range) in &references {
+            match range {
+                Some(range) => text.push_str(&format!(
+                    "EXACT  {record}  lines {}-{}  bytes {}..{}\n",
+                    range.start_line, range.end_line, range.start_byte, range.end_byte
+                )),
+                None => text.push_str(&format!("LINEAGE  {record}\n")),
+            }
+        }
+    }
+    Ok(Output::plain(
+        text,
+        Value::object(vec![
+            ("source".into(), Value::string(id.to_owned())),
+            (
+                "dependents".into(),
+                Value::array(
+                    references
+                        .iter()
+                        .map(|(record, range)| {
+                            Value::object(vec![
+                                ("record".into(), Value::string(record.clone())),
+                                (
+                                    "mode".into(),
+                                    Value::string(if range.is_some() {
+                                        "exact"
+                                    } else {
+                                        "lineage"
+                                    }),
+                                ),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
+        ]),
+    ))
+}
+
+/// Finalizes a full source into cited fragments or metadata-only lineage.
+pub fn finalize(
+    session: &Session,
+    id: &str,
+    retain: &str,
+    context: &str,
+    remove_file: bool,
+    dry_run: bool,
+) -> Result<Output, EnvError> {
+    let mut catalog = source::load_catalog(&session.root).map_err(to_env)?;
+    let index = catalog
+        .iter()
+        .position(|doc| doc.id == id)
+        .ok_or_else(|| EnvError::new("AKR-C042", format!("source {id:?} not found")))?;
+    let document = catalog[index].clone();
+    if document.availability != SourceAvailability::Full {
+        return Err(EnvError::new(
+            "AKR-S031",
+            format!(
+                "source {id:?} is already {}",
+                document.availability.as_str()
+            ),
+        ));
+    }
+    let references = source_references(session, id);
+    let exact: Vec<_> = references
+        .iter()
+        .filter_map(|(_, range)| range.clone())
+        .collect();
+    if retain == "metadata" && !exact.is_empty() {
+        return Err(EnvError::new(
+            "AKR-S031",
+            format!(
+                "source cannot become metadata-only: {} exact record citations require source bytes",
+                exact.len()
+            ),
+        ));
+    }
+    let loaded = source::load_corpus(&session.root)
+        .map_err(|error| EnvError::new("AKR-S021", error.to_string()))?
+        .into_iter()
+        .find(|item| item.document.id == id)
+        .ok_or_else(|| EnvError::new("AKR-S021", format!("source {id:?} is not readable")))?;
+    let bytes = loaded.text.as_bytes();
+    let mut fragments = Vec::<RetainedFragment>::new();
+    if retain == "cited" {
+        for range in exact {
+            let captured = captured_range(bytes, &range, context, &loaded.text);
+            let start = usize::try_from(captured.start_byte).unwrap_or(usize::MAX);
+            let end = usize::try_from(captured.end_byte).unwrap_or(usize::MAX);
+            let captured_bytes = bytes.get(start..end).ok_or_else(|| {
+                EnvError::new("AKR-S022", format!("citation into {id:?} is out of bounds"))
+            })?;
+            let blob = source::hash_bytes(captured_bytes);
+            if let Some(existing) = fragments
+                .iter_mut()
+                .find(|fragment| fragment.blob == blob && fragment.captured_range == captured)
+            {
+                if !existing.cited_ranges.contains(&range) {
+                    existing.cited_ranges.push(range);
+                }
+            } else {
+                fragments.push(RetainedFragment {
+                    cited_ranges: vec![range],
+                    captured_range: captured,
+                    content_hash: blob.clone(),
+                    blob,
+                });
+            }
+        }
+    }
+    let retained_bytes: usize = fragments
+        .iter()
+        .map(|fragment| {
+            fragment
+                .captured_range
+                .end_byte
+                .saturating_sub(fragment.captured_range.start_byte) as usize
+        })
+        .sum();
+    let plan = format!(
+        "Source finalization plan\n\nfull document       {} bytes\nexact references   {}\ncaptured fragments  {}\nretained bytes      {}\nrecords rewritten   0\nsource file removed {}\n",
+        document.byte_len,
+        references
+            .iter()
+            .filter(|(_, range)| range.is_some())
+            .count(),
+        fragments.len(),
+        retained_bytes,
+        if remove_file { "yes" } else { "no" },
+    );
+    if dry_run {
+        return Ok(Output::plain(
+            plan,
+            Value::object(vec![
+                ("dry_run".into(), Value::bool(true)),
+                ("fragments".into(), Value::integer(fragments.len() as i64)),
+            ]),
+        ));
+    }
+    for fragment in &fragments {
+        let path = source::fragment_path(&session.root, &fragment.blob);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|error| {
+                EnvError::new(
+                    "AKR-C042",
+                    format!("cannot create {}: {error}", parent.display()),
+                )
+            })?;
+        }
+        let start = fragment.captured_range.start_byte as usize;
+        let end = fragment.captured_range.end_byte as usize;
+        let captured = bytes.get(start..end).ok_or_else(|| {
+            EnvError::new("AKR-S022", format!("fragment for {id:?} is out of bounds"))
+        })?;
+        if !path.exists() {
+            std::fs::write(&path, captured).map_err(|error| {
+                EnvError::new(
+                    "AKR-C042",
+                    format!("cannot write {}: {error}", path.display()),
+                )
+            })?;
+        }
+    }
+    catalog[index].availability = if retain == "metadata" {
+        SourceAvailability::MetadataOnly
+    } else {
+        SourceAvailability::CitedOnly
+    };
+    catalog[index].fragments = fragments;
+    source::save_catalog(&session.root, &catalog).map_err(to_env)?;
+    if remove_file {
+        let path = session.root.join(&document.path);
+        std::fs::remove_file(&path).map_err(|error| {
+            EnvError::new(
+                "AKR-C042",
+                format!("cannot remove {}: {error}", path.display()),
+            )
+        })?;
+    }
+    Ok(Output::plain(
+        format!(
+            "{}finalized {} as {}\n",
+            plan,
+            id,
+            catalog[index].availability.as_str()
+        ),
+        Value::object(vec![
+            ("id".into(), Value::string(id.to_owned())),
+            (
+                "availability".into(),
+                Value::string(catalog[index].availability.as_str().to_owned()),
+            ),
+            (
+                "fragments".into(),
+                Value::integer(catalog[index].fragments.len() as i64),
+            ),
+        ]),
+    ))
+}
+
+fn captured_range(bytes: &[u8], range: &SourceRange, context: &str, text: &str) -> SourceRange {
+    if context == "exact" {
+        return range.clone();
+    }
+    let chunks = akr_core::source::chunk_markdown(text);
+    chunks
+        .iter()
+        .find(|chunk| chunk.start_byte <= range.start_byte && chunk.end_byte >= range.end_byte)
+        .map(|chunk| SourceRange {
+            start_byte: chunk.start_byte,
+            end_byte: chunk.end_byte,
+            start_line: chunk.start_line,
+            end_line: chunk.end_line,
+            excerpt_hash: Some(source::hash_bytes(
+                &bytes[chunk.start_byte as usize..chunk.end_byte as usize],
+            )),
+        })
+        .unwrap_or_else(|| range.clone())
 }
 
 fn extract_lines(text: &str, range: &str) -> Result<String, EnvError> {
@@ -642,6 +977,8 @@ fn to_env(d: SourceDiagnostic) -> EnvError {
     match d {
         SourceDiagnostic::HashMismatch { .. } => EnvError::new("AKR-S021", d.to_string()),
         SourceDiagnostic::MissingFile { .. } => EnvError::new("AKR-S021", d.to_string()),
+        SourceDiagnostic::MissingFragment { .. } => EnvError::new("AKR-S021", d.to_string()),
+        SourceDiagnostic::FragmentHashMismatch { .. } => EnvError::new("AKR-S021", d.to_string()),
         SourceDiagnostic::CatalogError(msg) => EnvError::new("AKR-C042", msg),
     }
 }

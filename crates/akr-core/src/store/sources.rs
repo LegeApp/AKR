@@ -667,7 +667,7 @@ fn placeholders(count: usize, first: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::{SourceDocument, SourceOrigin};
+    use crate::source::{SourceAvailability, SourceDocument, SourceOrigin};
 
     fn document(id: &str, text: &str) -> LoadedSource {
         LoadedSource {
@@ -683,6 +683,8 @@ mod tests {
                 observed_at: None,
                 scope: None,
                 supersedes: None,
+                availability: SourceAvailability::Full,
+                fragments: Vec::new(),
             },
             text: text.to_owned(),
         }

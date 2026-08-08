@@ -44,7 +44,7 @@ Four layers, with different trust and mutability rules:
 | Layer | Contents | Canonical? | Written by |
 | --- | --- | --- | --- |
 | **Scratch** | Disposable agent working notes (`.agent/scratch/`) | No | Agents, freely |
-| **Sources** | Immutable external advice/reports (`sources/external/`, `sources/catalog.json`) | No — non-authoritative, content-hashed | `akr source add` (append-only) |
+| **Sources** | Registered external advice/reports (`sources/external/`, `sources/catalog.json`) | No — non-authoritative, content-hashed while registered | `akr source add`, `akr source finalize` |
 | **Ledger** | Typed records in `.akr` source files | **Yes** | Humans and agents, via validated operations |
 | **Views** | Generated Markdown/HTML (`docs/generated/`) | No | `akr build`, never by hand |
 

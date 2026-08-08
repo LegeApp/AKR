@@ -791,6 +791,7 @@ pub fn import(context: &WriteContext, request: &ImportRequest) -> WriteResult {
 
     let source_block = |excerpt: &str| Source {
         kind: SourceKind::Legacy,
+        role: None,
         path: Some(request.document.clone()),
         url: None,
         excerpt: Some(excerpt.to_owned()),
@@ -798,6 +799,7 @@ pub fn import(context: &WriteContext, request: &ImportRequest) -> WriteResult {
         // that workflow is that the original is on its way out (D-022).
         document: None,
         range: None,
+        use_note: None,
     };
 
     let mut edits: Vec<(PathBuf, Record, ChangeKind)> = Vec::new();

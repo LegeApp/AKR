@@ -9,7 +9,7 @@ use crate::diagnostics::{Code, Diagnostic, Label, Severity, SlotRef, Span, Subje
 use crate::model::{
     Acceptance, Check, CheckMethod, Claim, Commit, ContentSlot, ContentValue, Date, Disposition,
     Glob, Kind, Ledger, LogicalKey, Outcome, Project, Record, Reference, Relation, RevisionId,
-    ScopeTerm, Segment, Source, SourceKind, State,
+    ScopeTerm, Segment, Source, SourceKind, SourceRole, State,
 };
 use std::collections::BTreeMap;
 
@@ -291,11 +291,27 @@ impl Ctx {
                 };
                 record.sources.push(Source {
                     kind,
+                    role: match self.block_text(block, "role").as_deref() {
+                        None => None,
+                        Some(value) => match SourceRole::from_str(value) {
+                            Some(role) => Some(role),
+                            None => {
+                                self.error(
+                                    c::T012,
+                                    block.span,
+                                    "`role` must be origin, rationale, evidence, constraint or example",
+                                    None,
+                                );
+                                None
+                            }
+                        },
+                    },
                     path: self.block_text(block, "path"),
                     url: self.block_text(block, "url"),
                     excerpt: self.block_text(block, "excerpt"),
                     document: self.block_text(block, "document"),
                     range,
+                    use_note: self.block_text(block, "use"),
                 });
             }
             "disposition" => {

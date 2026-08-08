@@ -8,7 +8,7 @@ use super::ident::{Commit, Date, Glob, LogicalKey, Segment};
 use super::kind::{ContentSlot, Kind};
 use super::record::{
     Acceptance, Check, CheckMethod, Claim, ContentValue, Disposition, Outcome, Record, Source,
-    SourceKind,
+    SourceKind, SourceRole,
 };
 use super::refs::{Reference, RevisionId};
 use super::relation::Relation;
@@ -279,11 +279,13 @@ impl RecordBuilder {
     pub fn source(mut self, kind: SourceKind, path: Option<&str>) -> Self {
         self.record.sources.push(Source {
             kind,
+            role: None,
             path: path.map(ToOwned::to_owned),
             url: None,
             excerpt: None,
             document: None,
             range: None,
+            use_note: None,
         });
         self
     }

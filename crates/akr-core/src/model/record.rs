@@ -227,12 +227,54 @@ pub enum SourceKind {
     Internal,
 }
 
+/// What a source contributes to a record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceRole {
+    /// The record originated in the source material.
+    Origin,
+    /// The source explains why the project chose this direction.
+    Rationale,
+    /// The source is treated as an externally supplied observation.
+    Evidence,
+    /// The source supplies a constraint the record must respect.
+    Constraint,
+    /// The source is retained as an illustrative example.
+    Example,
+}
+
+impl SourceRole {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Origin => "origin",
+            Self::Rationale => "rationale",
+            Self::Evidence => "evidence",
+            Self::Constraint => "constraint",
+            Self::Example => "example",
+        }
+    }
+
+    #[must_use]
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "origin" => Some(Self::Origin),
+            "rationale" => Some(Self::Rationale),
+            "evidence" => Some(Self::Evidence),
+            "constraint" => Some(Self::Constraint),
+            "example" => Some(Self::Example),
+            _ => None,
+        }
+    }
+}
+
 /// Provenance for a record's content. Provenance, not identity: a record does not become
 /// invalid when its source file is deleted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Source {
     /// Which sort of source.
     pub kind: SourceKind,
+    /// The role this source plays in the record.
+    pub role: Option<SourceRole>,
     /// Repo-relative path.
     pub path: Option<String>,
     /// URL, for external sources.
@@ -253,6 +295,8 @@ pub struct Source {
     /// when the scanner improves, and a citation that moved with them would silently
     /// start pointing somewhere else.
     pub range: Option<SourceRange>,
+    /// What the project adopted or retained from the source.
+    pub use_note: Option<String>,
 }
 
 /// An exact locator into a registered source document.

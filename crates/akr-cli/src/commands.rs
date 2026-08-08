@@ -278,6 +278,15 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
             new_path,
             new_id,
         } => crate::source::supersede(session, old_id, new_path, new_id.as_deref()),
+        Command::SourceStatus { id } => crate::source::status(session, id),
+        Command::SourceDependents { id } => crate::source::dependents(session, id),
+        Command::SourceFinalize {
+            id,
+            retain,
+            context,
+            remove_file,
+            dry_run,
+        } => crate::source::finalize(session, id, retain, context, *remove_file, *dry_run),
         Command::Propose { .. }
         | Command::Revise { .. }
         | Command::Supersede { .. }
@@ -938,18 +947,10 @@ fn index_build(
 /// question that cannot be answered from the ledger alone: it needs the registered bytes.
 /// A workspace with no catalog produces nothing, which is most workspaces.
 fn citation_diagnostics(session: &Session) -> Vec<Diagnostic> {
-    let Ok(corpus) = akr_core::source::load_corpus(&session.root) else {
-        // An unreadable catalog is already `AKR-S021` from `verify_catalog`; saying it
-        // twice with a second code would only make the report longer.
-        return Vec::new();
-    };
-    if corpus.is_empty() {
-        return Vec::new();
-    }
     let mut out = Vec::new();
     for record in session.ledger.records() {
         for source in &record.sources {
-            for problem in akr_core::source::check_citation(source, &corpus) {
+            for problem in akr_core::source::check_citation_at(&session.root, source) {
                 out.push(Diagnostic {
                     code: akr_core::diagnostics::Code::new("AKR-S022"),
                     severity: akr_core::diagnostics::Severity::Error,
