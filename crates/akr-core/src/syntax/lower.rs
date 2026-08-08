@@ -261,11 +261,41 @@ impl Ctx {
                         return;
                     }
                 };
+                // A citation into the registered library needs all four coordinates or
+                // none: a half-written range would resolve to a passage nobody chose.
+                let start_byte = self.block_integer(block, "start_byte");
+                let end_byte = self.block_integer(block, "end_byte");
+                let start_line = self.block_integer(block, "start_line");
+                let end_line = self.block_integer(block, "end_line");
+                let range = match (start_byte, end_byte, start_line, end_line) {
+                    (Some(start_byte), Some(end_byte), Some(start_line), Some(end_line)) => {
+                        Some(crate::model::SourceRange {
+                            start_byte,
+                            end_byte,
+                            start_line: u32::try_from(start_line).unwrap_or(0),
+                            end_line: u32::try_from(end_line).unwrap_or(0),
+                            excerpt_hash: self.block_text(block, "excerpt_hash"),
+                        })
+                    }
+                    (None, None, None, None) => None,
+                    _ => {
+                        self.error(
+                            c::T012,
+                            block.span,
+                            "a `source` range needs start_byte, end_byte, start_line and \
+                             end_line together, or none of them",
+                            None,
+                        );
+                        None
+                    }
+                };
                 record.sources.push(Source {
                     kind,
                     path: self.block_text(block, "path"),
                     url: self.block_text(block, "url"),
                     excerpt: self.block_text(block, "excerpt"),
+                    document: self.block_text(block, "document"),
+                    range,
                 });
             }
             "disposition" => {
@@ -363,6 +393,27 @@ impl Ctx {
             BodyItem::Slot(slot) if slot.name == name => Some(&slot.value),
             _ => None,
         })
+    }
+
+    /// A non-negative integer slot of a block, or `None` when it is absent.
+    fn block_integer(&mut self, block: &Block, name: &str) -> Option<u64> {
+        let value = self.block_value(block, name)?;
+        let rendered = match value {
+            Value::Str(text, _) | Value::Word(text, _) | Value::Scalar(text, _) => text.clone(),
+            other => other.render_inline(),
+        };
+        match rendered.parse::<u64>() {
+            Ok(number) => Some(number),
+            Err(_) => {
+                self.error(
+                    c::T013,
+                    value.span(),
+                    format!("slot `{name}` expects a non-negative integer, found {rendered}"),
+                    None,
+                );
+                None
+            }
+        }
     }
 
     fn block_text(&mut self, block: &Block, name: &str) -> Option<String> {

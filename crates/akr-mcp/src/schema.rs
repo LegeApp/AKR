@@ -39,14 +39,30 @@ pub const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "knowledge.get",
-        description: "Retrieve one record by reference, with its relations, freshness and \
-                      canonical source text.",
+        description: "Retrieve one record by reference. `detail` controls the size: \
+                      `summary`, `body` (default), or `canonical` for the raw AKR source \
+                      text. Ask for canonical only when you need the syntax itself.",
         writes: false,
     },
     Tool {
         name: "knowledge.context",
         description: "Assemble the deterministic context bundle for a goal: what governs \
                       this work, what it rests on, and what is questionable.",
+        writes: false,
+    },
+    Tool {
+        name: "knowledge.source_search",
+        description: "Search the immutable source library — registered outside advice, \
+                      audits and reports. Results are NON-AUTHORITATIVE: they say where a \
+                      passage is, never that the project adopted it. Punctuation is safe \
+                      here; `mode: \"literal\"` verifies an exact substring.",
+        writes: false,
+    },
+    Tool {
+        name: "knowledge.source_get",
+        description: "Read a passage of a registered source. NON-AUTHORITATIVE. The \
+                      default detail is `section`, not the whole document; ask for \
+                      `whole` only when the entire report is genuinely wanted.",
         writes: false,
     },
     Tool {
@@ -152,6 +168,15 @@ pub fn input_schema(name: &str) -> Option<Value> {
                     "relations",
                     boolean("Include inbound and outbound relations."),
                 ),
+                (
+                    "detail",
+                    string(
+                        "`summary` (identity, state, scope, relation counts, freshness, \
+                         source locators), `body` (the default: adds slots, claims and \
+                         full relations) or `canonical` (adds the raw AKR source text). \
+                         Ask for `canonical` only when you need the syntax itself.",
+                    ),
+                ),
             ],
             &["ref"],
         ),
@@ -165,6 +190,56 @@ pub fn input_schema(name: &str) -> Option<Value> {
                 ("budget_tokens", integer("Approximate token budget.")),
             ],
             &["goal"],
+        ),
+        "knowledge.source_search" => object(
+            vec![
+                ("query", string("What to look for. Punctuation is safe.")),
+                (
+                    "mode",
+                    string(
+                        "`text` (default) escapes punctuation into ordinary terms, \
+                         `literal` verifies an exact substring against the registered \
+                         bytes, `fts` passes a raw FTS5 expression through.",
+                    ),
+                ),
+                (
+                    "documents",
+                    string_array("Restrict to these registered source ids."),
+                ),
+                (
+                    "all_versions",
+                    boolean("Include documents a later registration supersedes."),
+                ),
+                (
+                    "limit",
+                    integer("Maximum results. Default 10, maximum 100."),
+                ),
+            ],
+            &["query"],
+        ),
+        "knowledge.source_get" => object(
+            vec![
+                (
+                    "chunk",
+                    string("A chunk id from knowledge.source_search. Exclusive with `id`."),
+                ),
+                (
+                    "id",
+                    string("A registered source id. Exclusive with `chunk`."),
+                ),
+                (
+                    "detail",
+                    string(
+                        "`snippet` (the chunk alone), `section` (the chunk and its \
+                         neighbours, the default) or `whole` (the entire document).",
+                    ),
+                ),
+                (
+                    "lines",
+                    string("A line range `a:b` within the document, with `id`."),
+                ),
+            ],
+            &[],
         ),
         "knowledge.impact" => object(
             vec![
@@ -348,6 +423,16 @@ pub fn input_schema(name: &str) -> Option<Value> {
                          several.",
                     ),
                 ),
+                (
+                    "about",
+                    string(
+                        "What the friction was WITH, when that is not this project — a \
+                         tool name such as \"akr\". Leave it out for this project's own \
+                         code or setup. Use it whenever the thing that got in your way \
+                         was the tooling rather than the repository you are working in: \
+                         that is how the report reaches whoever maintains the tool.",
+                    ),
+                ),
             ],
             &["message", "agent"],
         ),
@@ -364,6 +449,8 @@ pub fn output_schema(name: &str) -> Option<Value> {
         | "knowledge.explain"
         | "knowledge.get"
         | "knowledge.context"
+        | "knowledge.source_search"
+        | "knowledge.source_get"
         | "knowledge.impact"
         | "knowledge.validate"
         | "knowledge.propose"

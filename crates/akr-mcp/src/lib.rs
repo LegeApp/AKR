@@ -22,10 +22,12 @@
 //! cannot read anything an operator could not read by running a command. In particular it
 //! never opens the SQLite cache: D-019, restated in §6.
 
+pub mod budget;
 pub mod errors;
 pub mod protocol;
 pub mod record;
 pub mod schema;
+pub mod skew;
 pub mod tools;
 
 pub use protocol::{Server, serve};

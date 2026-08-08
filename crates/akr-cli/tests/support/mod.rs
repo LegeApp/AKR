@@ -337,6 +337,25 @@ impl Example {
         }
     }
 
+    /// Runs `git` in the workspace and asserts it succeeded.
+    ///
+    /// [`Self::shell`] deliberately understands only the handful of directives the
+    /// transcripts use; the change-protocol tests need the git *index*, which no
+    /// transcript exercises, so they get their own door rather than widening that one.
+    pub fn git(&self, args: &[&str]) {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(&self.root)
+            .output()
+            .expect("git runs");
+        assert!(
+            output.status.success(),
+            "git {}: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
     /// Where the workspace is.
     pub fn root(&self) -> &Path {
         &self.root

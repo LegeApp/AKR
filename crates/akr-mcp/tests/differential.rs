@@ -422,7 +422,14 @@ fn every_declared_tool_has_a_schema_and_an_implementation() {
         .and_then(|r| r.get("tools"))
         .and_then(Value::as_array)
         .expect("a tool list");
-    assert_eq!(tools.len(), 13, "the catalogue is closed for 0.1");
+    // Derived, never counted in prose: the registry is the only place the catalogue is
+    // named, so adding a tool without declaring it here is impossible rather than merely
+    // discouraged.
+    assert_eq!(
+        tools.len(),
+        akr_mcp::schema::TOOLS.len(),
+        "tools/list must report exactly the declared catalogue"
+    );
 
     for tool in tools {
         let name = tool.get("name").and_then(Value::as_str).expect("a name");

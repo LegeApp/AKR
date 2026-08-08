@@ -37,8 +37,20 @@ pub struct Hit {
 /// A search request. Filters are applied before ranking (`docs/07-cli.md` §6).
 #[derive(Debug, Clone, Default)]
 pub struct Request {
-    /// The full-text query, in FTS5 syntax.
+    /// What to look for.
+    ///
+    /// Ordinary words unless [`Self::raw_fts`] is set. Punctuation is escaped into
+    /// terms rather than handed to the engine as operators.
     pub query: String,
+    /// Treat [`Self::query`] as a raw FTS5 expression.
+    ///
+    /// Off by default, and that default is the fix for a real friction: an agent asked
+    /// for `HDR slice 6 non-default feature` and got `no such column: default`, asked
+    /// for a query containing a comma and got `fts5: syntax error near ","`, and gave up
+    /// and grepped `.akr/records` — which is the one thing the whole surface exists to
+    /// make unnecessary. Operators are worth having; they are not worth being the
+    /// default spelling of "find me these words".
+    pub raw_fts: bool,
     /// Restrict to these kinds. Empty means every kind.
     pub kinds: Vec<String>,
     /// Restrict to these states. Empty means every state.
@@ -76,6 +88,14 @@ pub fn search(path: &Path, request: &Request) -> Result<Vec<Hit>, IndexError> {
     }
 
     let limit = request.limit.unwrap_or(20).min(100);
+    let expression = if request.raw_fts {
+        request.query.clone()
+    } else {
+        escape_query(&request.query)
+    };
+    if expression.trim().is_empty() {
+        return Ok(Vec::new());
+    }
     let mut sql = String::from(
         "SELECT records_fts.key, records_fts.rev, records_fts.kind, r.state, \
          records_fts.title, bm25(records_fts) AS score \
@@ -100,7 +120,7 @@ pub fn search(path: &Path, request: &Request) -> Result<Vec<Hit>, IndexError> {
     sql.push_str(" ORDER BY score ASC, records_fts.key ASC LIMIT ");
     sql.push_str(&limit.to_string());
 
-    let mut bound: Vec<&dyn rusqlite::ToSql> = vec![&request.query];
+    let mut bound: Vec<&dyn rusqlite::ToSql> = vec![&expression];
     for kind in &request.kinds {
         bound.push(kind);
     }
@@ -132,8 +152,75 @@ pub fn search(path: &Path, request: &Request) -> Result<Vec<Hit>, IndexError> {
 }
 
 /// A query the engine would not take is the caller's fault, not the cache's.
+///
+/// With escaping on by default this is now reachable only through `--fts`, which is the
+/// right place for it: somebody who asked for operators wants to hear that the operators
+/// were wrong.
 fn query_error(error: &rusqlite::Error) -> IndexError {
-    IndexError::new(codes::X031, format!("search query: {error}"))
+    IndexError::new(
+        codes::X031,
+        format!(
+            "search query: {error}\nhelp: this is a raw FTS5 expression; drop --fts to \
+             search for the words themselves"
+        ),
+    )
+}
+
+/// Turns a caller's words into an FTS5 expression that cannot be a syntax error.
+///
+/// Each whitespace-separated term becomes one quoted phrase with its punctuation turned
+/// into token boundaries, matching what the tokeniser stored. `DecodeRequest::default()`
+/// becomes the phrase `"DecodeRequest default"`; a bare comma disappears; `non-default`
+/// stops being read as a column name.
+#[must_use]
+pub fn escape_query(query: &str) -> String {
+    query
+        .split_whitespace()
+        .map(|term| {
+            term.split(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
+        .filter(|term| !term.is_empty())
+        .map(|term| format!("\"{term}\""))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::escape_query;
+
+    #[test]
+    fn the_three_queries_that_failed_in_the_field_now_parse() {
+        // Every one of these came back as an FTS5 error from a real session
+        // (`raw-autotune.papercut.knowledge-search-and-knowledge-start-via-the`).
+        assert_eq!(escape_query("budget, tokens"), "\"budget\" \"tokens\"");
+        assert_eq!(
+            escape_query("HDR slice 6 non-default feature"),
+            "\"HDR\" \"slice\" \"6\" \"non default\" \"feature\""
+        );
+        assert_eq!(
+            escape_query("DecodeRequest::default()"),
+            "\"DecodeRequest default\""
+        );
+    }
+
+    #[test]
+    fn an_all_punctuation_query_escapes_to_nothing() {
+        // Which the caller reads as "no matches" rather than as a parse error.
+        assert_eq!(escape_query(",,, ;;"), "");
+        assert_eq!(escape_query("   "), "");
+    }
+
+    #[test]
+    fn ordinary_words_are_unchanged_but_quoted() {
+        assert_eq!(
+            escape_query("decoder optimisation"),
+            "\"decoder\" \"optimisation\""
+        );
+    }
 }
 
 fn placeholders(count: usize, first: usize) -> String {

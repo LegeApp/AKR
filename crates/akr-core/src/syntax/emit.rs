@@ -234,11 +234,23 @@ fn emit_source(out: &mut String, source: &Source) {
         SourceKind::Internal => "internal",
     };
     let _ = writeln!(out, "        kind {kind}");
+    if let Some(document) = &source.document {
+        let _ = writeln!(out, "        document \"{}\"", escape(document));
+    }
     if let Some(path) = &source.path {
         let _ = writeln!(out, "        path \"{}\"", escape(path));
     }
     if let Some(url) = &source.url {
         let _ = writeln!(out, "        url \"{}\"", escape(url));
+    }
+    if let Some(range) = &source.range {
+        let _ = writeln!(out, "        start_byte {}", range.start_byte);
+        let _ = writeln!(out, "        end_byte {}", range.end_byte);
+        let _ = writeln!(out, "        start_line {}", range.start_line);
+        let _ = writeln!(out, "        end_line {}", range.end_line);
+        if let Some(hash) = &range.excerpt_hash {
+            let _ = writeln!(out, "        excerpt_hash \"{}\"", escape(hash));
+        }
     }
     if let Some(excerpt) = &source.excerpt {
         emit_prose(out, 2, "excerpt", excerpt);

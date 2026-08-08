@@ -90,8 +90,17 @@ if [[ ! -x "$SOURCE_BIN" ]]; then
   exit 1
 fi
 
-run "mkdir -p \"$AKR_BIN_DIR\" && cp \"$SOURCE_BIN\" \"$AKR_MCP_BIN\""
+# Copy beside the target and rename over it, rather than writing through it.
+#
+# `cp` onto a binary that a running MCP server has mapped fails with ETXTBSY ("Text file
+# busy"), which is the common case: the server whose stale build you are replacing is the
+# reason you are running this. `rename(2)` swaps the directory entry instead, so the
+# running process keeps the inode it already opened and the next start picks up the new
+# one — and it is atomic, so there is never a half-written binary on the path.
+run "mkdir -p \"$AKR_BIN_DIR\" && cp \"$SOURCE_BIN\" \"$AKR_MCP_BIN.new\" && mv -f \"$AKR_MCP_BIN.new\" \"$AKR_MCP_BIN\""
 log "Installed $AKR_MCP_BIN"
+log "NOTE: a server that is already running keeps the old binary until it restarts."
+log "      Reconnect the MCP server (or restart the session) before using knowledge.* tools."
 
 # Install/refresh a section in ~/.codex/config.toml
 if [[ "$DO_CODEX" -eq 1 ]]; then

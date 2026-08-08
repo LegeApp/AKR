@@ -31,6 +31,46 @@ pub enum Profile {
     Lenient,
 }
 
+/// How much of a record `akr get` and `knowledge.get` return.
+///
+/// The default is `body`, not `canonical`. Canonical AKR syntax is rarely what a reader
+/// wants and is the largest part of the payload, so it is an explicit request: a tool
+/// whose cheapest call returns the most bytes will be called that way every time
+/// (`sources/context-reduction.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Detail {
+    /// Identity, title, state, scope, relation counts, freshness, source locators.
+    Summary,
+    /// Summary plus content slots, claims, checks and full relations (the default).
+    #[default]
+    Body,
+    /// Body plus the canonically formatted AKR source text.
+    Canonical,
+}
+
+impl Detail {
+    /// Parses the `--detail` argument.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "summary" => Some(Self::Summary),
+            "body" => Some(Self::Body),
+            "canonical" => Some(Self::Canonical),
+            _ => None,
+        }
+    }
+
+    /// The name used on the command line and over MCP.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Summary => "summary",
+            Self::Body => "body",
+            Self::Canonical => "canonical",
+        }
+    }
+}
+
 /// Flags that apply to every command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Global {
@@ -124,6 +164,8 @@ pub enum Command {
         history: bool,
         /// Include inbound edges.
         relations: bool,
+        /// How much of the record to return.
+        detail: Detail,
     },
     /// Print a registry entry for a code or a rule.
     Explain {
@@ -167,8 +209,10 @@ pub enum Command {
     },
     /// `akr search <query> [--kind ...] [--state ...] [--limit n]`.
     Search {
-        /// The query, in the full-text engine's syntax.
+        /// What to look for. Ordinary words unless [`Self::Search::raw_fts`] is set.
         query: String,
+        /// Treat the query as a raw FTS5 expression rather than as words.
+        raw_fts: bool,
         /// Restrict to these kinds. Applied before ranking.
         kinds: Vec<String>,
         /// Restrict to these states. Applied before ranking.
@@ -286,6 +330,27 @@ pub enum Command {
         /// Heading section.
         section: Option<String>,
     },
+    /// `akr source get --chunk <chunk-id> [--neighbors n]`.
+    SourceGetChunk {
+        /// The derived chunk id, as printed by `akr source search`.
+        chunk: String,
+        /// How many chunks either side to include.
+        neighbors: usize,
+    },
+    /// `akr source search <query> [--literal|--fts] [--document id] [--limit n]`.
+    SourceSearch {
+        /// The query.
+        query: String,
+        /// `--literal` verifies an exact substring; `--fts` passes an FTS5 expression
+        /// through; the default escapes punctuation into ordinary terms.
+        mode: String,
+        /// Restrict to these documents.
+        documents: Vec<String>,
+        /// Include superseded documents.
+        all_versions: bool,
+        /// Maximum results.
+        limit: Option<usize>,
+    },
     /// `akr source verify`.
     SourceVerify,
     /// `akr source supersede <old-id> <new-path> [--id <new-id>]`.
@@ -296,6 +361,50 @@ pub enum Command {
         new_path: PathBuf,
         /// New id.
         new_id: Option<String>,
+    },
+    /// `akr diff --staged` — the semantic delta between HEAD and the git index.
+    DiffStaged,
+    /// `akr change begin ...` — open a change transaction in this worktree.
+    ChangeBegin {
+        /// fix, feat, perf, refactor, test, docs, build or chore.
+        kind: String,
+        /// The commit subject, imperative.
+        summary: String,
+        /// The commit scope.
+        scope: Option<String>,
+        /// The work record this commit mainly advances.
+        primary: Option<String>,
+        /// Other records the same change advances.
+        related: Vec<String>,
+        /// A note specific to this commit.
+        note: Option<String>,
+        /// Why a material change carries no work reference.
+        untracked_reason: Option<String>,
+    },
+    /// `akr change show`.
+    ChangeShow,
+    /// `akr change abort`.
+    ChangeAbort,
+    /// `akr change prepare --staged` / `akr change verify --staged`.
+    ChangePrepare {
+        /// `prepare` writes the result; `verify` only reports it.
+        write: bool,
+    },
+    /// `akr git message`.
+    GitMessage,
+    /// `akr git commit`.
+    GitCommit,
+    /// `akr git log <record>`.
+    GitLog {
+        /// The record whose commits to list.
+        reference: String,
+    },
+    /// `akr git install-hooks`.
+    GitInstallHooks,
+    /// `akr git-hook <name>` — what an installed hook calls.
+    GitHook {
+        /// The hook name.
+        name: String,
     },
     /// `akr propose <key> --kind <kind>`.
     Propose {
@@ -360,8 +469,10 @@ pub enum Command {
         agent: Option<String>,
         /// The namespace for the key; needed only when the project declares several.
         namespace: Option<String>,
+        /// What the friction was with, when that is not this project (D-033).
+        about: Option<String>,
     },
-    /// `akr papercut collate [--projects <dir>] [--namespace <ns>]` (D-030).
+    /// `akr papercut collate [--projects <dir>] [--about <subject>] [--namespace <ns>]`.
     PapercutCollate {
         /// A directory of sibling workspaces to scan; defaults to the siblings of the
         /// workspace root.
@@ -369,6 +480,10 @@ pub enum Command {
         /// The namespace for the master record's key; needed only when the project
         /// declares several.
         namespace: Option<String>,
+        /// Absorb only the sisters' papercuts whose `about` names this subject.
+        about: Option<String>,
+        /// Absorb every live sister papercut, whatever its subject.
+        all: bool,
     },
     /// `akr evidence add <key>`.
     EvidenceAdd {
@@ -417,9 +532,20 @@ impl Command {
             | Self::IngestMark { .. }
             | Self::IngestApply { .. }
             | Self::IngestClose { .. } => "ingest".to_owned(),
+            Self::DiffStaged => "diff".to_owned(),
+            Self::ChangeBegin { .. }
+            | Self::ChangeShow
+            | Self::ChangeAbort
+            | Self::ChangePrepare { .. } => "change".to_owned(),
+            Self::GitMessage | Self::GitCommit | Self::GitLog { .. } | Self::GitInstallHooks => {
+                "git".to_owned()
+            }
+            Self::GitHook { .. } => "git-hook".to_owned(),
             Self::SourceAdd { .. }
             | Self::SourceList { .. }
             | Self::SourceGet { .. }
+            | Self::SourceGetChunk { .. }
+            | Self::SourceSearch { .. }
             | Self::SourceVerify
             | Self::SourceSupersede { .. } => "source".to_owned(),
             Self::Propose { .. } => "propose".to_owned(),
@@ -688,11 +814,18 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
             }
         }
         "get" => {
-            known_flags(&["--history", "--relations", "--rev"])?;
+            known_flags(&["--history", "--relations", "--rev", "--detail"])?;
             Command::Get {
                 reference: need(0, "a reference")?,
                 history: flag_set("--history"),
                 relations: flag_set("--relations"),
+                detail: match option_value(tail, "--detail") {
+                    Some(name) => Detail::from_name(&name).ok_or_else(|| {
+                        UsageError::new("AKR-C004", format!("`{name}` is not a detail level"))
+                            .with_help("summary, body or canonical")
+                    })?,
+                    None => Detail::default(),
+                },
             }
         }
         "explain" => {
@@ -773,7 +906,7 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
             }
         }
         "search" => {
-            known_flags(&["--kind", "--state", "--limit"])?;
+            known_flags(&["--kind", "--state", "--limit", "--fts"])?;
             let limit = match option_value(tail, "--limit") {
                 Some(text) => Some(text.parse().map_err(|_| {
                     UsageError::new(
@@ -788,6 +921,7 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
                 kinds: repeated(tail, "--kind"),
                 states: repeated(tail, "--state"),
                 limit,
+                raw_fts: tail.iter().any(|a| a == "--fts"),
             }
         }
         "import" => {
@@ -801,6 +935,27 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
         }
         "ingest" => parse_ingest(name, &positional, tail)?,
         "source" => parse_source(name, &positional, tail)?,
+        "diff" => {
+            // One mode for now, and it is named rather than defaulted: `akr diff` with no
+            // flag would eventually mean something else, and a command whose meaning
+            // changes under people is worse than one that asks.
+            if !tail.iter().any(|a| a == "--staged") {
+                return Err(UsageError::new(
+                    "AKR-C003",
+                    "akr diff requires --staged; the staged tree is the synchronisation \
+                     boundary (docs/16-change-protocol.md §3)",
+                ));
+            }
+            Command::DiffStaged
+        }
+        "change" => parse_change(name, &positional, tail)?,
+        "git" => parse_git(name, &positional, tail)?,
+        "git-hook" => Command::GitHook {
+            name: positional
+                .first()
+                .map(|s| (*s).clone())
+                .ok_or_else(|| UsageError::new("AKR-C003", "git-hook requires a hook name"))?,
+        },
         "propose" => {
             known_flags(&["--kind", "--title", "--from", "--edit"])?;
             Command::Propose {
@@ -865,10 +1020,20 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
                 == Some("collate")
                 && !tail.iter().any(|a| a == "-m" || a == "--agent");
             if collate_subcommand {
-                known_flags(&["--projects", "--namespace"])?;
+                known_flags(&["--projects", "--namespace", "--about", "--all"])?;
+                let about = option_value(tail, "--about");
+                let all = tail.iter().any(|a| a == "--all");
+                if about.is_some() && all {
+                    return Err(UsageError::new(
+                        "AKR-C005",
+                        "--about and --all are mutually exclusive",
+                    ));
+                }
                 return Ok(Command::PapercutCollate {
                     projects: option_value(tail, "--projects").map(PathBuf::from),
                     namespace: option_value(tail, "--namespace"),
+                    about,
+                    all,
                 });
             }
             // Parsed by hand: `-m` takes a value, and the generic positional filter
@@ -876,6 +1041,7 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
             let mut message: Option<String> = None;
             let mut agent: Option<String> = None;
             let mut namespace: Option<String> = None;
+            let mut about: Option<String> = None;
             let mut args = tail.iter();
             while let Some(arg) = args.next() {
                 match arg.as_str() {
@@ -887,6 +1053,14 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
                     "--namespace" => {
                         namespace = Some(args.next().cloned().ok_or_else(|| {
                             UsageError::new("AKR-C003", "--namespace requires a value")
+                        })?);
+                    }
+                    "--about" => {
+                        about = Some(args.next().cloned().ok_or_else(|| {
+                            UsageError::new(
+                                "AKR-C003",
+                                "--about requires a value: what the friction was with",
+                            )
                         })?);
                     }
                     other if other.starts_with('-') => {
@@ -912,6 +1086,7 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
                     .ok_or_else(|| UsageError::new("AKR-C003", "papercut requires a message"))?,
                 agent,
                 namespace,
+                about,
             }
         }
         "evidence" => {
@@ -1112,9 +1287,49 @@ fn parse_source(
             .map(|s| (*s).clone())
             .ok_or_else(|| UsageError::new("AKR-C003", format!("source {name} requires {what}")))
     };
-    let sub = need(0, "a subcommand (add|list|get|verify|supersede)")?;
+    let sub = need(0, "a subcommand (add|list|get|search|verify|supersede)")?;
     let sub = sub.as_str();
     Ok(match sub {
+        "search" => {
+            for arg in tail.iter().filter(|a| a.starts_with("--")) {
+                let base = arg.split('=').next().unwrap_or(arg);
+                if ![
+                    "--literal",
+                    "--fts",
+                    "--document",
+                    "--all-versions",
+                    "--limit",
+                ]
+                .contains(&base)
+                {
+                    return Err(UsageError::new(
+                        "AKR-C002",
+                        format!("unknown flag {base:?} for command \"source search\""),
+                    ));
+                }
+            }
+            let literal = tail.iter().any(|a| a == "--literal");
+            let fts = tail.iter().any(|a| a == "--fts");
+            if literal && fts {
+                return Err(UsageError::new(
+                    "AKR-C005",
+                    "--literal and --fts are mutually exclusive",
+                ));
+            }
+            Command::SourceSearch {
+                query: need(1, "a query")?,
+                mode: if literal {
+                    "literal".to_owned()
+                } else if fts {
+                    "fts".to_owned()
+                } else {
+                    "text".to_owned()
+                },
+                documents: repeated(tail, "--document"),
+                all_versions: tail.iter().any(|a| a == "--all-versions"),
+                limit: option_value(tail, "--limit").and_then(|v| v.parse().ok()),
+            }
+        }
         "add" => {
             let allowed = vec!["--id", "--title", "--origin", "--observed-at", "--scope"];
             for arg in tail.iter().filter(|a| a.starts_with("--")) {
@@ -1152,12 +1367,31 @@ fn parse_source(
         "get" => {
             for arg in tail.iter().filter(|a| a.starts_with("--")) {
                 let base = arg.split('=').next().unwrap_or(arg);
-                if !["--whole", "--lines", "--section"].contains(&base) {
+                if !["--whole", "--lines", "--section", "--chunk", "--neighbors"].contains(&base) {
                     return Err(UsageError::new(
                         "AKR-C002",
                         format!("unknown flag {base:?} for command \"source get\""),
                     ));
                 }
+            }
+            // `--chunk` names a unit of the derived index rather than a document, so it
+            // takes no source id and pairs only with `--neighbors`.
+            if let Some(chunk) = option_value(tail, "--chunk") {
+                if ["--whole", "--lines", "--section"]
+                    .iter()
+                    .any(|flag| tail.iter().any(|a| a.split('=').next() == Some(flag)))
+                {
+                    return Err(UsageError::new(
+                        "AKR-C005",
+                        "--chunk cannot be combined with --whole, --lines or --section",
+                    ));
+                }
+                return Ok(Command::SourceGetChunk {
+                    chunk,
+                    neighbors: option_value(tail, "--neighbors")
+                        .and_then(|v| v.parse().ok())
+                        .unwrap_or(0),
+                });
             }
             let has_lines = option_value(tail, "--lines").is_some();
             let has_section = option_value(tail, "--section").is_some();
@@ -1222,6 +1456,83 @@ fn parse_table_mode(value: Option<String>, name: &str) -> Result<TableMode, Usag
 }
 
 /// The value of `--flag value` or `--flag=value`.
+/// `akr change <subcommand>`.
+fn parse_change(
+    name: &str,
+    positional: &[&String],
+    tail: &[String],
+) -> Result<Command, UsageError> {
+    let sub = positional.first().map(|s| s.as_str()).ok_or_else(|| {
+        UsageError::new(
+            "AKR-C003",
+            format!("{name} requires a subcommand (begin|show|prepare|verify|abort)"),
+        )
+    })?;
+    Ok(match sub {
+        "begin" => {
+            let summary = option_value(tail, "--summary")
+                .ok_or_else(|| UsageError::new("AKR-C003", "change begin requires --summary"))?;
+            Command::ChangeBegin {
+                kind: option_value(tail, "--kind").unwrap_or_else(|| "chore".to_owned()),
+                summary,
+                scope: option_value(tail, "--scope"),
+                primary: option_value(tail, "--primary"),
+                related: repeated(tail, "--related"),
+                note: option_value(tail, "--note"),
+                untracked_reason: option_value(tail, "--untracked-reason"),
+            }
+        }
+        "show" => Command::ChangeShow,
+        "abort" => Command::ChangeAbort,
+        "prepare" | "verify" => {
+            if !tail.iter().any(|a| a == "--staged") {
+                return Err(UsageError::new(
+                    "AKR-C003",
+                    format!("change {sub} requires --staged"),
+                ));
+            }
+            Command::ChangePrepare {
+                write: sub == "prepare",
+            }
+        }
+        other => {
+            return Err(UsageError::new(
+                "AKR-C001",
+                format!("unknown subcommand {other:?} for command \"change\""),
+            )
+            .with_help("supported subcommands: begin, show, prepare, verify, abort"));
+        }
+    })
+}
+
+/// `akr git <subcommand>`.
+fn parse_git(name: &str, positional: &[&String], _tail: &[String]) -> Result<Command, UsageError> {
+    let sub = positional.first().map(|s| s.as_str()).ok_or_else(|| {
+        UsageError::new(
+            "AKR-C003",
+            format!("{name} requires a subcommand (message|commit|log|install-hooks)"),
+        )
+    })?;
+    Ok(match sub {
+        "message" => Command::GitMessage,
+        "commit" => Command::GitCommit,
+        "install-hooks" => Command::GitInstallHooks,
+        "log" => Command::GitLog {
+            reference: positional
+                .get(1)
+                .map(|s| (*s).clone())
+                .ok_or_else(|| UsageError::new("AKR-C003", "git log requires a record"))?,
+        },
+        other => {
+            return Err(UsageError::new(
+                "AKR-C001",
+                format!("unknown subcommand {other:?} for command \"git\""),
+            )
+            .with_help("supported subcommands: message, commit, log, install-hooks"));
+        }
+    })
+}
+
 fn option_value(tail: &[String], flag: &str) -> Option<String> {
     let mut args = tail.iter();
     while let Some(arg) = args.next() {
@@ -1426,6 +1737,8 @@ pub fn help_for(name: &str) -> Option<String> {
             "akr source add <path> [--id <id>] [--title <title>] [--origin external|internal-reference] [--observed-at <commit>] [--scope <glob>]\n\
              akr source list [--all-versions]\n\
              akr source get <id> [--whole|--lines <a:b>|--section <heading>]\n\
+             akr source get --chunk <chunk-id> [--neighbors <n>]\n\
+             akr source search <query> [--literal|--fts] [--document <id>] [--all-versions] [--limit <n>]\n\
              akr source verify\n\
              akr source supersede <old-id> <new-path> [--id <new-id>]\n\
              \n\
@@ -1436,10 +1749,67 @@ pub fn help_for(name: &str) -> Option<String> {
              the same verification. `supersede` adds a new version and preserves\n\
              the old file; the catalog's `supersedes` field links them.\n\
              \n\
+             `search` ranks chunks of the registered documents and labels every\n\
+             result non-authoritative: a hit says where a passage is, never that\n\
+             the project adopted it. Punctuation is escaped into ordinary terms by\n\
+             default, so DecodeRequest::default() is a query rather than a parse\n\
+             error; --literal verifies an exact substring against the stored bytes\n\
+             and --fts passes a raw FTS5 expression through.\n\
+             \n\
              FLAGS\n\
              \x20   add --id, --title, --origin, --observed-at, --scope\n\
-             \x20   get --whole, --lines, --section\n\
+             \x20   get --whole, --lines, --section, --chunk, --neighbors\n\
+             \x20   search --literal, --fts, --document, --all-versions, --limit\n\
              \x20   list --all-versions\n"
+        }
+        "diff" => {
+            "akr diff --staged\n\
+             \n\
+             The semantic delta between the HEAD ledger and the ledger staged in the\n\
+             git index: records added, revisions added, state transitions, evidence\n\
+             added, and the implementation files staged beside them.\n\
+             \n\
+             It parses both trees rather than reading `git diff` text. A reformat, a\n\
+             reordering, or a record moved between files is not a semantic change,\n\
+             and a textual diff cannot say so (docs/16-change-protocol.md, 4).\n"
+        }
+        "change" => {
+            "akr change begin --summary <text> [--kind <kind>] [--scope <scope>]\n\
+             \x20                 [--primary <key>] [--related <key>]... [--note <text>]\n\
+             \x20                 [--untracked-reason <text>]\n\
+             akr change show\n\
+             akr change prepare --staged\n\
+             akr change verify --staged\n\
+             akr change abort\n\
+             \n\
+             A change transaction associates the commit you are about to make with the\n\
+             AKR work it advances. It lives in this worktree's git directory, is never\n\
+             committed, and is invisible to search and context: only the generated\n\
+             commit message and its trailers are durable (D-032).\n\
+             \n\
+             `prepare` refuses a material code change that names neither a work record\n\
+             nor --untracked-reason, refuses when several work records moved and none\n\
+             was named primary, and records the staged tree so that a tree which moves\n\
+             afterwards invalidates the preparation. `verify` runs the same checks and\n\
+             writes nothing.\n\
+             \n\
+             KINDS\n\
+             \x20   fix, feat, perf, refactor, test, docs, build, chore\n"
+        }
+        "git" => {
+            "akr git message\n\
+             akr git commit\n\
+             akr git log <record>\n\
+             akr git install-hooks\n\
+             \n\
+             `message` prints the message generated from the prepared transaction and\n\
+             the staged semantic delta; `commit` generates it and hands the index to\n\
+             git. The durable AKR-to-git link is the commit trailers -- AKR-Change,\n\
+             AKR-Work, AKR-Evidence, AKR-Graph, AKR-Tree -- which survive rebases and\n\
+             cherry-picks and which `git log` finds.\n\
+             \n\
+             `install-hooks` writes two-line wrappers around `akr git-hook`, so the\n\
+             checks stay in the binary rather than becoming a second implementation.\n"
         }
         "ingest" => {
             "akr ingest preview <path> [--source-kind internal|external] [--tables rows|support]\n\
@@ -1525,8 +1895,8 @@ pub fn help_for(name: &str) -> Option<String> {
              every unfinished child, like supersede.\n"
         }
         "papercut" => {
-            "akr papercut -m <agent> \"message\" [--namespace <ns>]\n\
-             akr papercut collate [--projects <dir>] [--namespace <ns>]\n\
+            "akr papercut -m <agent> \"message\" [--about <subject>] [--namespace <ns>]\n\
+             akr papercut collate [--projects <dir>] [--about <subject>|--all] [--namespace <ns>]\n\
              \n\
              Logs a small friction hit while working — a tool call that missed and had\n\
              to be retried, a confusing setup step, a flaky command, a stale cache, a\n\
@@ -1539,15 +1909,23 @@ pub fn help_for(name: &str) -> Option<String> {
              the date are filled in automatically, and the aggregate is rendered to\n\
              docs/generated/PAPERCUTS.md by `akr build`.\n\
              \n\
+             --about says what the friction was *with*, when that is not this project:\n\
+             `--about akr` on a papercut about AKR's own behaviour, hit while working\n\
+             somewhere else. Absent means this project's own code or setup (D-033).\n\
+             \n\
              `collate` reads the live papercut heads of every workspace under a scan\n\
              directory (default: the siblings of the workspace root) and gathers those\n\
              not already absorbed into one master papercut record, whose collated slot\n\
              is the dedup set for the next run (D-030). Sister projects are read, never\n\
-             written.\n\
+             written. It absorbs the ones aimed at this project by default; --about\n\
+             narrows to one subject and --all takes everything. Whatever is left behind\n\
+             is counted in the output, so nothing goes missing silently.\n\
              \n\
              FLAGS\n\
              \x20   -m, --agent <name>    required to log; who hit it (a model or harness name)\n\
+             \x20   --about <subject>     what the friction was with, if not this project\n\
              \x20   --projects <dir>      collate: a directory of sibling workspaces to scan\n\
+             \x20   --all                 collate: absorb every subject, not just this project's\n\
              \x20   --namespace <ns>      only needed when the project declares several\n"
         }
         "evidence" | "evidence add" => {
@@ -1618,7 +1996,16 @@ pub fn help() -> String {
             "extract candidates from markdown and review dispositions",
         ),
         ("lock", "verify or rewrite akr.lock"),
-        ("source", "immutable source library in sources/"),
+        (
+            "source",
+            "immutable source library in sources/; add, search, get",
+        ),
+        ("diff", "the semantic delta of the staged ledger; --staged"),
+        (
+            "change",
+            "the change transaction; begin, prepare, show, abort",
+        ),
+        ("git", "generate and make the commit; message, commit, log"),
         ("propose", "create a record; --kind, --title, --from"),
         (
             "revise",

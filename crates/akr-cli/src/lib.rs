@@ -16,6 +16,7 @@
 //! tell you when they had already drifted.
 
 pub mod args;
+pub mod change;
 pub mod commands;
 pub mod fmt;
 pub mod import;

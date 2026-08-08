@@ -282,6 +282,8 @@ impl RecordBuilder {
             path: path.map(ToOwned::to_owned),
             url: None,
             excerpt: None,
+            document: None,
+            range: None,
         });
         self
     }

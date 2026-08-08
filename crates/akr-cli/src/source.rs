@@ -133,6 +133,165 @@ pub fn list(session: &Session, all: bool) -> Result<Output, EnvError> {
     Ok(Output::plain(text, result))
 }
 
+/// How much of a source `akr source get` and `knowledge.source_get` return.
+///
+/// The default is a section rather than the whole document, and that is a token decision
+/// rather than a convenience one: an advisor report is tens of thousands of tokens, and a
+/// tool whose easiest call returns all of it will be called that way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Detail {
+    /// The matching chunk only.
+    Snippet,
+    /// The chunk plus its immediate neighbours (the default).
+    #[default]
+    Section,
+    /// The complete registered document.
+    Whole,
+}
+
+impl Detail {
+    /// Parses the `--detail` argument.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "snippet" => Some(Self::Snippet),
+            "section" => Some(Self::Section),
+            "whole" => Some(Self::Whole),
+            _ => None,
+        }
+    }
+
+    /// The name used in output and over MCP.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Snippet => "snippet",
+            Self::Section => "section",
+            Self::Whole => "whole",
+        }
+    }
+}
+
+/// `akr source search <query>` — BM25 over the chunk index.
+///
+/// Every result carries the words `non-authoritative`. `docs/15-external-sources.md` §8:
+/// a source hit says where a passage is, and never that the project agreed with it. That
+/// label is the difference between an agent citing the report as advice and citing it as
+/// the plan of record.
+#[cfg(feature = "fts5")]
+pub fn search(
+    session: &Session,
+    query: &str,
+    mode: akr_core::store::QueryMode,
+    documents: &[String],
+    all_versions: bool,
+    limit: Option<usize>,
+) -> Result<Output, EnvError> {
+    let path = akr_core::store::sources_cache_path(&session.akr_dir);
+    let request = akr_core::store::SourceRequest {
+        query: query.to_owned(),
+        mode,
+        documents: documents.to_vec(),
+        all_versions,
+        limit,
+    };
+    let hits = akr_core::store::search_sources(&path, &request)
+        .map_err(|e| EnvError::new(e.code.as_str(), e.message))?;
+
+    let mut text = String::new();
+    if hits.is_empty() {
+        text.push_str("no matches in the source library\n");
+    } else {
+        for hit in &hits {
+            text.push_str(&format!(
+                "{:.2}  source:{}\n      external · non-authoritative\n      {}\n      lines {}-{}  chunk {}\n      {}\n\n",
+                hit.score,
+                hit.document_id,
+                if hit.heading.is_empty() {
+                    "(no heading)"
+                } else {
+                    hit.heading.as_str()
+                },
+                hit.start_line,
+                hit.end_line,
+                hit.chunk_id,
+                hit.snippet,
+            ));
+        }
+    }
+    let result = Value::object(vec![
+        ("standing".into(), Value::string("non_authoritative")),
+        (
+            "results".into(),
+            Value::array(hits.iter().map(hit_to_json).collect()),
+        ),
+        ("count".into(), Value::integer(hits.len() as i64)),
+    ]);
+    Ok(Output::plain(text, result))
+}
+
+/// `akr source get --chunk <chunk-id> [--neighbors n]`.
+#[cfg(feature = "fts5")]
+pub fn get_chunk(session: &Session, chunk_id: &str, neighbors: usize) -> Result<Output, EnvError> {
+    let path = akr_core::store::sources_cache_path(&session.akr_dir);
+    let chunks = akr_core::store::get_chunk(&path, chunk_id, neighbors)
+        .map_err(|e| EnvError::new(e.code.as_str(), e.message))?;
+    let mut text = String::new();
+    for chunk in &chunks {
+        text.push_str(&format!(
+            "source:{} · non-authoritative · lines {}-{}\n",
+            chunk.hit.document_id, chunk.hit.start_line, chunk.hit.end_line
+        ));
+        text.push_str(&chunk.text);
+        if !chunk.text.ends_with('\n') {
+            text.push('\n');
+        }
+        text.push('\n');
+    }
+    let result = Value::object(vec![
+        ("standing".into(), Value::string("non_authoritative")),
+        (
+            "chunks".into(),
+            Value::array(
+                chunks
+                    .iter()
+                    .map(|chunk| {
+                        let mut fields = match hit_to_json(&chunk.hit) {
+                            Value::Object(fields) => fields,
+                            other => vec![("hit".into(), other)],
+                        };
+                        fields.push(("text".into(), Value::string(chunk.text.clone())));
+                        Value::Object(fields)
+                    })
+                    .collect(),
+            ),
+        ),
+    ]);
+    Ok(Output::plain(text, result))
+}
+
+#[cfg(feature = "fts5")]
+fn hit_to_json(hit: &akr_core::store::SourceHit) -> Value {
+    Value::object(vec![
+        ("document".into(), Value::string(hit.document_id.clone())),
+        ("title".into(), Value::string(hit.document_title.clone())),
+        ("path".into(), Value::string(hit.document_path.clone())),
+        ("chunk".into(), Value::string(hit.chunk_id.clone())),
+        ("heading".into(), Value::string(hit.heading.clone())),
+        ("kind".into(), Value::string(hit.kind.clone())),
+        ("start_byte".into(), Value::integer(hit.start_byte as i64)),
+        ("end_byte".into(), Value::integer(hit.end_byte as i64)),
+        (
+            "start_line".into(),
+            Value::integer(i64::from(hit.start_line)),
+        ),
+        ("end_line".into(), Value::integer(i64::from(hit.end_line))),
+        ("score".into(), Value::string(format!("{:.4}", hit.score))),
+        ("snippet".into(), Value::string(hit.snippet.clone())),
+        ("standing".into(), Value::string("non_authoritative")),
+    ])
+}
+
 /// `akr source get <id>`
 pub fn get(
     session: &Session,
@@ -206,10 +365,27 @@ pub fn verify(session: &Session) -> Result<Output, EnvError> {
             Value::array(diags.iter().map(|d| Value::string(d.to_string())).collect()),
         ),
     ]);
-    // Return diagnostics but let caller decide exit. Here we surface as Output with diagnostics counts.
-    // For `akr check` we need Diagnostics; for CLI `source verify` we emit text and exit diagnostics.
-    // Use plain output; check will handle.
-    Ok(Output::plain(text, result))
+    // Exit 1, the ledger-diagnostics status: a source whose bytes no longer match its
+    // registration is a fact about the workspace's content, not a broken checkout. A
+    // verification that printed `AKR-S021` and exited 0 would pass every CI job that
+    // runs it, which is the one thing this command exists to prevent.
+    Ok(Output::plain(text, result).with_diagnostics(
+        diags.iter().map(source_diagnostic).collect(),
+        Exit::Diagnostics,
+    ))
+}
+
+/// The [`akr_core::diagnostics::Diagnostic`] form of a catalog failure.
+fn source_diagnostic(diagnostic: &SourceDiagnostic) -> akr_core::diagnostics::Diagnostic {
+    akr_core::diagnostics::Diagnostic {
+        code: akr_core::diagnostics::Code::new("AKR-S021"),
+        severity: akr_core::diagnostics::Severity::Error,
+        rule: None,
+        message: diagnostic.to_string(),
+        primary: akr_core::diagnostics::Label::new(akr_core::diagnostics::Subject::Ledger),
+        notes: Vec::new(),
+        help: None,
+    }
 }
 
 /// `akr source supersede <old-id> <new-path>`

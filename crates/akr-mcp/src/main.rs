@@ -8,12 +8,15 @@
 //! `akr` binary lives under (`docs/07-cli.md` §1), because this is the same tool with a
 //! different mouth.
 
+use akr_mcp::protocol::Surface;
 use akr_mcp::{Server, serve};
 use std::io::{BufReader, stdin, stdout};
 use std::path::PathBuf;
 
 fn main() -> std::process::ExitCode {
     let mut root = PathBuf::from(".");
+    let mut surface = Surface::Full;
+    let mut accounting: Option<PathBuf> = None;
     let mut args = std::env::args().skip(1);
     while let Some(argument) = args.next() {
         match argument.as_str() {
@@ -24,6 +27,20 @@ fn main() -> std::process::ExitCode {
                     return std::process::ExitCode::from(2);
                 }
             },
+            "--surface" => match args.next().as_deref().map(Surface::from_name) {
+                Some(Some(value)) => surface = value,
+                _ => {
+                    eprintln!("error[AKR-C004]: --surface takes `read` or `full`");
+                    return std::process::ExitCode::from(2);
+                }
+            },
+            "--accounting" => match args.next() {
+                Some(value) => accounting = Some(PathBuf::from(value)),
+                None => {
+                    eprintln!("error[AKR-C003]: --accounting requires a path");
+                    return std::process::ExitCode::from(2);
+                }
+            },
             "--version" | "-V" => {
                 println!("akr-mcp {}", akr_mcp::protocol::SERVER_VERSION);
                 return std::process::ExitCode::SUCCESS;
@@ -31,10 +48,17 @@ fn main() -> std::process::ExitCode {
             "--help" | "-h" => {
                 println!(
                     "akr-mcp — the AKR knowledge tools over MCP\n\n\
-                     USAGE\n    akr-mcp [--dir <path>]\n\n\
+                     USAGE\n    akr-mcp [--dir <path>] [--surface read|full] \
+                     [--accounting <path>]\n\n\
                      Speaks JSON-RPC 2.0 over stdio, one document per line. The MCP tools \
                      of docs/08-mcp.md §2 are listed by `tools/list`; every one of them \
-                     calls the function `akr` calls.\n"
+                     calls the function `akr` calls.\n\n\
+                     --surface read exposes only the tools that answer questions. Tool \
+                     schemas are a fixed cost in every session that loads them, and an \
+                     agent that will only ever read should not pay for the writers.\n\n\
+                     --accounting appends one JSON line per call: sizes, estimated \
+                     tokens, duration, whether the output budget withheld it. `akr mcp \
+                     stats` aggregates it.\n"
                 );
                 return std::process::ExitCode::SUCCESS;
             }
@@ -45,7 +69,10 @@ fn main() -> std::process::ExitCode {
         }
     }
 
-    let server = Server::new(root);
+    let mut server = Server::new(root).with_surface(surface);
+    if let Some(path) = accounting {
+        server = server.with_accounting(path);
+    }
     match serve(&server, BufReader::new(stdin()), stdout()) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {

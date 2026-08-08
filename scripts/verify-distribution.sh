@@ -23,7 +23,14 @@ cp -a "$ROOT/.git" "$tmpdir/.git"
 
 (
     cd "$tmpdir"
+    # Formatting first, and gated rather than merely documented. `cargo fmt --check` was
+    # red on the committed tree for three days in August 2026 without anyone noticing,
+    # which means the next contributor running the documented `cargo fmt` gets a large
+    # diff belonging to somebody else. A check nobody runs is a convention, not a rule.
+    cargo fmt --check
     cargo test
     python3 tools/check-design.py --strict
     cargo run --bin akr -- build --check
+    # The source library's own invariant: registered bytes still match their hashes.
+    cargo run --bin akr -- source verify
 )

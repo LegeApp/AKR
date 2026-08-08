@@ -239,6 +239,40 @@ pub struct Source {
     pub url: Option<String>,
     /// The passage this record came from.
     pub excerpt: Option<String>,
+    /// The id of a registered source document (D-031), when this is a citation into the
+    /// immutable library rather than a loose path.
+    ///
+    /// A path can move, be rewritten or be deleted; a registered document is
+    /// content-hashed and append-only, so a citation naming one still resolves years
+    /// later. That is the difference between provenance that survives and provenance
+    /// that decays into a broken link.
+    pub document: Option<String>,
+    /// The exact byte range within that document.
+    ///
+    /// Bytes, not a chunk id: chunk boundaries belong to a rebuildable index and move
+    /// when the scanner improves, and a citation that moved with them would silently
+    /// start pointing somewhere else.
+    pub range: Option<SourceRange>,
+}
+
+/// An exact locator into a registered source document.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceRange {
+    /// First byte, inclusive.
+    pub start_byte: u64,
+    /// One past the last byte.
+    pub end_byte: u64,
+    /// One-based first line. For people and rendered citations only.
+    pub start_line: u32,
+    /// One-based last line.
+    pub end_line: u32,
+    /// `sha256:` over the cited bytes, when the author recorded one.
+    ///
+    /// The range says where; this says that the passage is still the passage. A
+    /// registered document cannot change without changing its own content hash, so this
+    /// is belt and braces — but it is what turns "the range is in bounds" into "the range
+    /// is the text the record was written about".
+    pub excerpt_hash: Option<String>,
 }
 
 /// One revision of one record.

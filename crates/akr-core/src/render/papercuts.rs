@@ -46,26 +46,95 @@ pub fn render_papercuts(cx: RenderContext<'_>) -> Option<String> {
             .to_owned(),
     );
 
-    let mut items: Vec<String> = Vec::new();
-    for record in &papercuts {
-        let date = record
-            .created_at
-            .map_or_else(String::new, |d| format!("{d} "));
-        let author = record
-            .author
-            .as_deref()
-            .map_or_else(String::new, |a| format!("[{a}] "));
-        items.push(format!(
-            "- {date}{author}{}  `@{}`",
-            statement_line(record),
-            record.id
-        ));
+    // Split by subject, because these are two different reading tasks. "What has been
+    // hurting in *this* project" is what the file is for; a friction with a tool, logged
+    // here because this is where the agent happened to be, is somebody else's backlog and
+    // would otherwise be read as ours (D-033).
+    let (ours, elsewhere): (Vec<&Record>, Vec<&Record>) = papercuts
+        .iter()
+        .partition(|record| about_of(record).is_none());
+
+    if !ours.is_empty() {
+        blocks.push(items(&ours, false));
     }
-    blocks.push(items.join("\n"));
+    if !elsewhere.is_empty() {
+        blocks.push("## Not about this project".to_owned());
+        blocks.push(
+            "Frictions with something else — a tool, a harness — hit while working here. \
+             They are logged where they were hit; `akr papercut collate --about <subject>` \
+             is how the project that owns the subject gathers them."
+                .to_owned(),
+        );
+        blocks.push(items(&elsewhere, true));
+    }
 
     let mut out = blocks.join("\n\n");
     out.push('\n');
     Some(out)
+}
+
+/// One bullet per papercut, with the subject shown when there is one.
+fn items(records: &[&Record], show_subject: bool) -> String {
+    records
+        .iter()
+        .map(|record| {
+            let date = record
+                .created_at
+                .map_or_else(String::new, |d| format!("{d} "));
+            let author = record
+                .author
+                .as_deref()
+                .map_or_else(String::new, |a| format!("[{a}] "));
+            let subject = if show_subject {
+                about_of(record).map_or_else(String::new, |about| format!("({about}) "))
+            } else {
+                String::new()
+            };
+            format!(
+                "- {date}{author}{subject}{}  `@{}`",
+                line_for(record),
+                record.id
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// The `about` subject of a papercut, if it declared one.
+fn about_of(record: &Record) -> Option<String> {
+    match record.get(ContentSlot::About) {
+        Some(ContentValue::Text(text) | ContentValue::Prose(text)) => Some(text.clone()),
+        _ => None,
+    }
+}
+
+/// What one bullet says about a record.
+///
+/// A collation is summarised rather than flattened. Its statement is every absorbed
+/// papercut in full — which is right for the record, and wrong for a bullet list, where
+/// it renders as one paragraph a screen wide that nobody reads. The view says how many
+/// and from where; the record says what they were.
+fn line_for(record: &Record) -> String {
+    match record.get(ContentSlot::Collated) {
+        Some(ContentValue::Strings(keys)) if !keys.is_empty() => {
+            let mut projects: Vec<&str> = keys
+                .iter()
+                .filter_map(|key| key.split('.').next())
+                .collect();
+            projects.sort_unstable();
+            projects.dedup();
+            format!(
+                "{} — {} papercut{} collated from {} project{}; open the record for the \
+                 statements",
+                record.title,
+                keys.len(),
+                if keys.len() == 1 { "" } else { "s" },
+                projects.len(),
+                if projects.len() == 1 { "" } else { "s" },
+            )
+        }
+        _ => statement_line(record),
+    }
 }
 
 /// The statement as one line: prose newlines become spaces, because the bullet list is

@@ -109,7 +109,8 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
             reference,
             history,
             relations,
-        } => get(session, reference, *history, *relations),
+            detail,
+        } => get(session, reference, *history, *relations, *detail),
         Command::WhyCurrent { reference } => why_current(session, reference),
         Command::Impact {
             reference,
@@ -128,10 +129,11 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
         } => context(session, goal, paths, *budget),
         Command::Search {
             query,
+            raw_fts,
             kinds,
             states,
             limit,
-        } => search(session, query, kinds, states, *limit),
+        } => search(session, query, *raw_fts, kinds, states, *limit),
         Command::Import {
             path,
             namespace,
@@ -217,6 +219,59 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
             lines,
             section,
         } => crate::source::get(session, id, *whole, lines.as_deref(), section.as_deref()),
+        #[cfg(feature = "fts5")]
+        Command::SourceGetChunk { chunk, neighbors } => {
+            crate::source::get_chunk(session, chunk, *neighbors)
+        }
+        #[cfg(feature = "fts5")]
+        Command::SourceSearch {
+            query,
+            mode,
+            documents,
+            all_versions,
+            limit,
+        } => {
+            let mode = match mode.as_str() {
+                "literal" => akr_core::store::QueryMode::Literal,
+                "fts" => akr_core::store::QueryMode::Fts,
+                _ => akr_core::store::QueryMode::Text,
+            };
+            crate::source::search(session, query, mode, documents, *all_versions, *limit)
+        }
+        // `akr search` degrades the same way when the binary carries no FTS5, so the
+        // source surface degrades with it rather than disappearing silently.
+        #[cfg(not(feature = "fts5"))]
+        Command::SourceGetChunk { .. } | Command::SourceSearch { .. } => Err(EnvError::new(
+            "AKR-I022",
+            "source search requires a full-text index; this binary was built without FTS5",
+        )),
+        Command::DiffStaged => crate::change::diff_staged(session),
+        Command::ChangeBegin {
+            kind,
+            summary,
+            scope,
+            primary,
+            related,
+            note,
+            untracked_reason,
+        } => crate::change::begin(
+            session,
+            kind,
+            summary,
+            scope.as_deref(),
+            primary.as_deref(),
+            related,
+            note.as_deref(),
+            untracked_reason.as_deref(),
+        ),
+        Command::ChangeShow => crate::change::show(session),
+        Command::ChangeAbort => crate::change::abort(session),
+        Command::ChangePrepare { write } => crate::change::prepare(session, *write),
+        Command::GitMessage => crate::change::message(session),
+        Command::GitCommit => crate::change::commit(session),
+        Command::GitLog { reference } => crate::change::log(session, reference),
+        Command::GitInstallHooks => crate::change::install_hooks(session),
+        Command::GitHook { name } => crate::change::git_hook(session, name),
         Command::SourceVerify => crate::source::verify(session),
         Command::SourceSupersede {
             old_id,
@@ -268,6 +323,7 @@ fn check(
             help: None,
         });
     }
+    diagnostics.extend(citation_diagnostics(session));
 
     let mut text = String::new();
     text.push_str(&format!("akr check — {}\n", session.ledger.project.name));
@@ -770,6 +826,22 @@ fn build(session: &mut Session, check: bool) -> Result<Output, EnvError> {
         None => text.push_str("index cache not written (--no-rebuild)\n"),
     }
 
+    // The source library's own generation, synced beside the record cache and never with
+    // it (D-031). Silent when there is no catalog: most workspaces register no sources.
+    #[cfg(feature = "fts5")]
+    let source_index = source_index_build(session)?;
+    #[cfg(feature = "fts5")]
+    match source_index {
+        Some(stats) if stats.added > 0 || stats.removed > 0 || stats.rebuilt => {
+            text.push_str(&format!(
+                "chunked {} source documents into {} chunks ({} added, {} removed)\n",
+                stats.documents, stats.chunks, stats.added, stats.removed
+            ));
+        }
+        Some(stats) if stats.documents > 0 => text.push_str("source index current\n"),
+        _ => {}
+    }
+
     let result = Value::object(vec![
         ("check", Value::bool(false)),
         ("views_written", Value::integer(written.len() as i64)),
@@ -779,6 +851,11 @@ fn build(session: &mut Session, check: bool) -> Result<Output, EnvError> {
         (
             "indexed",
             Value::integer(index.map_or(0, |s| s.revisions as i64)),
+        ),
+        #[cfg(feature = "fts5")]
+        (
+            "source_chunks",
+            Value::integer(source_index.map_or(0, |s| s.chunks as i64)),
         ),
     ]);
     Ok(Output::text(text).with_result(result))
@@ -855,6 +932,78 @@ fn index_build(
         .map_err(|error| EnvError::new(error.code.as_str(), error.message))
 }
 
+/// `AKR-S022` for every record whose `source` block cites the library and misses.
+///
+/// This runs in `akr check` rather than as a V-rule because it is the one provenance
+/// question that cannot be answered from the ledger alone: it needs the registered bytes.
+/// A workspace with no catalog produces nothing, which is most workspaces.
+fn citation_diagnostics(session: &Session) -> Vec<Diagnostic> {
+    let Ok(corpus) = akr_core::source::load_corpus(&session.root) else {
+        // An unreadable catalog is already `AKR-S021` from `verify_catalog`; saying it
+        // twice with a second code would only make the report longer.
+        return Vec::new();
+    };
+    if corpus.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for record in session.ledger.records() {
+        for source in &record.sources {
+            for problem in akr_core::source::check_citation(source, &corpus) {
+                out.push(Diagnostic {
+                    code: akr_core::diagnostics::Code::new("AKR-S022"),
+                    severity: akr_core::diagnostics::Severity::Error,
+                    rule: None,
+                    message: format!("{}: {problem}", record.id),
+                    primary: akr_core::diagnostics::Label::new(
+                        akr_core::diagnostics::Subject::Revision(record.id.clone()),
+                    ),
+                    notes: Vec::new(),
+                    help: Some(
+                        "record citations name a registered document and an exact byte \
+                         range; `akr source search` prints both"
+                            .to_owned(),
+                    ),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Brings the source-library index into agreement with `sources/catalog.json`.
+///
+/// Separate from [`index_build`] on purpose, and that separation is the point of D-031:
+/// the record cache is stamped with the ledger's source-graph hash and the source index
+/// with the corpus hash, so a record write leaves the chunk tables untouched and a source
+/// registration leaves the record tables untouched.
+///
+/// A source whose bytes no longer match its registration is an error here, because
+/// serving a passage from a file that has been edited is the one thing the library exists
+/// to prevent.
+#[cfg(feature = "fts5")]
+pub(crate) fn source_index_build(
+    session: &Session,
+) -> Result<Option<akr_core::store::SourceIndexStats>, EnvError> {
+    if session.global.no_rebuild {
+        return Ok(None);
+    }
+    let corpus = akr_core::source::load_corpus(&session.root)
+        .map_err(|d| EnvError::new("AKR-S021", d.to_string()))?;
+    let path = akr_core::store::sources_cache_path(&session.akr_dir);
+    if corpus.is_empty() && !path.exists() {
+        return Ok(None);
+    }
+    akr_core::store::sync_sources(
+        &path,
+        &corpus,
+        crate::session::TOOL_VERSION,
+        &session.today.to_string(),
+    )
+    .map(Some)
+    .map_err(|error| EnvError::new(error.code.as_str(), error.message))
+}
+
 // -------------------------------------------------------------------------------------
 // view, get, why-current
 // -------------------------------------------------------------------------------------
@@ -897,7 +1046,9 @@ fn get(
     reference: &str,
     history: bool,
     relations: bool,
+    detail: crate::args::Detail,
 ) -> Result<Output, EnvError> {
+    use crate::args::Detail;
     let model = session.resolve();
     let ledger = &session.ledger;
     let parsed = Reference::parse(reference)
@@ -951,20 +1102,57 @@ fn get(
                 .join(" -> ")
         ));
     }
-    if let Some(body) = akr_core::context::body_of(record) {
+    if detail != Detail::Summary
+        && let Some(body) = akr_core::context::body_of(record)
+    {
         text.push('\n');
         for line in body.lines() {
             text.push_str(&format!("  {line}\n"));
         }
     }
-    if !record.claims.is_empty() {
+    if detail != Detail::Summary && !record.claims.is_empty() {
         text.push_str("\n  claims\n");
         for claim in &record.claims {
             let first = claim.text.lines().next().unwrap_or_default();
             text.push_str(&format!("    #{:<14} {first}\n", claim.anchor.as_str()));
         }
     }
-    if relations {
+    // Provenance, printed rather than left in the file. `sources/akr-ingest-and-mcp-fix-advice.md`:
+    // an agent should never have to open a `.akr` file to find out where a record came
+    // from, and the locator is the thing that makes the difference between "this came
+    // from the audit somewhere" and "this came from these bytes of that audit".
+    if !record.sources.is_empty() {
+        text.push_str("\n  sources\n");
+        for source in &record.sources {
+            let kind = match source.kind {
+                akr_core::model::SourceKind::Legacy => "legacy",
+                akr_core::model::SourceKind::External => "external",
+                akr_core::model::SourceKind::Internal => "internal",
+            };
+            let where_ = source
+                .document
+                .as_ref()
+                .map(|document| format!("source:{document}"))
+                .or_else(|| source.path.clone())
+                .or_else(|| source.url.clone())
+                .unwrap_or_else(|| "(no locator)".to_owned());
+            text.push_str(&format!("    {kind:<9} {where_}\n"));
+            if let Some(range) = &source.range {
+                text.push_str(&format!(
+                    "              lines {}-{}  bytes {}..{}\n",
+                    range.start_line, range.end_line, range.start_byte, range.end_byte
+                ));
+                text.push_str("              non-authoritative; `akr source get` prints it\n");
+            }
+        }
+    }
+    if relations && detail == Detail::Summary {
+        // A count rather than the edges: summary is for deciding whether to fetch the
+        // record, and "seven things depend on this" answers that as well as seven lines
+        // would, for a twentieth of the payload.
+        let outbound: usize = record.relations.values().map(Vec::len).sum();
+        text.push_str(&format!("\n  relations  {outbound} outbound\n"));
+    } else if relations {
         text.push_str("\n  relations (outbound)\n");
         for (relation, references) in &record.relations {
             for target in references {
@@ -1019,6 +1207,33 @@ fn get(
     if let Some(topic) = &record.topic {
         fields.push(("topic", Value::string(topic.to_string())));
     }
+    fields.push(("detail", Value::string(detail.as_str())));
+    if detail == Detail::Summary {
+        // Relation *summaries*: one count per relation name. Enough to know the record is
+        // connected and to what sort of thing, without the closure.
+        fields.push((
+            "relation_counts",
+            Value::Object(
+                record
+                    .relations
+                    .iter()
+                    .map(|(relation, targets)| {
+                        (
+                            relation.name().to_owned(),
+                            Value::integer(i64::try_from(targets.len()).unwrap_or(0)),
+                        )
+                    })
+                    .collect(),
+            ),
+        ));
+        fields.push((
+            "claim_count",
+            Value::integer(i64::try_from(record.claims.len()).unwrap_or(0)),
+        ));
+        fields.push(("freshness", freshness_json(&freshness, &record.id)));
+        fields.push(("sources", sources_json(record)));
+        return Ok(Output::text(text).with_result(Value::object(fields)));
+    }
     fields.push((
         "slots",
         Value::Object(
@@ -1070,10 +1285,56 @@ fn get(
             ),
         ));
     }
-    if let Some(source) = session.inputs.canonical_text.get(&record.id) {
+    fields.push(("sources", sources_json(record)));
+    // Canonical syntax is the biggest thing in the payload and the least often wanted, so
+    // it is an explicit request rather than the default (`sources/context-reduction.md`).
+    if detail == Detail::Canonical
+        && let Some(source) = session.inputs.canonical_text.get(&record.id)
+    {
         fields.push(("source_text", Value::string(source.clone())));
     }
     Ok(Output::text(text).with_result(Value::object(fields)))
+}
+
+/// A record's provenance, as locators rather than copied text.
+///
+/// A citation into the registered library renders as its document and range; the excerpt
+/// is not repeated, because `akr source get` can produce it from the exact bytes and a
+/// second copy in every record is a second copy to keep honest (D-031).
+fn sources_json(record: &akr_core::model::Record) -> Value {
+    Value::array(
+        record
+            .sources
+            .iter()
+            .map(|source| {
+                let mut fields = vec![(
+                    "kind",
+                    Value::string(match source.kind {
+                        akr_core::model::SourceKind::Legacy => "legacy",
+                        akr_core::model::SourceKind::External => "external",
+                        akr_core::model::SourceKind::Internal => "internal",
+                    }),
+                )];
+                if let Some(document) = &source.document {
+                    fields.push(("document", Value::string(document.clone())));
+                    fields.push(("standing", Value::string("non_authoritative")));
+                }
+                if let Some(path) = &source.path {
+                    fields.push(("path", Value::string(path.clone())));
+                }
+                if let Some(url) = &source.url {
+                    fields.push(("url", Value::string(url.clone())));
+                }
+                if let Some(range) = &source.range {
+                    fields.push(("start_byte", Value::integer(range.start_byte as i64)));
+                    fields.push(("end_byte", Value::integer(range.end_byte as i64)));
+                    fields.push(("start_line", Value::integer(i64::from(range.start_line))));
+                    fields.push(("end_line", Value::integer(i64::from(range.end_line))));
+                }
+                Value::object(fields)
+            })
+            .collect(),
+    )
 }
 
 /// One scope term, in the object form of `docs/08-mcp.md` §3.
@@ -1863,12 +2124,14 @@ fn lock(session: &mut Session, check_only: bool) -> Result<Output, EnvError> {
 fn search(
     session: &Session,
     query: &str,
+    raw_fts: bool,
     kinds: &[String],
     states: &[String],
     limit: Option<usize>,
 ) -> Result<Output, EnvError> {
     let request = akr_core::store::Request {
         query: query.to_owned(),
+        raw_fts,
         kinds: kinds.to_vec(),
         states: states.to_vec(),
         limit,

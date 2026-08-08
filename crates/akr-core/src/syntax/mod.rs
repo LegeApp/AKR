@@ -15,7 +15,7 @@ use crate::diagnostics::{Diagnostic, FileId};
 
 pub use emit::{record_node, record_text};
 pub use format::format;
-pub use lower::lower_file;
+pub use lower::{lower_all, lower_file};
 pub use parser::{Parsed, parse};
 
 /// Parses and reformats source into its canonical form.

@@ -156,6 +156,17 @@ pub struct Repository {
     root: PathBuf,
 }
 
+/// One entry of the git index: what is staged, at which mode, as which blob.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct IndexEntry {
+    /// The repository-relative path, `/`-separated on every platform.
+    pub path: String,
+    /// The file mode git recorded, e.g. `100644`.
+    pub mode: String,
+    /// The blob object id of the staged content.
+    pub blob: String,
+}
+
 impl Repository {
     /// Opens the repository containing `path`.
     ///
@@ -368,10 +379,215 @@ impl Repository {
             .collect())
     }
 
+    /// Every entry of the git index, in path order.
+    ///
+    /// The *index*, deliberately, and not the working tree. `docs/16-change-protocol.md`
+    /// §3: the staged tree is the synchronisation boundary, because a working tree with
+    /// eighteen modified files does not say which of them belong to the change being made.
+    ///
+    /// # Errors
+    /// [`GitError::CommandFailed`] when git cannot read the index.
+    pub fn staged_entries(&self) -> Result<Vec<IndexEntry>, GitError> {
+        let text = self.run(&["ls-files", "--stage"])?;
+        let mut out = Vec::new();
+        for line in text.lines() {
+            // `<mode> <object> <stage>\t<path>`
+            let Some((meta, path)) = line.split_once('\t') else {
+                continue;
+            };
+            let fields: Vec<&str> = meta.split_whitespace().collect();
+            if fields.len() < 3 {
+                continue;
+            }
+            out.push(IndexEntry {
+                mode: fields[0].to_owned(),
+                blob: fields[1].to_owned(),
+                path: path.replace('\\', "/"),
+            });
+        }
+        out.sort_by(|a, b| a.path.cmp(&b.path));
+        Ok(out)
+    }
+
+    /// The contents of a blob.
+    ///
+    /// # Errors
+    /// [`GitError::CommandFailed`] when the object is missing or unreadable.
+    pub fn blob(&self, oid: &str) -> Result<String, GitError> {
+        self.run(&["cat-file", "blob", oid])
+    }
+
+    /// Writes the current index out as a tree and returns its object id.
+    ///
+    /// Cheap, and it changes neither `HEAD` nor the index — `write-tree` only
+    /// materialises what is already staged. It is how a prepared transaction notices that
+    /// the staged tree moved underneath it.
+    ///
+    /// # Errors
+    /// [`GitError::CommandFailed`] when the index cannot be written as a tree.
+    pub fn write_tree(&self) -> Result<String, GitError> {
+        Ok(self.run(&["write-tree"])?.trim().to_owned())
+    }
+
+    /// A path inside the git directory of *this worktree*, resolved by git.
+    ///
+    /// `--git-path` rather than `.git/`: in a linked worktree those are different
+    /// directories, and a change transaction is per worktree by construction.
+    ///
+    /// # Errors
+    /// [`GitError::CommandFailed`] when git cannot resolve the path.
+    pub fn git_path(&self, relative: &str) -> Result<PathBuf, GitError> {
+        let text = self.run(&["rev-parse", "--git-path", relative])?;
+        let raw = PathBuf::from(text.trim());
+        Ok(if raw.is_absolute() {
+            raw
+        } else {
+            self.root.join(raw)
+        })
+    }
+
+    /// Whether the index differs from `HEAD` at all.
+    ///
+    /// # Errors
+    /// [`GitError::CommandFailed`] when git cannot compare them.
+    pub fn has_staged_changes(&self) -> Result<bool, GitError> {
+        Ok(self.status(&["diff", "--cached", "--quiet"])? != 0)
+    }
+
+    /// Commits the index with `message`, returning the new commit.
+    ///
+    /// Git is asked to make the commit rather than reimplemented, which is the whole
+    /// shape of the bridge (`docs/16-change-protocol.md` §1): AKR leads the intent, git
+    /// seals the snapshot.
+    ///
+    /// # Errors
+    /// [`GitError::CommandFailed`] when the commit is refused — an empty index, a failing
+    /// hook, or an unconfigured identity.
+    pub fn commit(&self, message: &str) -> Result<Commit, GitError> {
+        self.run(&["commit", "-m", message])?;
+        self.head()
+    }
+
+    /// Commits reachable from `range` whose message carries `trailer`.
+    ///
+    /// # Errors
+    /// [`GitError::CommandFailed`] when the range does not resolve.
+    pub fn log_grep(&self, range: &str, trailer: &str) -> Result<Vec<(Commit, String)>, GitError> {
+        let text = self.run(&[
+            "log",
+            range,
+            &format!("--grep={trailer}"),
+            "--format=%H\t%s",
+        ])?;
+        let mut out = Vec::new();
+        for line in text.lines() {
+            let Some((oid, subject)) = line.split_once('\t') else {
+                continue;
+            };
+            if let Ok(commit) = Commit::new(oid.trim()) {
+                out.push((commit, subject.to_owned()));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Which of `commits` the repository actually has, in one call.
+    ///
+    /// One `cat-file --batch-check` instead of one `rev-parse` per commit. On a ledger
+    /// with a few hundred evidence citations the difference is a few hundred process
+    /// spawns, which is most of what made `akr check` take two minutes on a real
+    /// repository (`saveyourskin.papercut.akr-check-akr-build-akr-lock-update-each-took`).
+    ///
+    /// # Errors
+    /// [`GitError::CommandFailed`] when git cannot be started. A commit git does not
+    /// recognise is absent from the result, not an error: that is the question being asked.
+    pub fn contains_all(&self, commits: &[Commit]) -> Result<BTreeSet<Commit>, GitError> {
+        if commits.is_empty() {
+            return Ok(BTreeSet::new());
+        }
+        let mut input = String::new();
+        for commit in commits {
+            input.push_str(commit.as_str());
+            input.push('\n');
+        }
+        let text = self.run_with_stdin(
+            &["cat-file", "--batch-check=%(objectname) %(objecttype)"],
+            &input,
+        )?;
+        let mut out = BTreeSet::new();
+        for line in text.lines() {
+            let mut fields = line.split_whitespace();
+            let (Some(oid), Some(kind)) = (fields.next(), fields.next()) else {
+                continue;
+            };
+            if kind == "commit"
+                && let Ok(commit) = Commit::new(oid)
+            {
+                out.insert(commit);
+            }
+        }
+        Ok(out)
+    }
+
+    /// `commits` in topological order, newest first, from one history walk.
+    ///
+    /// This replaces a comparison sort whose comparator spawned `git merge-base
+    /// --is-ancestor`: O(n log n) processes to answer a question git will answer once.
+    /// `--topo-order` guarantees that no commit is listed before one that descends from
+    /// it, which is exactly the order the ancestry table needs.
+    ///
+    /// Commits git does not place are omitted; the caller falls back to a deterministic
+    /// tiebreak for those rather than inventing an ancestry.
+    ///
+    /// # Errors
+    /// [`GitError::CommandFailed`] when the walk fails.
+    pub fn topological_order(&self, commits: &[Commit]) -> Result<Vec<Commit>, GitError> {
+        if commits.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut args: Vec<String> = vec!["rev-list".to_owned(), "--topo-order".to_owned()];
+        args.extend(commits.iter().map(|c| c.as_str().to_owned()));
+        let text = self.run(&args)?;
+        let wanted: BTreeSet<&str> = commits.iter().map(Commit::as_str).collect();
+        Ok(text
+            .lines()
+            .map(str::trim)
+            .filter(|line| wanted.contains(line))
+            .filter_map(|line| Commit::new(line).ok())
+            .collect())
+    }
+
     // -- process plumbing -------------------------------------------------------------
 
     fn run<S: AsRef<OsStr>>(&self, args: &[S]) -> Result<String, GitError> {
         run_in(&self.root, args)
+    }
+
+    fn run_with_stdin<S: AsRef<OsStr>>(&self, args: &[S], input: &str) -> Result<String, GitError> {
+        use std::io::Write as _;
+        use std::process::Stdio;
+        let mut child = Command::new("git")
+            .args(args)
+            .current_dir(&self.root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| GitError::CommandFailed {
+                subcommand: describe(args),
+                stderr: e.to_string(),
+            })?;
+        if let Some(stdin) = child.stdin.as_mut() {
+            let _ = stdin.write_all(input.as_bytes());
+        }
+        drop(child.stdin.take());
+        let output = child
+            .wait_with_output()
+            .map_err(|e| GitError::CommandFailed {
+                subcommand: describe(args),
+                stderr: e.to_string(),
+            })?;
+        Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     }
 
     fn status<S: AsRef<OsStr>>(&self, args: &[S]) -> Result<i32, GitError> {
@@ -442,38 +658,40 @@ pub fn ancestry_over(
     repository: &Repository,
     commits: impl IntoIterator<Item = Commit>,
 ) -> Result<crate::model::Ancestry, GitError> {
-    let known: Vec<Commit> = commits
+    let distinct: Vec<Commit> = commits
         .into_iter()
         .collect::<BTreeSet<_>>()
         .into_iter()
-        .filter(|c| repository.contains(c))
+        .collect();
+    // One `cat-file --batch-check` rather than one `rev-parse` each.
+    let present = repository.contains_all(&distinct)?;
+    let known: Vec<Commit> = distinct
+        .into_iter()
+        .filter(|commit| present.contains(commit))
         .collect();
 
-    // Sort oldest-first: `a` before `b` when `b` descends from `a`.
-    let mut ordered = known.clone();
-    let mut failure = None;
-    ordered.sort_by(|a, b| {
-        if a == b {
-            return std::cmp::Ordering::Equal;
-        }
-        match repository.is_descendant(b, a) {
-            Ok(true) => std::cmp::Ordering::Less,
-            Ok(false) => match repository.is_descendant(a, b) {
-                Ok(true) => std::cmp::Ordering::Greater,
-                Ok(false) => a.as_str().cmp(b.as_str()),
-                Err(error) => {
-                    failure = Some(error);
-                    std::cmp::Ordering::Equal
-                }
-            },
-            Err(error) => {
-                failure = Some(error);
-                std::cmp::Ordering::Equal
-            }
-        }
-    });
-    if let Some(error) = failure {
-        return Err(error);
+    // One history walk rather than a comparison sort whose comparator forks git.
+    //
+    // The old shape was O(n log n) `merge-base --is-ancestor` processes, and on a ledger
+    // with a few hundred evidence citations over a few hundred commits that dominated
+    // `akr check`, `akr build` and `akr lock --update` alike — two minutes each, reported
+    // from a real port session. `rev-list --topo-order` answers the whole question once.
+    let mut ordered = repository.topological_order(&known)?;
+    ordered.reverse(); // oldest first: `a` before `b` when `b` descends from `a`.
+
+    // Anything git would not place — it should place everything, but a corrupt or grafted
+    // history is not this function's problem to diagnose — keeps a deterministic position
+    // rather than an invented ancestry.
+    if ordered.len() != known.len() {
+        let placed: BTreeSet<&Commit> = ordered.iter().collect();
+        let mut missing: Vec<Commit> = known
+            .iter()
+            .filter(|commit| !placed.contains(commit))
+            .cloned()
+            .collect();
+        missing.sort();
+        missing.extend(ordered);
+        ordered = missing;
     }
 
     let pairs: Vec<(Commit, Commit)> = ordered

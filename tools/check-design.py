@@ -131,6 +131,21 @@ def planned_paths():
     return out
 
 
+def is_outside_material(path):
+    """Registered outside advice, or an agent's own working notes.
+
+    `sources/` holds exact bytes somebody else wrote (D-031). They are immutable, they are
+    not part of the design set, and they are explicitly allowed to be wrong: an advisor
+    report that cites a diagnostic code AKR never had, or links to a file that does not
+    exist here, is reporting on somebody's else's tree. Flagging that as incoherence would
+    make the checker fail for saying something true.
+
+    `.agents/` is the same argument from the other direction: working notes nobody
+    reviews, which the agent protocol already says nothing depends on."""
+    parts = os.path.relpath(path, ROOT).split(os.sep)
+    return parts[0] in ("sources", ".agents", ".agent")
+
+
 def is_legacy_fixture(path):
     """A synthetic pre-AKR document under an example's `legacy/` directory.
 
@@ -147,7 +162,8 @@ def is_legacy_fixture(path):
 def check_links():
     anchor_cache = {}
     planned = planned_paths()
-    md_files = [p for p in walk(ROOT, {".md"}) if not is_legacy_fixture(p)]
+    md_files = [p for p in walk(ROOT, {".md"})
+                if not is_legacy_fixture(p) and not is_outside_material(p)]
     checked = 0
     for path in md_files:
         in_fence = False
@@ -241,6 +257,8 @@ def check_codes():
     citations = {}
     for path in walk(ROOT, TEXT_EXT):
         if rel(path).startswith("spec/diagnostics/codes-"):
+            continue
+        if is_outside_material(path):
             continue
         try:
             text = read(path)

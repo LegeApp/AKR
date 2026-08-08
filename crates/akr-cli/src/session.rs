@@ -314,6 +314,20 @@ impl Session {
 /// Whether a diagnostic counts as an error under the active profile (D-013).
 #[must_use]
 pub fn is_fatal(diagnostic: &Diagnostic, profile: Profile) -> bool {
+    // `AKR-G004` is a fact about the *working tree*, not about the ledger, and it is
+    // exempt from the strict promotion for the same reason staleness never changes an
+    // exit code (D-024): it says the reader should not be misled, not that anything is
+    // wrong.
+    //
+    // Left promotable, it made "akr check is clean" unreachable for an agent mid-task,
+    // because an agent mid-task always has uncommitted edits in watched paths. The two
+    // ways out were both bad — commit prematurely to satisfy the check, or run
+    // `--lenient` and lose every other strict signal along with this one — which is
+    // exactly what was reported from a real session
+    // (`jpegxl-rs.papercut.akr-check-strict-exits-1-on-akr-g004-alone-when`).
+    if diagnostic.code.as_str() == "AKR-G004" {
+        return false;
+    }
     match profile {
         Profile::Strict => true,
         Profile::Lenient => diagnostic.severity == Severity::Error,

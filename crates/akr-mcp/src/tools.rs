@@ -1,4 +1,8 @@
-//! The nine tools, each over the function the command line calls.
+//! Every tool of [`crate::schema::TOOLS`], each over the function the command line calls.
+//!
+//! The catalogue is named in exactly one place — the `TOOLS` table — and this module
+//! dispatches over it. Prose that counts the tools drifts the moment one is added, which
+//! is how the help text came to advertise nine of them while `tools/list` returned eleven.
 //!
 //! Every tool here does three things and no more: translate its JSON arguments into the
 //! request type `akr-cli` already takes, call the same function `akr <command>` calls, and
@@ -75,6 +79,8 @@ pub fn call(root: &Path, name: &str, arguments: &Value) -> Result<ToolResult, To
         "knowledge.explain" => explain(root, arguments),
         "knowledge.get" => get(root, arguments),
         "knowledge.context" => context(root, arguments),
+        "knowledge.source_search" => source_search(root, arguments),
+        "knowledge.source_get" => source_get(root, arguments),
         "knowledge.impact" => impact(root, arguments),
         "knowledge.validate" => validate(root, arguments),
         "knowledge.propose" => propose(root, arguments),
@@ -98,6 +104,10 @@ fn search(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let query = required_str(arguments, "query")?;
     let command = Command::Search {
         query: query.to_owned(),
+        // Never raw FTS5 over MCP. An agent writing a query has no way to know that a
+        // comma is an operator, and the failure mode was measured: it gave up and grepped
+        // `.akr/records`.
+        raw_fts: false,
         kinds: string_list(arguments, "kinds"),
         states: string_list(arguments, "states"),
         limit: arguments
@@ -137,6 +147,7 @@ fn start(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
         .and_then(|value| usize::try_from(value).ok());
     let command = Command::Search {
         query: task.to_owned(),
+        raw_fts: false,
         kinds: vec!["milestone".into(), "work".into(), "track".into()],
         states: Vec::new(),
         limit: None,
@@ -229,6 +240,15 @@ fn search_planning_candidates(session: &Session, result: &Value, paths: &[Glob])
 
 fn get(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let reference = required_str(arguments, "ref")?;
+    let detail = match arguments.get("detail").and_then(Value::as_str) {
+        None => akr_cli::args::Detail::default(),
+        Some(name) => akr_cli::args::Detail::from_name(name).ok_or_else(|| {
+            ToolError::new(
+                "AKR-C004",
+                format!("`detail`: {name:?} is not `summary`, `body` or `canonical`"),
+            )
+        })?,
+    };
     let command = Command::Get {
         reference: reference.to_owned(),
         history: flag(arguments, "history"),
@@ -239,6 +259,7 @@ fn get(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
             .get("relations")
             .and_then(Value::as_bool)
             .unwrap_or(true),
+        detail,
     };
     run_read(root, command)
 }
@@ -275,6 +296,88 @@ fn context(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let text = output.text.clone();
     let structured = finish(&session, output)?;
     Ok(ToolResult::Read { text, structured })
+}
+
+/// `knowledge.source_search` — the source library, over the same command `akr source
+/// search` runs.
+///
+/// The tool takes an enum string rather than the CLI's two flags, for the reason
+/// `docs/08-mcp.md` §2 gives about one-character interfaces: an agent reads
+/// `"literal"` and a flag pair is a thing it has to remember the exclusivity rule for.
+fn source_search(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
+    let query = required_str(arguments, "query")?;
+    let mode = arguments
+        .get("mode")
+        .and_then(Value::as_str)
+        .unwrap_or("text");
+    if !matches!(mode, "text" | "literal" | "fts") {
+        return Err(ToolError::new(
+            "AKR-C004",
+            format!("`mode`: {mode:?} is not `text`, `literal` or `fts`"),
+        ));
+    }
+    let command = Command::SourceSearch {
+        query: query.to_owned(),
+        mode: mode.to_owned(),
+        documents: string_list(arguments, "documents"),
+        all_versions: flag(arguments, "all_versions"),
+        limit: arguments
+            .get("limit")
+            .and_then(Value::as_integer)
+            .and_then(|n| usize::try_from(n).ok()),
+    };
+    run_read(root, command)
+}
+
+/// `knowledge.source_get` — one passage of one registered source.
+///
+/// `detail` defaults to `section` rather than `whole`, which is the token decision of
+/// `sources/context-reduction.md`: the cheapest call must not be the one that returns a
+/// forty-thousand-token report.
+fn source_get(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
+    let chunk = arguments.get("chunk").and_then(Value::as_str);
+    let id = arguments.get("id").and_then(Value::as_str);
+    let detail = arguments
+        .get("detail")
+        .and_then(Value::as_str)
+        .unwrap_or("section");
+    if !matches!(detail, "snippet" | "section" | "whole") {
+        return Err(ToolError::new(
+            "AKR-C004",
+            format!("`detail`: {detail:?} is not `snippet`, `section` or `whole`"),
+        ));
+    }
+    let command = match (chunk, id) {
+        (Some(_), Some(_)) => {
+            return Err(ToolError::new(
+                "AKR-C005",
+                "`chunk` and `id` are mutually exclusive",
+            ));
+        }
+        (Some(chunk), None) => Command::SourceGetChunk {
+            chunk: chunk.to_owned(),
+            // `section` is one chunk either side; `snippet` is the chunk alone. `whole`
+            // is meaningless for a chunk id, so it widens as far as `section` does and
+            // the caller is expected to pass `id` when it wants the document.
+            neighbors: usize::from(detail != "snippet"),
+        },
+        (None, Some(id)) => Command::SourceGet {
+            id: id.to_owned(),
+            whole: detail == "whole",
+            lines: arguments
+                .get("lines")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned),
+            section: None,
+        },
+        (None, None) => {
+            return Err(ToolError::new(
+                "AKR-C003",
+                "knowledge.source_get requires exactly one of `chunk` or `id`",
+            ));
+        }
+    };
+    run_read(root, command)
 }
 
 fn impact(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
@@ -579,6 +682,10 @@ fn papercut(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
         agent: agent.to_owned(),
         observed_at: commit,
         created_at: Some(session.today),
+        about: arguments
+            .get("about")
+            .and_then(Value::as_str)
+            .map(ToOwned::to_owned),
     };
     let record = request.to_record(key.clone());
     let title = record.title.clone();

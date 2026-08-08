@@ -37,13 +37,68 @@ pub const SERVER_VERSION: &str = "0.1.0";
 /// A server bound to one workspace.
 pub struct Server {
     root: PathBuf,
+    surface: Surface,
+    accounting: Option<PathBuf>,
+}
+
+/// Which half of the tool catalogue this server exposes.
+///
+/// Tool schemas are a fixed tax on every session that loads them, and an implementation
+/// agent that will only ever read pays it for eight write tools it never calls. `read`
+/// serves the surface that answers questions; `full` adds the ones that change the ledger.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Surface {
+    /// Read tools only.
+    Read,
+    /// Every tool (the default).
+    #[default]
+    Full,
+}
+
+impl Surface {
+    /// Parses `--surface`.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "read" => Some(Self::Read),
+            "full" => Some(Self::Full),
+            _ => None,
+        }
+    }
+
+    /// Whether this surface exposes `tool`.
+    #[must_use]
+    pub fn exposes(self, tool: &crate::schema::Tool) -> bool {
+        match self {
+            Self::Read => !tool.writes,
+            Self::Full => true,
+        }
+    }
 }
 
 impl Server {
-    /// A server for the workspace at `root`.
+    /// A server for the workspace at `root`, exposing every tool.
     #[must_use]
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            surface: Surface::Full,
+            accounting: None,
+        }
+    }
+
+    /// Restricts the catalogue to one surface.
+    #[must_use]
+    pub fn with_surface(mut self, surface: Surface) -> Self {
+        self.surface = surface;
+        self
+    }
+
+    /// Appends one JSONL line per tool call to `path`.
+    #[must_use]
+    pub fn with_accounting(mut self, path: impl Into<PathBuf>) -> Self {
+        self.accounting = Some(path.into());
+        self
     }
 
     /// The workspace root.
@@ -65,7 +120,7 @@ impl Server {
         let result = match method {
             "initialize" => Ok(self.initialize(&params)),
             "server/discover" => Ok(self.server_discover(&params)),
-            "tools/list" => Ok(Self::tools_list()),
+            "tools/list" => Ok(self.tools_list()),
             "tools/call" => Ok(self.tools_call(&params)),
             "ping" => Ok(Value::Object(Vec::new())),
             other => Err((-32601, format!("unknown method {other:?}"))),
@@ -104,6 +159,12 @@ impl Server {
                 Value::object(vec![
                     ("name", Value::string("akr-mcp")),
                     ("version", Value::string(SERVER_VERSION)),
+                    // Published so a client can see a stale server before it trips over
+                    // one: the friction this answers was diagnosed twice as a ledger bug.
+                    (
+                        "vocabularyVersion",
+                        Value::string(crate::skew::SERVER_VOCABULARY),
+                    ),
                 ]),
             ),
             (
@@ -126,6 +187,12 @@ impl Server {
                 Value::object(vec![
                     ("name", Value::string("akr-mcp")),
                     ("version", Value::string(SERVER_VERSION)),
+                    // Published so a client can see a stale server before it trips over
+                    // one: the friction this answers was diagnosed twice as a ledger bug.
+                    (
+                        "vocabularyVersion",
+                        Value::string(crate::skew::SERVER_VOCABULARY),
+                    ),
                 ]),
             ),
             (
@@ -152,12 +219,13 @@ impl Server {
         ])
     }
 
-    fn tools_list() -> Value {
+    fn tools_list(&self) -> Value {
         Value::object(vec![(
             "tools",
             Value::array(
                 TOOLS
                     .iter()
+                    .filter(|tool| self.surface.exposes(tool))
                     .map(|tool| {
                         Value::object(vec![
                             ("name", Value::string(tool.name)),
@@ -198,10 +266,42 @@ impl Server {
             .cloned()
             .unwrap_or(Value::Object(Vec::new()));
 
-        match tools::call(&self.root, name, &arguments) {
-            Ok(payload) => content(payload.text(), payload.structured(), false),
-            Err(error) => content(None, &error.to_json(), true),
-        }
+        let started = std::time::Instant::now();
+        let outcome = tools::call(&self.root, name, &arguments);
+        let (text, structured, is_error) = match outcome {
+            Ok(payload) => {
+                let enforced = crate::budget::enforce(name, payload.text(), payload.structured());
+                (enforced.text, enforced.structured, false)
+            }
+            Err(mut error) => {
+                // A failing call is where an agent meets a stale server, and a type error
+                // about a slot it never wrote is the least explicable thing the surface
+                // can say. Naming the skew here turns it into a one-line remedy.
+                if let Some(skew) = crate::skew::detect(&self.root) {
+                    error.diagnostics.push(skew.diagnostic());
+                }
+                (None, error.to_json(), true)
+            }
+        };
+
+        crate::budget::record(
+            self.accounting.as_deref(),
+            &crate::budget::Call {
+                tool: name.to_owned(),
+                input_bytes: arguments.to_pretty().len(),
+                text_output_bytes: text.as_ref().map_or(0, String::len),
+                structured_output_bytes: structured.to_pretty().len(),
+                estimated_output_tokens: crate::budget::estimate_tokens(
+                    text.as_deref().unwrap_or_default(),
+                ) + crate::budget::estimate_tokens(
+                    &structured.to_pretty(),
+                ),
+                truncated: structured.get("truncated").and_then(Value::as_bool) == Some(true),
+                duration_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            },
+        );
+
+        content(text.as_deref(), &structured, is_error)
     }
 }
 

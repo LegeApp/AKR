@@ -143,21 +143,27 @@ pub fn run(session: &Session, command: &Command) -> Result<Output, EnvError> {
             message,
             agent,
             namespace,
+            about,
         } => papercut(
             session,
             &context,
             message,
             agent.as_deref(),
             namespace.as_deref(),
+            about.as_deref(),
         ),
         Command::PapercutCollate {
             projects,
             namespace,
+            about,
+            all,
         } => papercut_collate(
             session,
             &context,
             projects.as_deref(),
             namespace.as_deref(),
+            about.as_deref(),
+            *all,
         ),
         Command::EvidenceAdd {
             key,
@@ -300,6 +306,7 @@ pub fn papercut(
     message: &str,
     agent: Option<&str>,
     namespace: Option<&str>,
+    about: Option<&str>,
 ) -> Result<Output, EnvError> {
     let agent = match agent {
         Some(agent) => agent.to_owned(),
@@ -323,6 +330,7 @@ pub fn papercut(
         agent,
         observed_at: commit,
         created_at: Some(session.today),
+        about: about.map(ToOwned::to_owned),
     };
     let record = request.to_record(key.clone());
     let title = record.title.clone();
@@ -350,6 +358,8 @@ fn papercut_collate(
     context: &WriteContext,
     projects: Option<&Path>,
     namespace: Option<&str>,
+    about: Option<&str>,
+    all: bool,
 ) -> Result<Output, EnvError> {
     let scan_dir = match projects {
         Some(path) => path.to_path_buf(),
@@ -357,7 +367,9 @@ fn papercut_collate(
             .root
             .parent()
             .map(Path::to_path_buf)
-            .ok_or_else(|| EnvError::new("AKR-G001", "cannot find the siblings of the workspace root"))?,
+            .ok_or_else(|| {
+                EnvError::new("AKR-G001", "cannot find the siblings of the workspace root")
+            })?,
     };
     if !scan_dir.is_dir() {
         return Err(EnvError::new(
@@ -366,23 +378,61 @@ fn papercut_collate(
         ));
     }
 
+    // `--about akr` is the case the kind exists for: a friction with *this* tool, logged
+    // wherever the agent happened to be working (D-033). `--all` keeps D-030's original
+    // take-everything behaviour, which is still what a single-project owner wants.
+    let subject = match (about, all) {
+        (Some(name), _) => akr_core::papercut::collate::Subject::Named(name.to_owned()),
+        (None, true) => akr_core::papercut::collate::Subject::Any,
+        (None, false) => akr_core::papercut::collate::Subject::Any,
+    };
     let already = akr_core::papercut::collate::already_collated(&session.ledger);
-    let collate = akr_core::papercut::collate::collect(&scan_dir, &session.root, &already);
+    let collate =
+        akr_core::papercut::collate::collect(&scan_dir, &session.root, &already, &subject);
+
+    // Whatever the filter left behind is reported, never dropped in silence: a collation
+    // that looked complete while ignoring two thirds of what it read would be worse than
+    // none at all.
+    let mut trailer = String::new();
+    if collate.filtered_out > 0 {
+        trailer.push_str(&format!(
+            "  {} left behind by the subject filter\n",
+            collate.filtered_out
+        ));
+    }
+    if !collate.subjects_seen.is_empty() {
+        trailer.push_str(&format!(
+            "  subjects seen: {}\n",
+            collate.subjects_seen.join(", ")
+        ));
+    }
+    if !collate.skipped.is_empty() {
+        trailer.push_str(&format!(
+            "  {} workspace{} did not load and were skipped\n",
+            collate.skipped.len(),
+            if collate.skipped.len() == 1 { "" } else { "s" }
+        ));
+    }
 
     if collate.entries.is_empty() {
         let mut text = format!("scanned {} — nothing new to collate\n", collate.source);
-        if !collate.skipped.is_empty() {
-            text.push_str(&format!(
-                "  {} workspace{} did not load and were skipped\n",
-                collate.skipped.len(),
-                if collate.skipped.len() == 1 { "" } else { "s" }
-            ));
-        }
+        text.push_str(&trailer);
         return Ok(Output::plain(
             text,
             Value::object(vec![
                 ("scanned", Value::integer(collate.projects.len() as i64)),
                 ("collated", Value::integer(0)),
+                ("filtered_out", Value::integer(collate.filtered_out as i64)),
+                (
+                    "subjects_seen",
+                    Value::array(
+                        collate
+                            .subjects_seen
+                            .iter()
+                            .map(|s| Value::string(s.clone()))
+                            .collect(),
+                    ),
+                ),
             ]),
         ));
     }
@@ -407,10 +457,11 @@ fn papercut_collate(
         observed_at: commit,
         created_at: session.today,
         author: context.author.clone(),
+        about: about.map(ToOwned::to_owned),
     };
     let record = request.to_record(key.clone());
     let title = record.title.clone();
-    render(
+    let mut output = render(
         session,
         akr_core::ops::propose(
             context,
@@ -419,7 +470,12 @@ fn papercut_collate(
             &title,
             Some(record),
         ),
-    )
+    )?;
+    // The trailer goes on the successful path too, not only the empty one: the run that
+    // absorbed something is exactly the run where "and here is what I did not absorb"
+    // matters, because it is the one a reader will take as complete.
+    output.text.push_str(&trailer);
+    Ok(output)
 }
 
 // -------------------------------------------------------------------------------------
@@ -544,11 +600,11 @@ fn parse_checks(raw: &[String]) -> Result<Vec<(String, Reference)>, EnvError> {
 /// interaction the MCP surface cannot have, and a flag that works from a shell and fails
 /// from an agent is worse than one that is honestly absent.
 fn body_template(
-    _session: &Session,
+    session: &Session,
     from: Option<&Path>,
     edit: bool,
     key: &LogicalKey,
-    _kind: Kind,
+    kind: Kind,
 ) -> Result<Option<Record>, EnvError> {
     if edit {
         return Err(
@@ -561,6 +617,11 @@ fn body_template(
     };
     let text = std::fs::read_to_string(path)
         .map_err(|e| EnvError::new("AKR-C042", format!("cannot read {}: {e}", path.display())))?;
+    // The command already knows the project, the key and the kind — it is being told them
+    // on the command line — so demanding that the file repeat all three was ceremony that
+    // sent people to `akr fmt` to find out what a file header looks like. A file that
+    // brings its own header is still taken verbatim.
+    let text = complete_body(&text, session, key, kind);
 
     let mut sources = akr_core::diagnostics::SourceMap::new();
     let display_path = path.to_string_lossy().into_owned();
@@ -596,6 +657,54 @@ fn body_template(
         .cloned()
         .ok_or_else(|| EnvError::new("AKR-C031", format!("{} holds no record", path.display())))?;
     Ok(Some(record))
+}
+
+/// Wraps a partial `--from` body in whatever it is missing.
+///
+/// Three shapes are accepted, cheapest first:
+///
+/// * a whole file, with its `akr <version>` header — used as it stands;
+/// * a bare `record … { … }` block — the header is prepended;
+/// * a bare slot list — the header *and* the record line are supplied from the key and
+///   kind the command was given.
+///
+/// The last case is the one worth having. Writing three lines of slots and being told the
+/// file "does not parse as a record" is a poor trade for information the caller has
+/// already typed.
+fn complete_body(text: &str, session: &Session, key: &LogicalKey, kind: Kind) -> String {
+    let first = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty() && !line.starts_with('#'));
+    let header = format!(
+        "akr {}\nproject {}\n\n",
+        crate::session::GRAMMAR_VERSION,
+        session.ledger.project.name
+    );
+    match first {
+        Some(line) if line.starts_with("akr ") || line.starts_with("akr-lock ") => text.to_owned(),
+        Some(line) if line.starts_with("record ") => format!("{header}{text}"),
+        // A slot list. The revision number is 1 because a template is a body, not a
+        // history: `revise` renumbers it against the head it is replacing.
+        Some(_) => {
+            let indented: String = text
+                .lines()
+                .map(|line| {
+                    if line.trim().is_empty() {
+                        String::new()
+                    } else {
+                        format!("    {line}")
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!(
+                "{header}record {key}/1 : {} {{\n{indented}\n}}\n",
+                kind.name()
+            )
+        }
+        None => text.to_owned(),
+    }
 }
 
 // -------------------------------------------------------------------------------------

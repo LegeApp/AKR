@@ -218,7 +218,18 @@ fn block_slot_order(container: &str, slot: &str) -> Option<usize> {
     let order: &[&str] = match container {
         "claim" => &["text", "supported_by"],
         "check" => &["statement", "method", "command", "verified_by"],
-        "source" => &["kind", "path", "url", "excerpt"],
+        "source" => &[
+            "kind",
+            "document",
+            "path",
+            "url",
+            "start_byte",
+            "end_byte",
+            "start_line",
+            "end_line",
+            "excerpt_hash",
+            "excerpt",
+        ],
         "disposition" => &["outcome", "into", "note"],
         _ => return None,
     };

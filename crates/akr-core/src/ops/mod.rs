@@ -794,6 +794,10 @@ pub fn import(context: &WriteContext, request: &ImportRequest) -> WriteResult {
         path: Some(request.document.clone()),
         url: None,
         excerpt: Some(excerpt.to_owned()),
+        // Legacy migration cites a path, not a registered document: the whole point of
+        // that workflow is that the original is on its way out (D-022).
+        document: None,
+        range: None,
     };
 
     let mut edits: Vec<(PathBuf, Record, ChangeKind)> = Vec::new();

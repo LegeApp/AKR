@@ -31,6 +31,14 @@ pub struct LogPapercut {
     pub observed_at: Commit,
     /// The authoring date. The tooling fills this from `--today` or the system date.
     pub created_at: Option<Date>,
+    /// What the friction was *with*, when that is not this project (D-033).
+    ///
+    /// Papercuts are the one record kind whose subject is sometimes the tool rather than
+    /// the project being worked on: an agent in `jpegxl-rs` hits an AKR bug and has
+    /// nowhere but `jpegxl-rs`'s ledger to put it. `about` is that distinction, written
+    /// down — `--about akr` — so `akr papercut collate` can find it instead of somebody
+    /// having to think to go and read a sibling's ledger.
+    pub about: Option<String>,
 }
 
 /// Why a papercut key could not be allocated.
@@ -130,6 +138,9 @@ impl LogPapercut {
             ContentSlot::ObservedAt,
             ContentValue::Commit(self.observed_at.clone()),
         );
+        if let Some(about) = &self.about {
+            content.insert(ContentSlot::About, ContentValue::Text(about.clone()));
+        }
 
         Record {
             id: RevisionId::new(key, 1),

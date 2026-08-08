@@ -26,6 +26,40 @@ pub struct CollatedPapercut {
     pub key: LogicalKey,
     /// The source papercut's one-line title.
     pub title: String,
+    /// The source papercut's `about` subject, when it declared one (D-033).
+    pub about: Option<String>,
+    /// The source papercut's full statement.
+    ///
+    /// Carried, not summarised. The first collation stored keys and truncated titles and
+    /// told the reader to go and open the owning project's ledger — which is eight
+    /// checkouts for eighteen papercuts, and is the reason none of them were acted on.
+    /// A collation that cannot be worked from is a list of homework, not a report.
+    pub statement: String,
+}
+
+/// Which of the sisters' papercuts a collation absorbs.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum Subject {
+    /// Only those whose `about` names this subject.
+    Named(String),
+    /// Only those with no `about` at all — the sister project's own frictions.
+    ///
+    /// Not the default, because the interesting case is the opposite one: a papercut
+    /// about *this* tool, logged wherever the agent happened to be working.
+    Untagged,
+    /// Every live papercut, whatever it is about.
+    #[default]
+    Any,
+}
+
+impl Subject {
+    fn accepts(&self, about: Option<&str>) -> bool {
+        match self {
+            Self::Named(name) => about == Some(name.as_str()),
+            Self::Untagged => about.is_none(),
+            Self::Any => true,
+        }
+    }
 }
 
 /// What a scan of one directory found, and what remains to be collated.
@@ -39,6 +73,13 @@ pub struct Collate {
     pub skipped: Vec<String>,
     /// Papercuts not yet collated anywhere, sorted by project then key.
     pub entries: Vec<CollatedPapercut>,
+    /// Live papercuts left behind because their subject did not match.
+    ///
+    /// Counted rather than silently dropped: a collation that quietly ignored two thirds
+    /// of what it read would be worse than no collation, because it would look complete.
+    pub filtered_out: usize,
+    /// The distinct `about` subjects seen while scanning, sorted.
+    pub subjects_seen: Vec<String>,
 }
 
 /// The keys a ledger has already absorbed, from the `collated` slot of its live
@@ -66,11 +107,18 @@ pub fn already_collated(ledger: &Ledger) -> BTreeSet<String> {
 /// `skipped` rather than failing the scan, so one broken sibling cannot block the rest.
 /// `already` is the dedup set; keys in it are left out of `entries`.
 #[must_use]
-pub fn collect(scan_dir: &Path, exclude: &Path, already: &BTreeSet<String>) -> Collate {
+pub fn collect(
+    scan_dir: &Path,
+    exclude: &Path,
+    already: &BTreeSet<String>,
+    subject: &Subject,
+) -> Collate {
     let source = scan_dir.to_string_lossy().into_owned();
     let mut projects = Vec::new();
     let mut skipped = Vec::new();
     let mut entries = Vec::new();
+    let mut filtered_out = 0usize;
+    let mut subjects: BTreeSet<String> = BTreeSet::new();
 
     let Ok(read) = std::fs::read_dir(scan_dir) else {
         return Collate {
@@ -78,6 +126,8 @@ pub fn collect(scan_dir: &Path, exclude: &Path, already: &BTreeSet<String>) -> C
             projects,
             skipped,
             entries,
+            filtered_out,
+            subjects_seen: Vec::new(),
         };
     };
     let mut dirs: Vec<std::path::PathBuf> = read
@@ -119,14 +169,23 @@ pub fn collect(scan_dir: &Path, exclude: &Path, already: &BTreeSet<String>) -> C
             if already.contains(&key.to_string()) {
                 continue;
             }
-            let title = workspace
-                .ledger
-                .head(&key)
-                .map_or_else(|_| String::new(), |record| record.title.clone());
+            let head = workspace.ledger.head(&key).ok();
+            let title = head.map_or_else(String::new, |record| record.title.clone());
+            let about = head.and_then(about_of);
+            let statement = head.and_then(statement_of).unwrap_or_default();
+            if let Some(about) = &about {
+                subjects.insert(about.clone());
+            }
+            if !subject.accepts(about.as_deref()) {
+                filtered_out += 1;
+                continue;
+            }
             entries.push(CollatedPapercut {
                 project: project.clone(),
                 key,
                 title,
+                about,
+                statement,
             });
         }
     }
@@ -136,6 +195,31 @@ pub fn collect(scan_dir: &Path, exclude: &Path, already: &BTreeSet<String>) -> C
         projects,
         skipped,
         entries,
+        filtered_out,
+        subjects_seen: subjects.into_iter().collect(),
+    }
+}
+
+/// The `about` subject of a papercut record, if it declared one.
+#[must_use]
+pub fn about_of(record: &Record) -> Option<String> {
+    match record.get(ContentSlot::About) {
+        Some(ContentValue::Text(text) | ContentValue::Prose(text)) => Some(text.clone()),
+        _ => None,
+    }
+}
+
+/// A papercut's statement, flattened to one paragraph.
+fn statement_of(record: &Record) -> Option<String> {
+    match record.get(ContentSlot::Statement) {
+        Some(ContentValue::Prose(text) | ContentValue::Text(text)) => Some(
+            text.lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .collect::<Vec<_>>()
+                .join(" "),
+        ),
+        _ => None,
     }
 }
 
@@ -164,6 +248,8 @@ pub struct CollateRequest {
     pub created_at: Date,
     /// Who ran it; lands in the `author` slot.
     pub author: Option<String>,
+    /// The subject the collation was narrowed to, if any; lands in `about` (D-033).
+    pub about: Option<String>,
 }
 
 impl CollateRequest {
@@ -183,6 +269,9 @@ impl CollateRequest {
             ContentSlot::Collated,
             ContentValue::Strings(self.entries.iter().map(|e| e.key.to_string()).collect()),
         );
+        if let Some(about) = &self.about {
+            content.insert(ContentSlot::About, ContentValue::Text(about.clone()));
+        }
 
         Record {
             id: RevisionId::new(key, 1),
@@ -217,18 +306,37 @@ impl CollateRequest {
         )
     }
 
-    /// The body: the provenance line, then one line per absorbed papercut.
+    /// The body: the provenance line, then each absorbed papercut in full.
+    ///
+    /// In full, deliberately. The master record is the only copy of these findings in
+    /// this repository, and a summary that ends "see the owning project's ledger" makes
+    /// acting on eighteen papercuts an eight-checkout errand — which is how the first
+    /// collation came to be read once and worked from never.
     fn statement(&self) -> String {
         let mut out = format!(
-            "Collated {} papercut{} from {} on {} (D-030). Each source key is in the \
-             collated slot; see the owning project's ledger for the full statement.\n\n",
+            "Collated {} papercut{} from {} on {} (D-030). Each source key is also in the \
+             collated slot, which is the dedup set for the next run; the sisters were read \
+             and never written.\n\n",
             self.entries.len(),
             if self.entries.len() == 1 { "" } else { "s" },
             self.source,
             self.created_at,
         );
         for entry in &self.entries {
-            out.push_str(&format!("- {} @{} — {}\n", entry.project, entry.key, entry.title));
+            let about = entry
+                .about
+                .as_deref()
+                .map_or_else(String::new, |about| format!(" [about {about}]"));
+            out.push_str(&format!(
+                "## {} @{}{about}\n{}\n\n",
+                entry.project,
+                entry.key,
+                if entry.statement.is_empty() {
+                    entry.title.clone()
+                } else {
+                    entry.statement.clone()
+                },
+            ));
         }
         out
     }
@@ -241,7 +349,11 @@ fn project_list(names: &[String], limit: usize) -> String {
         0 => "no projects".to_owned(),
         1 => names[0].to_owned(),
         n if n <= limit => format!("{} and {}", names[..n - 1].join(", "), names[n - 1]),
-        _ => format!("{} and {} more", names[..limit].join(", "), names.len() - limit),
+        _ => format!(
+            "{} and {} more",
+            names[..limit].join(", "),
+            names.len() - limit
+        ),
     }
 }
 

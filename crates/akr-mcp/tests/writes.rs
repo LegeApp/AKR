@@ -414,7 +414,16 @@ fn no_tool_can_reach_the_sqlite_cache() {
         assert!(!schema.to_lowercase().contains("sqlite"), "{}", tool.name);
         assert!(!schema.to_lowercase().contains("select "), "{}", tool.name);
     }
-    assert_eq!(akr_mcp::schema::TOOLS.len(), 13);
+    // Every declared tool is implemented and every implemented tool is declared. The
+    // count itself is deliberately not asserted: it is prose about the registry, and
+    // prose about a registry is the thing that drifts.
+    for tool in akr_mcp::schema::TOOLS {
+        assert!(
+            akr_mcp::schema::output_schema(tool.name).is_some(),
+            "{} has no output schema",
+            tool.name
+        );
+    }
 }
 
 #[test]

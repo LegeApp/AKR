@@ -407,6 +407,20 @@ fn sibling_workspaces(example: &Example) -> std::path::PathBuf {
             ),
         )
         .expect("sibling papercuts.akr");
+
+        // …and one whose subject is AKR itself, not this sibling. D-033: this is the
+        // record that used to be invisible to whoever maintains the tool.
+        std::fs::write(
+            records.join("tool-papercuts.akr"),
+            format!(
+                "akr 0.1\nproject {project}\n\nrecord {project}.papercut.{slug}-tool/1 : papercut {{\n    \
+                 title \"{project} hit an akr bug\"\n    state verified\n    statement \"\"\"\n        \
+                 An akr diagnostic was misleading.\n        \"\"\"\n    observed_at \
+                 git:0123456789abcdef0123456789abcdef01234567\n    about \"akr\"\n    author \"test\"\n    created_at \
+                 2026-08-07\n}}\n"
+            ),
+        )
+        .expect("sibling tool-papercuts.akr");
     }
     scan
 }
@@ -417,25 +431,45 @@ fn papercut_collate_gathers_sister_papercuts_once() {
     let scan = sibling_workspaces(&example);
     let projects = scan.to_str().expect("utf-8 scan dir");
 
-    let run = example.run(&["papercut", "collate", "--projects", projects, "--namespace", "sys"]);
+    let run = example.run(&[
+        "papercut",
+        "collate",
+        "--projects",
+        projects,
+        "--namespace",
+        "sys",
+    ]);
     assert_eq!(run.code, 0, "{}", run.output());
     assert!(
-        run.stdout.contains("created sys.papercut.collated-2-papercuts-from-alpha-beta/1"),
+        run.stdout
+            .contains("created sys.papercut.collated-4-papercuts-from-alpha-beta/1"),
         "{}",
         run.stdout
     );
     assert!(run.stdout.contains("wrote"), "{}", run.stdout);
 
     let source = example.read_file(".akr/records/sys/papercuts.akr");
-    assert!(source.contains("collated [ "), "{source}");
+    assert!(source.contains("collated ["), "{source}");
     assert!(
         source.contains("alpha.papercut.alpha-annoyance"),
         "{source}"
     );
     assert!(source.contains("beta.papercut.beta-friction"), "{source}");
-    // The statement lists each absorbed papercut with its owning project.
-    assert!(source.contains("- alpha @alpha.papercut.alpha-annoyance"), "{source}");
-    assert!(source.contains("- beta @beta.papercut.beta-friction"), "{source}");
+    // The statement carries each absorbed papercut with its owning project — and its
+    // full text, not a truncated title. The first real collation stored titles and told
+    // the reader to go and open eight other ledgers, so none of it was acted on (D-033).
+    assert!(
+        source.contains("## alpha @alpha.papercut.alpha-annoyance"),
+        "{source}"
+    );
+    assert!(
+        source.contains("## beta @beta.papercut.beta-friction"),
+        "{source}"
+    );
+    assert!(
+        source.contains("A alpha-side friction worth logging."),
+        "the absorbed statement must be readable here:\n{source}"
+    );
 
     // The sisters were only read: neither workspace grew anything.
     assert!(
@@ -446,9 +480,20 @@ fn papercut_collate_gathers_sister_papercuts_once() {
     );
 
     // A rerun is a no-op: the keys are already in a live collation's `collated` slot.
-    let again = example.run(&["papercut", "collate", "--projects", projects, "--namespace", "sys"]);
+    let again = example.run(&[
+        "papercut",
+        "collate",
+        "--projects",
+        projects,
+        "--namespace",
+        "sys",
+    ]);
     assert_eq!(again.code, 0, "{}", again.output());
-    assert!(again.stdout.contains("nothing new to collate"), "{}", again.output());
+    assert!(
+        again.stdout.contains("nothing new to collate"),
+        "{}",
+        again.output()
+    );
     let source = example.read_file(".akr/records/sys/papercuts.akr");
     assert_eq!(
         source.matches("record sys.papercut.collated").count(),
@@ -457,4 +502,73 @@ fn papercut_collate_gathers_sister_papercuts_once() {
     );
 
     let _ = std::fs::remove_dir_all(&scan);
+}
+
+#[test]
+fn collate_can_narrow_to_one_subject_and_says_what_it_left() {
+    let example = Example::materialise("write-collate-about");
+    let scan = sibling_workspaces(&example);
+    let projects = scan.to_str().expect("utf-8 scan dir");
+
+    // The case the `about` slot exists for: an agent working in a sibling hit a friction
+    // with *akr*, and the only ledger it could reach was the sibling's (D-033).
+    let run = example.run(&[
+        "papercut",
+        "collate",
+        "--projects",
+        projects,
+        "--about",
+        "akr",
+        "--namespace",
+        "sys",
+    ]);
+    assert_eq!(run.code, 0, "{}", run.output());
+
+    let source = example.read_file(".akr/records/sys/papercuts.akr");
+    assert!(
+        source.contains("alpha.papercut.alpha-annoyance-tool"),
+        "the akr-subject papercut should have been absorbed:\n{source}"
+    );
+    assert!(
+        !source.contains("\"alpha.papercut.alpha-annoyance\""),
+        "the sibling's own friction is not ours to collate:\n{source}"
+    );
+    // What the filter left behind is counted, never dropped in silence.
+    assert!(
+        run.stdout.contains("left behind by the subject filter"),
+        "{}",
+        run.output()
+    );
+    assert!(
+        run.stdout.contains("subjects seen: akr"),
+        "{}",
+        run.output()
+    );
+
+    let _ = std::fs::remove_dir_all(&scan);
+}
+
+#[test]
+fn a_papercut_can_name_what_it_was_about() {
+    let example = Example::materialise("write-papercut-about");
+    let run = example.run(&[
+        "papercut",
+        "-m",
+        "tester",
+        "the akr error message did not say which key",
+        "--about",
+        "akr",
+        "--namespace",
+        "sys",
+    ]);
+    assert_eq!(run.code, 0, "{}", run.output());
+    let source = example.read_file(".akr/records/sys/papercuts.akr");
+    assert!(source.contains("about \"akr\""), "{source}");
+
+    // And it renders under its own heading, so nobody reads it as this project's backlog.
+    let build = example.run(&["build"]);
+    assert_eq!(build.code, 0, "{}", build.output());
+    let view = example.read_file("docs/generated/PAPERCUTS.md");
+    assert!(view.contains("## Not about this project"), "{view}");
+    assert!(view.contains("(akr)"), "{view}");
 }

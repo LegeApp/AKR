@@ -221,14 +221,39 @@ fn a_cache_without_fts5_fails_search_and_affects_nothing_else() {
 }
 
 #[test]
-fn a_malformed_query_says_so_rather_than_returning_nothing() {
+fn punctuation_is_words_and_only_raw_fts_can_be_malformed() {
     let example = Example::materialise("search-malformed");
     assert_eq!(example.run(&["build"]).code, 0);
-    // An unbalanced quote. Returning zero results here would be the wrong answer twice
-    // over: it is not true, and it teaches the caller that the ledger is empty.
-    let run = example.run(&["search", "\"unterminated"]);
-    assert_ne!(run.code, 0, "{}", run.output());
-    assert!(run.output().contains("AKR-X031"), "{}", run.output());
+
+    // These three all came back as FTS5 errors from real sessions
+    // (`raw-autotune.papercut.knowledge-search-and-knowledge-start-via-the`), and the
+    // agent that hit them gave up and grepped `.akr/records` — the one thing the search
+    // surface exists to make unnecessary. A query is words; punctuation is not syntax.
+    for query in [
+        "budget, tokens",
+        "HDR slice 6 non-default feature",
+        "DecodeRequest::default()",
+        "\"unterminated",
+    ] {
+        let run = example.run(&["search", query]);
+        assert_eq!(run.code, 0, "{query:?}: {}", run.output());
+        assert!(
+            !run.output().contains("AKR-X031"),
+            "{query:?} must not be a syntax error: {}",
+            run.output()
+        );
+    }
+
+    // Operators are still reachable, and asking for them means owning them: a malformed
+    // expression under `--fts` is the caller's, and says so.
+    let raw = example.run(&["search", "--fts", "\"unterminated"]);
+    assert_ne!(raw.code, 0, "{}", raw.output());
+    assert!(raw.output().contains("AKR-X031"), "{}", raw.output());
+    assert!(
+        raw.output().contains("drop --fts"),
+        "the error should name the way out: {}",
+        raw.output()
+    );
 }
 
 // -------------------------------------------------------------------------------------

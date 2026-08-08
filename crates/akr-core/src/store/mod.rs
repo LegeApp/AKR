@@ -28,9 +28,17 @@ use std::path::{Path, PathBuf};
 mod populate;
 #[cfg(feature = "fts5")]
 mod search;
+#[cfg(feature = "fts5")]
+mod sources;
 
 #[cfg(feature = "fts5")]
-pub use search::{Hit, Request, search};
+pub use search::{Hit, Request, escape_query as escape_record_query, search};
+#[cfg(feature = "fts5")]
+pub use sources::{
+    ChunkText, QueryMode, SOURCES_SCHEMA_VERSION, SOURCES_SQL, SourceHit, SourceIndexStats,
+    SourceRequest, document_chunks, escape_query, get_chunk, search as search_sources,
+    sources_cache_path, sync as sync_sources,
+};
 
 /// The DDL, verbatim from the spec.
 pub const SCHEMA_SQL: &str = include_str!("../../../../spec/schema/index.sql");

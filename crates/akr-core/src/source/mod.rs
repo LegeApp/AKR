@@ -8,6 +8,14 @@
 //! of [`SourceDocument`] entries. Every entry carries a SHA-256 content hash;
 //! verification recomputes it and reports `AKR-S021` on mismatch. The older
 //! file remains when a source is superseded.
+//!
+//! [`chunk`] turns those exact bytes into retrieval units. Chunking is derived and
+//! rebuildable: it can only affect how well search finds a passage, never what the
+//! project believes about it.
+
+pub mod chunk;
+
+pub use chunk::{ChunkKind, PARSER_VERSION, SourceChunk, chunk_markdown};
 
 use crate::hash::Sha256;
 use std::path::{Path, PathBuf};
@@ -15,7 +23,9 @@ use std::path::{Path, PathBuf};
 /// Origin of a registered source.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SourceOrigin {
+    /// Advice, audits and reports from outside the project.
     External,
+    /// Reference material the project keeps but does not maintain.
     InternalReference,
 }
 
@@ -283,6 +293,230 @@ pub fn save_catalog(
         ))
     })?;
     Ok(())
+}
+
+/// A registered document together with its exact bytes.
+#[derive(Debug, Clone)]
+pub struct LoadedSource {
+    /// The catalog entry.
+    pub document: SourceDocument,
+    /// The file's contents, verified against `document.content_hash`.
+    pub text: String,
+}
+
+/// Whether a newer catalog entry supersedes this one.
+#[must_use]
+pub fn is_superseded(doc: &SourceDocument, catalog: &[SourceDocument]) -> bool {
+    catalog
+        .iter()
+        .any(|other| other.supersedes.as_deref() == Some(doc.id.as_str()))
+}
+
+/// A digest over the corpus's identity: sorted `(id, content_hash)` pairs.
+///
+/// This is the source library's half of the cache generation pair (D-031). It moves when
+/// a document is registered or superseded and at no other time, which is what lets a
+/// record write leave the chunk tables alone and a source registration leave the record
+/// tables alone.
+#[must_use]
+pub fn corpus_hash(docs: &[SourceDocument]) -> String {
+    let mut sorted: Vec<&SourceDocument> = docs.iter().collect();
+    sorted.sort_by(|a, b| a.id.cmp(&b.id));
+    let mut hasher = Sha256::new();
+    for doc in sorted {
+        hasher.update(doc.id.as_bytes());
+        hasher.update(b"\0");
+        hasher.update(doc.content_hash.as_bytes());
+        hasher.update(b"\0");
+    }
+    hasher.update(chunk::PARSER_VERSION.to_string().as_bytes());
+    format!("sha256:{}", hasher.finish().to_hex())
+}
+
+/// Reads every catalog entry's bytes, verifying each hash on the way through.
+///
+/// Serving a passage from a file that no longer matches its registration would defeat the
+/// whole point of registering it, so a mismatch is an error here rather than a warning.
+///
+/// # Errors
+/// [`SourceDiagnostic::HashMismatch`] or [`SourceDiagnostic::MissingFile`] for the first
+/// entry that fails, and [`SourceDiagnostic::CatalogError`] for an unreadable catalog.
+pub fn load_corpus(workspace_root: &Path) -> Result<Vec<LoadedSource>, SourceDiagnostic> {
+    let catalog = load_catalog(workspace_root)?;
+    let mut out = Vec::with_capacity(catalog.len());
+    for document in catalog {
+        let file = workspace_root.join(&document.path);
+        let bytes = std::fs::read(&file).map_err(|_| SourceDiagnostic::MissingFile {
+            id: document.id.clone(),
+            path: document.path.clone(),
+        })?;
+        let found = hash_bytes(&bytes);
+        if found != document.content_hash {
+            return Err(SourceDiagnostic::HashMismatch {
+                id: document.id.clone(),
+                path: document.path.clone(),
+                expected: document.content_hash.clone(),
+                found,
+            });
+        }
+        out.push(LoadedSource {
+            document,
+            text: String::from_utf8_lossy(&bytes).into_owned(),
+        });
+    }
+    Ok(out)
+}
+
+/// A record's citation into the source library, checked against the library.
+///
+/// Four things can be wrong with a citation and they fail differently, so they are
+/// reported separately rather than as one "bad source" verdict: the reader's next action
+/// is different for each.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CitationProblem {
+    /// The named document is not in the catalog.
+    UnknownDocument { document: String },
+    /// The byte range runs past the end of the document.
+    RangeOutOfBounds {
+        document: String,
+        end_byte: u64,
+        byte_len: u64,
+    },
+    /// The range does not begin and end on character boundaries.
+    RangeNotOnBoundary {
+        document: String,
+        start: u64,
+        end: u64,
+    },
+    /// The recorded excerpt hash disagrees with the bytes in that range.
+    ExcerptHashMismatch {
+        document: String,
+        expected: String,
+        found: String,
+    },
+    /// The line range does not describe the same passage as the byte range.
+    LinesDisagree {
+        document: String,
+        recorded: (u32, u32),
+        actual: (u32, u32),
+    },
+}
+
+impl std::fmt::Display for CitationProblem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownDocument { document } => write!(
+                f,
+                "cites source {document:?}, which is not registered; \
+                 run `akr source list` or register it with `akr source add`"
+            ),
+            Self::RangeOutOfBounds {
+                document,
+                end_byte,
+                byte_len,
+            } => write!(
+                f,
+                "cites bytes up to {end_byte} of source {document:?}, which is {byte_len} bytes long"
+            ),
+            Self::RangeNotOnBoundary {
+                document,
+                start,
+                end,
+            } => write!(
+                f,
+                "cites bytes {start}..{end} of source {document:?}, which do not fall on \
+                 character boundaries"
+            ),
+            Self::ExcerptHashMismatch {
+                document,
+                expected,
+                found,
+            } => write!(
+                f,
+                "the excerpt hash of the citation into {document:?} does not match the \
+                 bytes in its range\nexpected: {expected}\nfound: {found}"
+            ),
+            Self::LinesDisagree {
+                document,
+                recorded,
+                actual,
+            } => write!(
+                f,
+                "the citation into {document:?} records lines {}-{} for a byte range that \
+                 covers lines {}-{}",
+                recorded.0, recorded.1, actual.0, actual.1
+            ),
+        }
+    }
+}
+
+/// Checks one citation against a loaded corpus.
+///
+/// Returns nothing for a `source` block that names no document: a loose `path` is still
+/// legitimate provenance (a legacy migration writes one), and only a citation into the
+/// registered library makes a promise this can check.
+#[must_use]
+pub fn check_citation(
+    source: &crate::model::Source,
+    corpus: &[LoadedSource],
+) -> Vec<CitationProblem> {
+    let Some(document) = &source.document else {
+        return Vec::new();
+    };
+    let Some(loaded) = corpus.iter().find(|item| &item.document.id == document) else {
+        return vec![CitationProblem::UnknownDocument {
+            document: document.clone(),
+        }];
+    };
+    let Some(range) = &source.range else {
+        return Vec::new();
+    };
+
+    let text = &loaded.text;
+    let byte_len = text.len() as u64;
+    if range.end_byte > byte_len || range.start_byte > range.end_byte {
+        return vec![CitationProblem::RangeOutOfBounds {
+            document: document.clone(),
+            end_byte: range.end_byte,
+            byte_len,
+        }];
+    }
+    let start = usize::try_from(range.start_byte).unwrap_or(usize::MAX);
+    let end = usize::try_from(range.end_byte).unwrap_or(usize::MAX);
+    let Some(slice) = text.get(start..end) else {
+        return vec![CitationProblem::RangeNotOnBoundary {
+            document: document.clone(),
+            start: range.start_byte,
+            end: range.end_byte,
+        }];
+    };
+
+    let mut problems = Vec::new();
+    if let Some(expected) = &range.excerpt_hash {
+        let found = hash_bytes(slice.as_bytes());
+        if &found != expected {
+            problems.push(CitationProblem::ExcerptHashMismatch {
+                document: document.clone(),
+                expected: expected.clone(),
+                found,
+            });
+        }
+    }
+
+    // Lines are the human half of the locator, and a citation whose lines and bytes
+    // disagree is worse than one with no lines at all: a reader would open the file at
+    // the wrong place and believe they had found the passage.
+    let start_line = u32::try_from(text[..start].matches('\n').count() + 1).unwrap_or(u32::MAX);
+    let counted = slice.trim_end_matches('\n').matches('\n').count();
+    let end_line = start_line.saturating_add(u32::try_from(counted).unwrap_or(0));
+    if (range.start_line, range.end_line) != (start_line, end_line) {
+        problems.push(CitationProblem::LinesDisagree {
+            document: document.clone(),
+            recorded: (range.start_line, range.end_line),
+            actual: (start_line, end_line),
+        });
+    }
+    problems
 }
 
 /// Verifies every catalog entry's file hash.
