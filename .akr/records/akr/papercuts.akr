@@ -238,6 +238,17 @@ record akr.papercut.knowledge-context-rejects-completed-work-goals/1 : papercut 
     created_at 2026-08-09
 }
 
+record akr.papercut.knowledge-search-detects-a-stale-index-but/1 : papercut {
+    title "knowledge.search detects a stale index but continues serving it, so…"
+    state verified
+    statement """
+        knowledge.search detects a stale index but continues serving it, so agents repeatedly receive known-old planning results until a human runs `akr build`. Search should safely refresh or fall back to current source data before returning results.
+        """
+    observed_at git:f001cde97b054e587f14ab849fe754ed1e14ebf0
+    author "codex"
+    created_at 2026-08-09
+}
+
 record akr.papercut.revising-a-sealed-record-through-the-supported/1 : papercut {
     title "Revising a sealed record through the supported knowledge.revise path…"
     state verified

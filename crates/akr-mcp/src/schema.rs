@@ -22,9 +22,8 @@ pub const TOOLS: &[Tool] = &[
     Tool {
         name: "knowledge.search",
         description: "Search the ledger. Ranks; never authorises — nothing enters a context \
-                      bundle because it matched a query. Right after a write, the index may \
-                      be stale and rebuilding is disabled for this tool; a human runs `akr \
-                      build` between the write and the next search.",
+                      bundle because it matched a query. A missing or stale disposable index \
+                      is refreshed from the loaded ledger before results are returned.",
         writes: false,
     },
     Tool {

@@ -446,6 +446,43 @@ record akr.work.sealed-lifecycle-lock-validation/1 : work {
     }
 }
 
+record akr.work.search-auto-refreshes-stale-index/1 : work {
+    title "Refresh stale search indexes before returning results"
+    state active
+    scope [
+        path "crates/akr-cli/src/**",
+        path "crates/akr-cli/tests/**",
+        path "crates/akr-mcp/**",
+        path "docs/**"
+    ]
+    intent """
+        Make akr search and knowledge.search rebuild a stale or missing disposable index before querying, unless --no-rebuild explicitly forbids cache writes, so search never presents known-old results or requires a human build between agent writes.
+        """
+    acceptance {
+        check fresh-after-write {
+            statement """
+                A search immediately after a ledger write rebuilds the cache and returns current indexed results without a stale warning.
+                """
+            method command
+            command "cargo test -p akr-cli --test search"
+        }
+        check mcp-current {
+            statement """
+                knowledge.search inherits the current-index behavior through the shared CLI command path.
+                """
+            method command
+            command "cargo test -p akr-mcp --test differential"
+        }
+        check no-rebuild-safe {
+            statement """
+                With --no-rebuild, search refuses a missing or stale cache with AKR-I031 and performs no cache write.
+                """
+            method command
+            command "cargo test -p akr-cli --test search"
+        }
+    }
+}
+
 record akr.work.sister-papercut-fixes/1 : work {
     title "Work the sister-project papercuts that are AKR's to fix"
     state completed

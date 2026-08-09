@@ -13,7 +13,7 @@ use crate::session::{
 use akr_core::context::{Request, assemble, render_json, render_text};
 use akr_core::diagnostics::{Diagnostic, RuleId, Subject};
 use akr_core::json::Value;
-use akr_core::model::{ContentSlot, ContentValue, Date, Kind, Reference, Relation, RevisionId};
+use akr_core::model::{Date, Kind, Reference, Relation, RevisionId};
 use akr_core::render::{View, check_views_current, render, write_views};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -2133,8 +2133,33 @@ fn lock(session: &mut Session, check_only: bool) -> Result<Output, EnvError> {
 ///
 /// Exit 0 even with zero results. An empty result set is an answer.
 #[cfg(feature = "fts5")]
+fn ensure_search_index(session: &mut Session, path: &Path) -> Result<(), EnvError> {
+    let needs_rebuild =
+        !path.exists() || akr_core::store::is_stale_against(path, &session.source_graph());
+    if !needs_rebuild {
+        return Ok(());
+    }
+    if session.global.no_rebuild {
+        return Err(EnvError::new(
+            "AKR-I031",
+            "index is missing or stale and rebuilding is disabled",
+        )
+        .help("drop `--no-rebuild` to refresh the disposable cache, or run `akr build`"));
+    }
+
+    // Search is a read of the ledger, but its SQLite index is explicitly disposable.
+    // Rebuild only that cache: never the lock, generated views, or source records.
+    session.attach_lock();
+    let model = session.resolve();
+    let diagnostics = session.diagnostics(&model);
+    let queue = session.review_queue();
+    index_build(session, &model, &queue, &diagnostics)?;
+    Ok(())
+}
+
+#[cfg(feature = "fts5")]
 fn search(
-    session: &Session,
+    session: &mut Session,
     query: &str,
     raw_fts: bool,
     kinds: &[String],
@@ -2149,18 +2174,9 @@ fn search(
         limit,
     };
     let path = akr_core::store::cache_path(&session.akr_dir);
-    let stale = akr_core::store::is_stale_against(&path, &session.source_graph());
-    let hits = if stale {
-        // Validate that the current query still parses and stays within the query's expected
-        // shape, but preserve correctness by scanning the resolved ledger instead of relying on
-        // stale rows.
-        akr_core::store::search(&path, &request)
-            .map_err(|error| EnvError::new(error.code.as_str(), error.message))?;
-        ledger_search(session, &request)
-    } else {
-        akr_core::store::search(&path, &request)
-            .map_err(|error| EnvError::new(error.code.as_str(), error.message))?
-    };
+    ensure_search_index(session, &path)?;
+    let hits = akr_core::store::search(&path, &request)
+        .map_err(|error| EnvError::new(error.code.as_str(), error.message))?;
 
     // Columns are padded to the widest cell, as `docs/07-cli.md` §6 shows them. Results are
     // read down the page rather than across, and ragged columns make that work.
@@ -2180,11 +2196,6 @@ fn search(
             "  {:.2}  {:key_width$}  {:kind_width$} {:state_width$}  {}\n",
             hit.score, reference[index], kinds[index], states[index], hit.title
         ));
-    }
-    if stale {
-        text.push_str(
-            "warning: search results are from a stale index; run `akr build` to include recent writes\n",
-        );
     }
     text.push_str(&format!(
         "{} result{}\n",
@@ -2209,12 +2220,9 @@ fn search(
         ("query", Value::string(query.to_owned())),
         ("results", Value::array(results)),
         ("count", Value::integer(hits.len() as i64)),
-        ("index_stale", Value::bool(stale)),
-        ("cache_stale", Value::bool(stale)),
-        (
-            "backend",
-            Value::string(if stale { "ledger_scan" } else { "fts_index" }),
-        ),
+        ("index_stale", Value::bool(false)),
+        ("cache_stale", Value::bool(false)),
+        ("backend", Value::string("fts_index")),
         ("ledger_revision", Value::string(session.source_graph())),
         (
             "cache_revision",
@@ -2230,7 +2238,7 @@ fn search(
 /// `akr start` — orient an ambiguous task before committing to a context anchor.
 #[cfg(feature = "fts5")]
 fn start(
-    session: &Session,
+    session: &mut Session,
     task: &str,
     paths: &[akr_core::model::Glob],
     budget: Option<usize>,
@@ -2454,7 +2462,7 @@ fn workspace_fallback(root: &Path, task: &str) -> (Value, usize) {
 
 #[cfg(not(feature = "fts5"))]
 fn start(
-    session: &Session,
+    session: &mut Session,
     task: &str,
     paths: &[akr_core::model::Glob],
     budget: Option<usize>,
@@ -2469,117 +2477,6 @@ fn start(
     )
 }
 
-#[cfg(feature = "fts5")]
-fn ledger_search(
-    session: &Session,
-    request: &akr_core::store::Request,
-) -> Vec<akr_core::store::Hit> {
-    let query = request.query.to_lowercase();
-    let limit = request.limit.unwrap_or(20).min(100);
-    let terms: Vec<String> = query
-        .split_whitespace()
-        .map(|term| term.trim_matches(|c: char| !c.is_alphanumeric()).to_owned())
-        .filter(|term| !term.is_empty())
-        .collect();
-
-    let mut hits: Vec<akr_core::store::Hit> = Vec::new();
-    if terms.is_empty() {
-        return hits;
-    }
-
-    'record: for record in session.ledger.records() {
-        if !record.file.as_ref().is_some_and(|text| !text.is_empty()) || !record.is_live() {
-            continue;
-        }
-        if !request.kinds.is_empty() && !request.kinds.iter().any(|kind| kind == record.kind.name())
-        {
-            continue;
-        }
-        if !request.states.is_empty()
-            && !request
-                .states
-                .iter()
-                .any(|state| state == record.state.name())
-        {
-            continue;
-        }
-
-        let mut score = 0.0;
-        let searchable: Vec<(f64, String)> = record
-            .claims
-            .iter()
-            .map(|claim| (3.0, claim.text.to_lowercase()))
-            .collect();
-        let title = record.title.to_lowercase();
-        let body = akr_core::context::body_of(record)
-            .unwrap_or_default()
-            .to_lowercase();
-        let aliases = record
-            .content
-            .iter()
-            .filter_map(|(slot, value)| {
-                if slot == &ContentSlot::Aliases {
-                    match value {
-                        ContentValue::Strings(items) => Some(items.join(" ").to_lowercase()),
-                        _ => None,
-                    }
-                } else {
-                    None
-                }
-            })
-            .collect::<String>();
-
-        for term in &terms {
-            let mut touched = false;
-            if record.id.key.to_string().to_lowercase().contains(term) {
-                touched = true;
-                score += 1.0;
-            }
-            if title.contains(term) {
-                touched = true;
-                score += 4.0;
-            }
-            if body.contains(term) {
-                touched = true;
-                score += 2.0;
-            }
-            if aliases.contains(term) {
-                touched = true;
-                score += 2.0;
-            }
-            for (weight, claim) in &searchable {
-                if claim.contains(term) {
-                    touched = true;
-                    score += *weight;
-                    break;
-                }
-            }
-            if !touched {
-                continue 'record;
-            }
-        }
-
-        if score > 0.0 {
-            hits.push(akr_core::store::Hit {
-                key: record.id.key.to_string(),
-                rev: record.id.revision,
-                kind: record.kind.name().to_owned(),
-                state: record.state.name().to_owned(),
-                title: record.title.to_owned(),
-                score,
-            })
-        }
-    }
-
-    hits.sort_by(|a, b| {
-        b.score
-            .partial_cmp(&a.score)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| a.key.cmp(&b.key))
-    });
-    hits.into_iter().take(limit).collect()
-}
-
 /// The same command in a binary built without FTS5.
 ///
 /// P7 exit criterion 4: the failure is `AKR-I022` and it affects nothing else. Every other
@@ -2587,8 +2484,9 @@ fn ledger_search(
 /// them reads the index.
 #[cfg(not(feature = "fts5"))]
 fn search(
-    _session: &Session,
+    _session: &mut Session,
     _query: &str,
+    _raw_fts: bool,
     _kinds: &[String],
     _states: &[String],
     _limit: Option<usize>,

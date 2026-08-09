@@ -323,6 +323,30 @@ fn knowledge_search_and_akr_search_agree() {
     assert_eq!(without_search_overlays(tool).to_pretty(), cli.to_pretty());
 }
 
+#[cfg(feature = "fts5")]
+#[test]
+fn knowledge_search_refreshes_a_missing_index() {
+    let example = Example::materialise("differential-search-refresh");
+    assert_eq!(example.run(&["build"]).code, 0);
+    std::fs::remove_dir_all(example.root().join(".akr/cache")).expect("the cache goes");
+
+    let tool = call(&example, "knowledge.search", r#"{"query":"projection"}"#);
+    assert_eq!(
+        tool.get("index_stale").and_then(Value::as_bool),
+        Some(false)
+    );
+    assert!(
+        tool.get("results")
+            .and_then(Value::as_array)
+            .is_some_and(|results| !results.is_empty()),
+        "{}",
+        tool.to_pretty()
+    );
+    let repeated = call(&example, "knowledge.search", r#"{"query":"projection"}"#);
+    assert_eq!(tool.to_pretty(), repeated.to_pretty());
+}
+
+#[cfg(not(feature = "fts5"))]
 #[test]
 fn a_cache_without_a_ranker_fails_the_same_way_on_both_surfaces() {
     // P7 exit criterion 4 reaches the tool surface too: an agent must learn that search is

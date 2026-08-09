@@ -96,10 +96,10 @@ authorises.** A record appearing here has no standing it did not already have, a
 nothing enters a context bundle because it matched a query
 ([`09-context-assembly.md`](09-context-assembly.md) §1).
 
-`index_stale` is true when the ledger sources changed since the last `akr build`. The
-results are still returned (staleness never changes the exit code), but callers should
-build before relying on search to find a recent write. The read tool does not rebuild the
-cache itself; D-019 reserves index writes to `akr build`.
+Before returning results, search refreshes a missing or stale disposable index from the
+currently loaded ledger. Successful responses therefore carry `index_stale: false`.
+Under `--no-rebuild`, a needed refresh is refused with `AKR-I031` and the cache remains
+untouched.
 
 ### `knowledge.get`
 

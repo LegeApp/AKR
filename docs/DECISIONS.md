@@ -584,8 +584,10 @@ carries `schema_version` and `source_graph_hash` in a `meta` table; a mismatch i
 either triggers a full rebuild. Deleting it is always safe.
 
 Agents access knowledge only through the CLI or MCP surface. `AGENTS.md` says so
-explicitly. All writes go through validated source-record operations that produce
-canonically formatted `.akr` text; nothing writes to the index except `akr build`.
+explicitly. All authoritative writes go through validated source-record operations that
+produce canonically formatted `.akr` text. `akr build` materialises the index eagerly;
+a search whose cache is missing or stale refreshes that disposable index before querying.
+`--no-rebuild` turns that refresh into `AKR-I031` for read-only checkouts.
 
 **Rationale.** The moment anything reads the cache directly, the cache becomes a
 schema with compatibility obligations, and the ledger stops being the single source of

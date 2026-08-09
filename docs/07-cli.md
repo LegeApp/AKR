@@ -413,10 +413,10 @@ $ akr search "frame budget" --kind constraint --kind observation
 
 A malformed query is `AKR-X031`; an unavailable backend is `AKR-X032`; a cache built
 without FTS5 is `AKR-I022`. Exit 0 even with zero results — an empty result set is an
-answer. If `.akr` sources changed since the last `akr build`, search still exits 0 but
-prints `warning: search results are from a stale index; run akr build to include recent
-writes`. JSON output carries `"index_stale": true` in the same case. Search does not
-silently rebuild: D-019 reserves index writes to `akr build`.
+answer. If `.akr` sources changed since the last index build, search silently rebuilds
+the disposable cache before querying it. Successful JSON output therefore carries
+`"index_stale": false`. With `--no-rebuild`, a missing or stale cache is `AKR-I031` and
+remains untouched.
 
 ---
 

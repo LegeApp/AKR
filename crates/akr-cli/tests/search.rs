@@ -257,22 +257,17 @@ fn punctuation_is_words_and_only_raw_fts_can_be_malformed() {
 }
 
 // -------------------------------------------------------------------------------------
-// A write between build and search leaves the cache stale — and search now says so.
+// A write between build and search refreshes the disposable cache before querying.
 // -------------------------------------------------------------------------------------
 
 #[test]
-fn a_write_between_build_and_search_is_flagged_not_hidden() {
-    // The friction `tandem.papercut.search-after-write-stale` recorded: an agent logs a
-    // record and searches for it in the same breath, the cache still predates the write
-    // (D-019: only `akr build` may touch it), and the old answer comes back with nothing
-    // to say it is old. Search cannot rebuild, but it can — and now does — notice.
+fn a_write_between_build_and_search_refreshes_before_answering() {
     let example = Example::materialise("search-after-write");
     assert_eq!(example.run(&["build"]).code, 0);
 
-    // A fresh build: the cache matches the sources, so nothing is stale and nothing warns.
+    // A fresh build already agrees with the sources, so search leaves the cache alone.
     let fresh = example.run(&["search", "projection"]);
     assert_eq!(fresh.code, 0, "{}", fresh.output());
-    assert!(!fresh.stdout.contains("stale index"), "{}", fresh.stdout);
     let fresh_json = example.run(&["--format", "json", "search", "projection"]);
     assert!(
         fresh_json
@@ -283,7 +278,7 @@ fn a_write_between_build_and_search_is_flagged_not_hidden() {
         fresh_json.stdout
     );
 
-    // A write goes through the pipeline; by D-019 it does not touch the cache.
+    // A source write does not eagerly touch the cache.
     let wrote = example.run(&[
         "papercut",
         "-m",
@@ -294,30 +289,59 @@ fn a_write_between_build_and_search_is_flagged_not_hidden() {
     ]);
     assert_eq!(wrote.code, 0, "{}", wrote.output());
 
-    // The same query still answers — from a cache that now predates the write — and says
-    // so rather than pretending the ledger is unchanged. Staleness never changes the exit
-    // code (D-024).
-    let stale = example.run(&["search", "projection"]);
-    assert_eq!(stale.code, 0, "{}", stale.output());
-    assert!(stale.stdout.contains("stale index"), "{}", stale.stdout);
-    assert!(stale.stdout.contains("akr build"), "{}", stale.stdout);
-    let stale_json = example.run(&["--format", "json", "search", "projection"]);
+    // The next search refreshes the cache first and can find the just-written record.
+    let refreshed = example.run(&["--format", "json", "search", "testing staleness"]);
+    assert_eq!(refreshed.code, 0, "{}", refreshed.output());
     assert!(
-        stale_json
+        refreshed.stdout.contains("papercut"),
+        "{}",
+        refreshed.stdout
+    );
+    assert!(
+        refreshed
             .stdout
             .replace(' ', "")
-            .contains("\"index_stale\":true"),
+            .contains("\"index_stale\":false"),
         "{}",
-        stale_json.stdout
+        refreshed.stdout
     );
-
-    // A rebuild reconciles the cache with the sources, and the warning goes away.
-    assert_eq!(example.run(&["build"]).code, 0);
-    let rebuilt = example.run(&["search", "projection"]);
-    assert_eq!(rebuilt.code, 0, "{}", rebuilt.output());
+    let current = example.run(&["search", "testing staleness"]);
+    assert_eq!(current.code, 0, "{}", current.output());
     assert!(
-        !rebuilt.stdout.contains("stale index"),
+        !current.stdout.contains("stale index"),
         "{}",
-        rebuilt.stdout
+        current.stdout
     );
+}
+
+#[test]
+fn no_rebuild_refuses_a_stale_search_without_touching_the_cache() {
+    let example = Example::materialise("search-no-rebuild");
+    assert_eq!(example.run(&["build"]).code, 0);
+    let cache = example.root().join(".akr/cache/index.sqlite");
+    let before = std::fs::read(&cache).expect("built cache");
+
+    let wrote = example.run(&[
+        "papercut",
+        "-m",
+        "codex",
+        "a source write that makes the search cache stale",
+        "--namespace",
+        "sys",
+    ]);
+    assert_eq!(wrote.code, 0, "{}", wrote.output());
+
+    let refused = example.run(&["--no-rebuild", "search", "search cache stale"]);
+    assert_ne!(refused.code, 0, "{}", refused.output());
+    assert!(
+        refused.output().contains("AKR-I031"),
+        "{}",
+        refused.output()
+    );
+    assert!(
+        refused.output().contains("drop `--no-rebuild`"),
+        "{}",
+        refused.output()
+    );
+    assert_eq!(std::fs::read(&cache).expect("unchanged cache"), before);
 }

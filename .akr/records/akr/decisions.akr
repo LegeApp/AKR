@@ -211,3 +211,18 @@ record akr.decision.query-words-dirty-tree-ancestry/1 : decision {
         """
     supported_by [ @akr.evidence.sister-papercut-fixes ]
 }
+
+record akr.decision.search-refreshes-disposable-index/1 : decision {
+    title "Search refreshes its disposable index before querying"
+    state active
+    scope [
+        path ".akr/cache/index.sqlite",
+        path "crates/akr-cli/src/commands.rs",
+        path "crates/akr-mcp/**"
+    ]
+    topic record-search-cache-refresh
+    decision """
+        akr search and knowledge.search must rebuild a missing or source-graph-stale record index from the currently loaded ledger before querying it. This cache refresh may occur as a side effect of a read because the cache is disposable and non-authoritative; it must not modify records, the lock, or generated views. When --no-rebuild is set, a needed refresh fails with AKR-I031 and leaves the cache untouched.
+        """
+    supported_by [ @akr.evidence.search-stale-warning/1 ]
+}
