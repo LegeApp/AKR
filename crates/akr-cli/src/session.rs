@@ -210,24 +210,13 @@ impl Session {
         inputs.tool = format!("akr {TOOL_VERSION}");
         inputs.grammar = GRAMMAR_VERSION.to_owned();
         inputs.vocabulary = VOCABULARY_VERSION.to_owned();
-        // HEAD identifies these bytes only when none of the loaded AKR sources differ
-        // from HEAD. A mid-flight build is still useful (lock, views and an exact
-        // source-graph keyed cache), but stamping that derived state with the pre-change
-        // commit would be false provenance. The source graph remains the durable exact
-        // identity; the commit is deliberately absent until the ledger bytes are clean.
-        let source_graph_dirty = repository.as_ref().is_some_and(|repository| {
-            repository.working_tree_changes().is_ok_and(|changes| {
-                inputs
-                    .sources
-                    .iter()
-                    .any(|source| changes.contains(&source.path))
-            })
+        // A source graph belongs to the newest commit that actually contains those exact
+        // source bytes, not necessarily HEAD. Lock/view-only commits advance HEAD without
+        // changing the graph; stamping them into their own generated output creates an
+        // endless rebuild/commit loop. Dirty source bytes still have no commit provenance.
+        inputs.commit = repository.as_ref().and_then(|repository| {
+            source_graph_commit(repository, &inputs.sources, global.at.as_ref())
         });
-        inputs.commit = if source_graph_dirty {
-            None
-        } else {
-            commit.clone()
-        };
 
         Ok(Self {
             root,
@@ -326,6 +315,53 @@ impl Session {
                 .to_string()
         }
     }
+}
+
+/// The newest useful commit that contains every loaded source byte exactly.
+fn source_graph_commit(
+    repository: &Repository,
+    sources: &[akr_core::resolve::SourceFile],
+    requested: Option<&Commit>,
+) -> Option<Commit> {
+    let changes = repository.working_tree_changes().ok()?;
+    if sources.iter().any(|source| changes.contains(&source.path)) {
+        return None;
+    }
+
+    let contains_graph = |commit: &Commit| {
+        sources.iter().all(|source| {
+            repository
+                .file_at(commit, &source.path)
+                .ok()
+                .flatten()
+                .is_some_and(|text| {
+                    akr_core::hash::source_file_hash(text.as_bytes()) == source.hash
+                })
+        })
+    };
+    if let Some(requested) = requested {
+        return contains_graph(requested).then(|| requested.clone());
+    }
+
+    let mut candidates: Vec<Commit> = sources
+        .iter()
+        .filter_map(|source| {
+            repository
+                .commits_touching(&source.path)
+                .ok()?
+                .into_iter()
+                .next()
+        })
+        .collect();
+    candidates.sort();
+    candidates.dedup();
+    if let Ok(ordered) = repository.topological_order(&candidates)
+        && let Some(commit) = ordered.into_iter().find(|commit| contains_graph(commit))
+    {
+        return Some(commit);
+    }
+
+    repository.head().ok().filter(contains_graph)
 }
 
 /// Whether a diagnostic counts as an error under the active profile (D-013).

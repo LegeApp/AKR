@@ -192,8 +192,9 @@ command consumes:
 
 ```
 ResolvedModel
-    commit              HEAD only when it exactly contains the loaded AKR sources;
-                        absent for a dirty source graph or outside Git
+    commit              newest commit that exactly contains the loaded AKR sources;
+                        absent for a dirty source graph or outside Git. A later
+                        projection-only commit does not change this provenance.
     tool_version        semver of the binary
     grammar_version     from the file headers
     source_graph_hash   §9

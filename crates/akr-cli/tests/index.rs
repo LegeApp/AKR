@@ -8,7 +8,31 @@
 
 mod support;
 
+use std::path::Path;
+use std::process::Command;
 use support::Example;
+
+fn git(root: &Path, args: &[&str]) -> String {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .expect("git runs");
+    assert!(
+        output.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8_lossy(&output.stdout).trim().to_owned()
+}
+
+fn akr(root: &Path, args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_akr"))
+        .args(args)
+        .current_dir(root)
+        .output()
+        .expect("akr runs")
+}
 
 /// Opens the cache and answers one scalar query.
 fn scalar(example: &Example, sql: &str) -> i64 {
@@ -122,6 +146,57 @@ fn a_second_build_finds_the_cache_current_and_leaves_it_alone() {
         "{}",
         second.stdout
     );
+}
+
+#[test]
+fn a_projection_only_commit_does_not_move_source_graph_provenance() {
+    let root = std::env::temp_dir().join(format!(
+        "akr-index-projection-commit-{}",
+        std::process::id()
+    ));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join(".akr")).expect("workspace directory");
+    std::fs::write(
+        root.join(".akr/project.akr"),
+        "akr 0.1\nproject fixture\n\nnamespace fx \"Fixture knowledge.\"\n\ndefaults {\n    review_after_days 90\n    view_output \"docs/generated\"\n}\n",
+    )
+    .expect("project source");
+    git(&root, &["init", "-q"]);
+    git(&root, &["config", "user.name", "AKR tests"]);
+    git(&root, &["config", "user.email", "akr@example.invalid"]);
+    git(&root, &["add", ".akr/project.akr"]);
+    git(&root, &["commit", "-q", "-m", "commit ledger source"]);
+    let source_commit = git(&root, &["rev-parse", "HEAD"]);
+
+    let build = akr(&root, &["build"]);
+    assert!(
+        build.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+    git(&root, &["add", ".akr/akr.lock", "docs/generated"]);
+    git(&root, &["commit", "-q", "-m", "commit derived projections"]);
+    let projection_commit = git(&root, &["rev-parse", "HEAD"]);
+    assert_ne!(source_commit, projection_commit);
+
+    let check = akr(&root, &["build", "--check"]);
+    assert!(
+        check.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&check.stdout),
+        String::from_utf8_lossy(&check.stderr)
+    );
+    let lock = std::fs::read_to_string(root.join(".akr/akr.lock")).expect("lock");
+    assert!(
+        lock.contains(&format!("commit git:{source_commit}")),
+        "{lock}"
+    );
+    assert!(
+        !lock.contains(&format!("commit git:{projection_commit}")),
+        "{lock}"
+    );
+    let _ = std::fs::remove_dir_all(root);
 }
 
 #[test]

@@ -134,7 +134,7 @@ Consequences, all of them load-bearing:
 | `akr` | string | Envelope version. Bumped only on a breaking change to the envelope. |
 | `tool_version` | string | Semver of the binary. |
 | `command` | string | The command as invoked, with subcommand: `"evidence add"`. |
-| `commit` | string or null | 40 hex when the loaded AKR source graph is exactly committed; null outside Git or while those source bytes are dirty. |
+| `commit` | string or null | 40 hex for the newest commit that exactly contains the loaded AKR source graph; null outside Git or while those source bytes are dirty. Later projection-only commits do not advance it. |
 | `source_graph_hash` | string | `sha256:` + 64 hex. |
 | `ok` | boolean | `exit_code == 0`. |
 | `exit_code` | integer | Mirrors the process exit status. |
