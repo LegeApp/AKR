@@ -3,7 +3,7 @@ project akr
 
 record akr.work.context-import-provenance-hardening/1 : work {
     title "Harden context budgets, plan import, and build provenance"
-    state active
+    state completed
     scope [
         path "crates/akr-cli/src/**",
         path "crates/akr-cli/tests/**",
@@ -22,6 +22,7 @@ record akr.work.context-import-provenance-hardening/1 : work {
                 """
             method command
             command "cargo test -p akr-mcp"
+            verified_by [ @akr.evidence.knowledge-provenance-lifecycle-suite/1 ]
         }
         check dirty-build-provenance {
             statement """
@@ -29,6 +30,7 @@ record akr.work.context-import-provenance-hardening/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test index"
+            verified_by [ @akr.evidence.knowledge-provenance-lifecycle-suite/1 ]
         }
         check exact-source-adoption {
             statement """
@@ -36,6 +38,7 @@ record akr.work.context-import-provenance-hardening/1 : work {
                 """
             method command
             command "cargo test -p akr-mcp --test writes"
+            verified_by [ @akr.evidence.knowledge-provenance-lifecycle-suite/1 ]
         }
         check plan-path-discovery {
             statement """
@@ -43,6 +46,7 @@ record akr.work.context-import-provenance-hardening/1 : work {
                 """
             method command
             command "cargo test -p akr-mcp --test differential"
+            verified_by [ @akr.evidence.knowledge-provenance-lifecycle-suite/1 ]
         }
         check workspace-compiles {
             statement """
@@ -50,6 +54,7 @@ record akr.work.context-import-provenance-hardening/1 : work {
                 """
             method command
             command "cargo check --workspace --all-targets"
+            verified_by [ @akr.evidence.knowledge-provenance-lifecycle-suite/1 ]
         }
     }
 }
@@ -70,7 +75,10 @@ record akr.work.mcp-budget-and-instrumentation/1 : work {
                 """
             method command
             command "cargo test -p akr-mcp"
-            verified_by [ @akr.evidence.mcp-budget-and-skew-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.mcp-budget-and-skew-suite
+            ]
         }
         check budgets-withhold {
             statement """
@@ -80,7 +88,10 @@ record akr.work.mcp-budget-and-instrumentation/1 : work {
                 """
             method command
             command "cargo test -p akr-mcp"
-            verified_by [ @akr.evidence.mcp-budget-and-skew-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.mcp-budget-and-skew-suite
+            ]
         }
         check detail-levels {
             statement """
@@ -89,14 +100,20 @@ record akr.work.mcp-budget-and-instrumentation/1 : work {
                 """
             method command
             command "cargo test -p akr-mcp"
-            verified_by [ @akr.evidence.mcp-budget-and-skew-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.mcp-budget-and-skew-suite
+            ]
         }
         check read-surface {
             statement """
                 akr-mcp --surface read lists only the tools that answer questions.
                 """
             method observation
-            verified_by [ @akr.evidence.workspace-green-2026-08-08 ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.workspace-green-2026-08-08
+            ]
         }
         check skew-named {
             statement """
@@ -105,7 +122,10 @@ record akr.work.mcp-budget-and-instrumentation/1 : work {
                 """
             method command
             command "cargo test -p akr-mcp"
-            verified_by [ @akr.evidence.mcp-budget-and-skew-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.mcp-budget-and-skew-suite
+            ]
         }
     }
     implements [ @akr.decision.mcp-budgeted-and-instrumented ]
@@ -155,7 +175,10 @@ record akr.work.p10-external-sources/1 : work {
                 """
             method command
             command "cargo test -p akr-core --lib source::chunk::tests::byte_ranges_slice_the_original_exactly"
-            verified_by [ @akr.evidence.p10-chunk-unit-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.p10-chunk-unit-suite
+            ]
         }
         check edit-fails-verify {
             statement """
@@ -164,7 +187,10 @@ record akr.work.p10-external-sources/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test source_library editing_a_registered_source_is_an_error"
-            verified_by [ @akr.evidence.p10-source-library-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.p10-source-library-suite
+            ]
         }
         check generations-independent {
             statement """
@@ -173,7 +199,10 @@ record akr.work.p10-external-sources/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test source_library"
-            verified_by [ @akr.evidence.p10-source-library-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.p10-source-library-suite
+            ]
         }
         check no-records-on-register {
             statement """
@@ -182,7 +211,10 @@ record akr.work.p10-external-sources/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test source_library registering_a_source_creates_no_records"
-            verified_by [ @akr.evidence.p10-source-library-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.p10-source-library-suite
+            ]
         }
         check results-marked-non-authoritative {
             statement """
@@ -191,7 +223,10 @@ record akr.work.p10-external-sources/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test source_library a_search_finds_the_section_and_says_it_is_not_authoritative"
-            verified_by [ @akr.evidence.p10-source-library-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.p10-source-library-suite
+            ]
         }
         check rewrap-search-text-stable {
             statement """
@@ -200,7 +235,10 @@ record akr.work.p10-external-sources/1 : work {
                 """
             method command
             command "cargo test -p akr-core --lib source::chunk::tests::wrapping_prose_differently_does_not_change_the_search_text"
-            verified_by [ @akr.evidence.p10-chunk-unit-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.p10-chunk-unit-suite
+            ]
         }
     }
     implements [ @akr.decision.external-sources-immutable-library ]
@@ -231,7 +269,10 @@ record akr.work.p11-change-protocol/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test change_protocol committing_through_the_bridge_leaves_the_trailers_in_history"
-            verified_by [ @akr.evidence.p11-change-protocol-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.p11-change-protocol-suite
+            ]
         }
         check hooks-are-thin-wrappers {
             statement """
@@ -240,7 +281,10 @@ record akr.work.p11-change-protocol/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test change_protocol hooks_are_thin_wrappers_around_the_binary"
-            verified_by [ @akr.evidence.p11-change-protocol-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.p11-change-protocol-suite
+            ]
         }
         check message-byte-identical {
             statement """
@@ -249,7 +293,10 @@ record akr.work.p11-change-protocol/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test change_protocol a_message_is_byte_identical_across_runs"
-            verified_by [ @akr.evidence.p11-change-protocol-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.p11-change-protocol-suite
+            ]
         }
         check moved-tree-invalidates-preparation {
             statement """
@@ -258,7 +305,10 @@ record akr.work.p11-change-protocol/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test change_protocol a_staged_tree_that_moved_invalidates_the_preparation"
-            verified_by [ @akr.evidence.p11-change-protocol-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.p11-change-protocol-suite
+            ]
         }
         check reformat-not-semantic {
             statement """
@@ -267,7 +317,10 @@ record akr.work.p11-change-protocol/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test change_protocol a_reformat_is_not_a_semantic_change"
-            verified_by [ @akr.evidence.p11-change-protocol-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.p11-change-protocol-suite
+            ]
         }
         check refuse-missing-work-reference {
             statement """
@@ -276,7 +329,10 @@ record akr.work.p11-change-protocol/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test change_protocol preparing_a_code_change_with_no_work_reference_is_refused"
-            verified_by [ @akr.evidence.p11-change-protocol-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.p11-change-protocol-suite
+            ]
         }
     }
     implements [ @akr.decision.change-transaction-not-commit-kind ]
@@ -297,7 +353,10 @@ record akr.work.papercut-collation-followthrough/1 : work {
                 PAPERCUTS.md shows what still hurts.
                 """
             method observation
-            verified_by [ @akr.evidence.workspace-green-2026-08-08 ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.workspace-green-2026-08-08
+            ]
         }
         check statements-carried {
             statement """
@@ -305,7 +364,10 @@ record akr.work.papercut-collation-followthrough/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test writes"
-            verified_by [ @akr.evidence.papercut-subject-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.papercut-subject-suite
+            ]
         }
         check subject-slot {
             statement """
@@ -313,7 +375,10 @@ record akr.work.papercut-collation-followthrough/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test writes"
-            verified_by [ @akr.evidence.papercut-subject-suite ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.papercut-subject-suite
+            ]
         }
         check tooling-frictions-fixed {
             statement """
@@ -321,7 +386,10 @@ record akr.work.papercut-collation-followthrough/1 : work {
                 rename so replacing a running server does not fail with Text file busy.
                 """
             method observation
-            verified_by [ @akr.evidence.workspace-green-2026-08-08 ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.workspace-green-2026-08-08
+            ]
         }
         check workspace-green {
             statement """
@@ -329,7 +397,10 @@ record akr.work.papercut-collation-followthrough/1 : work {
                 """
             method command
             command "scripts/run-tests-sliced.sh"
-            verified_by [ @akr.evidence.workspace-green-2026-08-08 ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.workspace-green-2026-08-08
+            ]
         }
     }
     implements [ @akr.decision.papercut-subject-and-collation ]
@@ -337,7 +408,7 @@ record akr.work.papercut-collation-followthrough/1 : work {
 
 record akr.work.sealed-lifecycle-lock-validation/1 : work {
     title "Distinguish authorized sealed lifecycle transitions"
-    state active
+    state completed
     scope [
         path "crates/akr-cli/tests/**",
         path "crates/akr-core/src/**",
@@ -354,6 +425,7 @@ record akr.work.sealed-lifecycle-lock-validation/1 : work {
                 """
             method command
             command "cargo test -p akr-core -p akr-cli"
+            verified_by [ @akr.evidence.knowledge-provenance-lifecycle-suite/1 ]
         }
         check tampering-detected {
             statement """
@@ -361,6 +433,7 @@ record akr.work.sealed-lifecycle-lock-validation/1 : work {
                 """
             method command
             command "cargo test -p akr-core --test lock_roundtrip"
+            verified_by [ @akr.evidence.knowledge-provenance-lifecycle-suite/1 ]
         }
         check workspace-compiles {
             statement """
@@ -368,6 +441,7 @@ record akr.work.sealed-lifecycle-lock-validation/1 : work {
                 """
             method command
             command "cargo check --workspace --all-targets"
+            verified_by [ @akr.evidence.knowledge-provenance-lifecycle-suite/1 ]
         }
     }
 }
@@ -386,7 +460,10 @@ record akr.work.sister-papercut-fixes/1 : work {
                 """
             method command
             command "cargo test -p akr-core --test git_queries --test freshness"
-            verified_by [ @akr.evidence.sister-papercut-fixes ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.sister-papercut-fixes
+            ]
         }
         check fts-escaping {
             statement """
@@ -395,7 +472,10 @@ record akr.work.sister-papercut-fixes/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test search"
-            verified_by [ @akr.evidence.sister-papercut-fixes ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.sister-papercut-fixes
+            ]
         }
         check stale-reports-verified {
             statement """
@@ -403,7 +483,10 @@ record akr.work.sister-papercut-fixes/1 : work {
                 stale: all seven views render.
                 """
             method observation
-            verified_by [ @akr.evidence.sister-papercut-fixes ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.sister-papercut-fixes
+            ]
         }
         check strict-and-dirty {
             statement """
@@ -411,7 +494,10 @@ record akr.work.sister-papercut-fixes/1 : work {
                 mid-task.
                 """
             method observation
-            verified_by [ @akr.evidence.sister-papercut-fixes ]
+            verified_by [
+                @akr.evidence.knowledge-provenance-lifecycle-suite/1,
+                @akr.evidence.sister-papercut-fixes
+            ]
         }
     }
     implements [ @akr.decision.query-words-dirty-tree-ancestry ]

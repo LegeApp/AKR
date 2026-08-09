@@ -5,7 +5,7 @@ build {
     tool "akr 0.1.0"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:e62f4ccb8ce248e8af82d40b895dee6bc7f755f6975ebf4ba3171e7e75885f9d"
+    source_graph "sha256:ecbfcd7952b69a79db74ad9f7d9147fdea0cedd18cadd6e83656d0f05e61f656"
 }
 
 source ".akr/project.akr" {
@@ -19,8 +19,8 @@ source ".akr/records/akr/decisions.akr" {
 }
 
 source ".akr/records/akr/evidence.akr" {
-    hash "sha256:8fb12390ac2326435df52c700020a6a1e3d4b70398ffae1c7f3f1e02e7578e5f"
-    records 12
+    hash "sha256:bed23d3d59592cbfd8e5f6a7d003e4e0fed0b1cb1bd762406eedec5332c51e33"
+    records 13
 }
 
 source ".akr/records/akr/papercuts.akr" {
@@ -29,7 +29,7 @@ source ".akr/records/akr/papercuts.akr" {
 }
 
 source ".akr/records/akr/work.akr" {
-    hash "sha256:c8d46f853e5a0dfdfb4034f71b4b22ca7980738f44dba953eec3601fec426c57"
+    hash "sha256:3c7936dfc77c786f4aa27dca9ac2e62c2edc8487e64eddbcc43a74b0387ca2aa"
     records 8
 }
 
@@ -168,6 +168,11 @@ seal @akr.evidence.design-coherence-clean/1 {
 seal @akr.evidence.fmt-clean/1 {
     state verified
     hash "sha256:d50b14e471eaad51531288be9279dcd1dd1dc305d31f4c5b6f796f2e7e8dd735"
+}
+
+seal @akr.evidence.knowledge-provenance-lifecycle-suite/1 {
+    state verified
+    hash "sha256:d6a4e0c36a5aadccccc9cf514f8b2f6b131c478476e3e76ae29eb5e20413ca99"
 }
 
 seal @akr.evidence.mcp-budget-and-skew-suite/1 {
@@ -311,13 +316,13 @@ seal @akr.papercut.the-akr-mcp-knowledge-tools-failed-with-akr/2 {
 }
 
 seal @akr.work.context-import-provenance-hardening/1 {
-    state active
-    hash "sha256:fe24d531e3855452ca9d184f6e3ddd7d0d6389128b06113c76900531082b22f2"
+    state completed
+    hash "sha256:fe3971bb7d291bd4f16b9ca20467811d96596a06003fe5884dda78bab589eded"
 }
 
 seal @akr.work.mcp-budget-and-instrumentation/1 {
     state completed
-    hash "sha256:e07c28fc960d10350dc85bb1b4b05539fed3526d260a659e838ab6bea4a7d6e1"
+    hash "sha256:0b6316eaf4cb17419e0a4e45eedd21136e32b920e6efd828f394437de52656e3"
 }
 
 seal @akr.work.mcp-help-and-format-cleanup/1 {
@@ -327,25 +332,25 @@ seal @akr.work.mcp-help-and-format-cleanup/1 {
 
 seal @akr.work.p10-external-sources/1 {
     state completed
-    hash "sha256:cf9fda668bfe1685f051295242de53a3ce530ade31884537ad951bf157cb1956"
+    hash "sha256:3b64924ffe058ffa1e63c92aab01a7c5b5f67a6c99ebc682ce2f39d90c833ef7"
 }
 
 seal @akr.work.p11-change-protocol/1 {
     state completed
-    hash "sha256:a9d266b816bde7072ec8c472d0575120c4a7968f4ed96227b35fd582b8db4dde"
+    hash "sha256:dfd32efb49698d7ad1c3eac41986ff5f9c96a6e296167f6141121fa411bce1c8"
 }
 
 seal @akr.work.papercut-collation-followthrough/1 {
     state completed
-    hash "sha256:93024fdb6e0b74b238ef7e5d3d92a0cba4740e82a127df4834213156c4a6e064"
+    hash "sha256:74854288c5a432be51b7543a359e4d502737552312460b54ee06dea5713888f7"
 }
 
 seal @akr.work.sealed-lifecycle-lock-validation/1 {
-    state active
-    hash "sha256:f82b12bae61b1d6fc8bc21727a40be7dbbef5238e95606ac260bab4680e73755"
+    state completed
+    hash "sha256:030bbe6a095105d3c25391a8d77c94c44855d27cbea8fd9f234c744624ce54fa"
 }
 
 seal @akr.work.sister-papercut-fixes/1 {
     state completed
-    hash "sha256:8ef1999e31d0e4d85ec7c1a57dd66fb64d6f67c155a77833dcf531bc45221059"
+    hash "sha256:9fdef5c5944920c85e4af0408be5187e42dbbf85cbe566f04211437a86330a72"
 }

@@ -27,6 +27,18 @@ record akr.evidence.fmt-clean/1 : evidence {
     author "GitHub Uploader"
 }
 
+record akr.evidence.knowledge-provenance-lifecycle-suite/1 : evidence {
+    title "All workspace tests pass for context budgeting, exact source adoption, dirty-build provenance, lifecycle seal classification, and parallel papercut collation."
+    state verified
+    result pass
+    method command
+    observed_at git:f0280490274c3256ea307c86064b1427037308f9
+    command "cargo test --workspace --all-targets"
+    summary """
+        All workspace tests pass for context budgeting, exact source adoption, dirty-build provenance, lifecycle seal classification, and parallel papercut collation.
+        """
+}
+
 record akr.evidence.mcp-budget-and-skew-suite/1 : evidence {
     title "MCP budget and version-skew unit suite"
     state verified
