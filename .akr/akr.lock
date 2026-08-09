@@ -5,7 +5,7 @@ build {
     tool "akr 0.1.0"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:3f2ca7f2d1b8ba38b287fdcbb0b75f288fbe0bf0f575ef178ff3653b2d97b7e0"
+    source_graph "sha256:795c771cdfc5654b08225e95638950bb1a35bf5d8e45fefaa702280b0b75dd93"
 }
 
 source ".akr/project.akr" {
@@ -19,8 +19,8 @@ source ".akr/records/akr/decisions.akr" {
 }
 
 source ".akr/records/akr/evidence.akr" {
-    hash "sha256:bed23d3d59592cbfd8e5f6a7d003e4e0fed0b1cb1bd762406eedec5332c51e33"
-    records 13
+    hash "sha256:966b272edb04830d6da05a581a6da588ff738e4ad4d1283ee60bf0e037fa3348"
+    records 14
 }
 
 source ".akr/records/akr/papercuts.akr" {
@@ -29,7 +29,7 @@ source ".akr/records/akr/papercuts.akr" {
 }
 
 source ".akr/records/akr/work.akr" {
-    hash "sha256:a4e158865f8304ec7e00afdfc932435c9d62b6471dcc3ca2660c860d53ad2e1e"
+    hash "sha256:239b335ef7384478a8098112ff83d126d677a8f037b01bfb167511f7cda91518"
     records 9
 }
 
@@ -215,6 +215,11 @@ seal @akr.evidence.papercut-subject-suite/1 {
     hash "sha256:5d6497987a79c2f292d6c6e3ca7eaabe33060f3c7611f055452f555f10c59cca"
 }
 
+seal @akr.evidence.search-auto-refresh-suite/1 {
+    state verified
+    hash "sha256:7c7e644abdf78fe7b710febbe2073575ddc0b6cd7675ef4da4f69beaf3c017f7"
+}
+
 seal @akr.evidence.search-stale-warning/1 {
     state verified
     hash "sha256:7b554238825972436b05387c7a0eb3cc3f78fd703e3464c47fe242c21b4e6a56"
@@ -361,8 +366,8 @@ seal @akr.work.sealed-lifecycle-lock-validation/1 {
 }
 
 seal @akr.work.search-auto-refreshes-stale-index/1 {
-    state active
-    hash "sha256:31aae57f7e4bcec153742a86eacaa5c5afa7935dce935e82e6d99c30a396df19"
+    state completed
+    hash "sha256:45dc43b4e2371790faff17004ef0cb88b83f8a63a562f81a4c6af93d6a00a67b"
 }
 
 seal @akr.work.sister-papercut-fixes/1 {

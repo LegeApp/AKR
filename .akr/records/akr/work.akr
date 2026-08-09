@@ -448,7 +448,7 @@ record akr.work.sealed-lifecycle-lock-validation/1 : work {
 
 record akr.work.search-auto-refreshes-stale-index/1 : work {
     title "Refresh stale search indexes before returning results"
-    state active
+    state completed
     scope [
         path "crates/akr-cli/src/**",
         path "crates/akr-cli/tests/**",
@@ -465,6 +465,7 @@ record akr.work.search-auto-refreshes-stale-index/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test search"
+            verified_by [ @akr.evidence.search-auto-refresh-suite/1 ]
         }
         check mcp-current {
             statement """
@@ -472,6 +473,7 @@ record akr.work.search-auto-refreshes-stale-index/1 : work {
                 """
             method command
             command "cargo test -p akr-mcp --test differential"
+            verified_by [ @akr.evidence.search-auto-refresh-suite/1 ]
         }
         check no-rebuild-safe {
             statement """
@@ -479,6 +481,7 @@ record akr.work.search-auto-refreshes-stale-index/1 : work {
                 """
             method command
             command "cargo test -p akr-cli --test search"
+            verified_by [ @akr.evidence.search-auto-refresh-suite/1 ]
         }
     }
 }

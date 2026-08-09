@@ -125,6 +125,18 @@ record akr.evidence.papercut-subject-suite/1 : evidence {
         """
 }
 
+record akr.evidence.search-auto-refresh-suite/1 : evidence {
+    title "Search auto-refresh and no-rebuild behavior verified"
+    state verified
+    result pass
+    method command
+    observed_at git:9502792addebd2f3e8c6356d68838953fbf8b034
+    command "cargo test --workspace --all-targets && cargo check --workspace --all-targets && cargo check -p akr-cli --no-default-features && cargo check -p akr-mcp --no-default-features && python tools/check-design.py && target/debug/akr build --check"
+    summary """
+        All workspace tests and checks passed; search-after-write and missing-index tests show current FTS results without stale warnings, --no-rebuild leaves stale cache bytes unchanged and returns AKR-I031, MCP refreshes through the shared command path, and repeated MCP reads are byte-identical.
+        """
+}
+
 record akr.evidence.search-stale-warning/1 : evidence {
     title "akr search flags a stale index after a write instead of silently returning old rows"
     state verified
