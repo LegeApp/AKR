@@ -505,6 +505,55 @@ fn evidence_add_creates_a_verified_record_with_head_as_default_commit() {
 }
 
 #[test]
+fn evidence_add_many_is_one_atomic_write() {
+    let example = Example::materialise("mcp-evidence-many");
+    let arguments = r#"{
+        "evidence": [
+            {
+                "key": "sys.evidence.batch-build",
+                "result": "pass",
+                "method": "command",
+                "command": "cargo check",
+                "summary": "The workspace compiled."
+            },
+            {
+                "key": "sys.evidence.batch-review",
+                "result": "pass",
+                "method": "manual",
+                "summary": "The manual review passed."
+            }
+        ]
+    }"#;
+    let (payload, is_error) = call(&example, "knowledge.evidence_add_many", arguments);
+    assert!(!is_error, "{}", error_text(&payload));
+    assert_eq!(payload.get("written").and_then(Value::as_integer), Some(2));
+    assert_eq!(
+        payload
+            .get("evidence")
+            .and_then(Value::as_array)
+            .map(|items| items.len()),
+        Some(2)
+    );
+    let source = example.read_file(".akr/records/sys/evidence.akr");
+    assert!(source.contains("sys.evidence.batch-build/1"), "{source}");
+    assert!(source.contains("sys.evidence.batch-review/1"), "{source}");
+
+    let duplicate = r#"{
+        "evidence": [
+            {"key":"sys.evidence.batch-duplicate","result":"pass","method":"manual"},
+            {"key":"sys.evidence.batch-duplicate","result":"pass","method":"manual"}
+        ]
+    }"#;
+    let (payload, is_error) = call(&example, "knowledge.evidence_add_many", duplicate);
+    assert!(is_error, "{}", error_text(&payload));
+    let source = example.read_file(".akr/records/sys/evidence.akr");
+    assert!(
+        !source.contains("batch-duplicate"),
+        "a refused batch wrote:\n{source}"
+    );
+}
+
+#[test]
 fn papercut_is_one_call_and_lands_in_its_own_view() {
     // D-027: the message is the whole ceremony. The tool allocates the key, fills the
     // slots, and the aggregate appears in PAPERCUTS.md on the next build.

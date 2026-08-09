@@ -38,7 +38,7 @@ fn run(argv: &[String]) -> Exit {
         // Standalone commands run without a workspace, so they have no source map and, by
         // construction, no ledger diagnostics.
         Some(outcome) => (outcome, Vec::new()),
-        None => match session::Session::open(&global) {
+        None => match session::Session::open_ledger(&global) {
             Ok(mut session) => {
                 let outcome = commands::run(&mut session, &command);
                 let diagnostics = outcome.as_ref().map_or_else(

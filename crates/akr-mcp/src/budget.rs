@@ -164,6 +164,9 @@ fn narrowing_advice(tool: &str) -> String {
              files you are about to touch."
         }
         "knowledge.impact" => "Call again with a smaller `depth`.",
+        "knowledge.validate" => {
+            "Call again with a smaller `limit`, or continue from `next_offset`."
+        }
         _ => "Call again with narrower arguments.",
     }
     .to_owned()
@@ -177,6 +180,7 @@ fn narrowing_arguments(tool: &str) -> Value {
         "knowledge.search" | "knowledge.source_search" => vec![("limit", Value::integer(5))],
         "knowledge.context" => vec![("budget_tokens", Value::integer(2_000))],
         "knowledge.impact" => vec![("depth", Value::integer(1))],
+        "knowledge.validate" => vec![("limit", Value::integer(3)), ("offset", Value::integer(0))],
         _ => return Value::Null,
     };
     Value::object(vec![

@@ -144,7 +144,7 @@ but not the graph's transitive properties.
 | `AKR-L006` | Key split across files | error | V-003 | `revisions of {key} appear in {file_a} and {file_b}` | A key's history must be one diff. |
 | `AKR-L011` | Unknown anchor | error | V-004 | `{key}/{rev} has no claim or check `{anchor}`` | |
 | `AKR-L012` | Retired anchor | error | V-004 | `claim `{anchor}` was retired at revision {n}` | Pin to a revision that had it, or cite the replacement. This distinct message is why `retired_claims` exists (D-011). |
-| `AKR-L021` | Historical reference in a live slot | error | V-006 | `slot `{slot}` may not reference {key}/{rev}, which is {state}` | Only `supersedes`, `contradicts`, and `derived_from` may point at terminal records. |
+| `AKR-L021` | Historical reference in a live slot | error | V-006 | `slot `{slot}` may not reference {key}/{rev}, which is {state}` | Historical and structural exemptions may point at terminal records; `depends_on` may additionally point at completed planning records. |
 | `AKR-L031` | Relation target out of range | error | V-005 | `{relation} may not target a {kind}; its range is {range}` | The diagnostic also names relations that would accept the target. |
 | `AKR-L032` | Relation source out of domain | error | V-005 | `a {kind} may not declare `{relation}`; its domain is {domain}` | |
 | `AKR-L033` | Kind-restricted slot target invalid | error | V-005 | `{slot} may only reference {kinds}` | Applies to `exceptions`, `into`, and `ref` scope terms. |
@@ -182,7 +182,7 @@ property of the ledger as a system rather than of any one record.
 
 | Code | Title | Sev | Rule | Message | Cause and fix |
 | --- | --- | --- | --- | --- | --- |
-| `AKR-R021` | Live record depends on a terminal record | error | V-019 | `{key} is {state} but `{slot}` resolves to {target}, which is {target_state}` | The resolved counterpart of L021: a floating reference whose head became terminal. Repoint or revise. |
+| `AKR-R021` | Live record relies on an invalid terminal record | error | V-019 | `{key} is {state} but `{slot}` resolves to {target}, which is {target_state}` | The resolved counterpart of L021: repoint or revise when a floating head becomes invalid. A completed planning prerequisite remains valid. |
 | `AKR-R022` | Completion with unsatisfied acceptance | error | V-020 | `{key} is `completed` but check `{check}` is not satisfied` | Names why: no evidence, evidence not `pass`, or evidence predates the record's last content change (D-016) — the last of which is waived for a `legacy`-sourced record (D-028). |
 | `AKR-R023` | Blocked without a blocker | warning | V-020 | `{key} is `blocked` but no live record `blocks` it` | A blocked item with no blocker is a stalled item nobody has named. |
 

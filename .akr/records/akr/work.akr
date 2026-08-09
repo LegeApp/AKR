@@ -59,6 +59,26 @@ record akr.work.context-import-provenance-hardening/1 : work {
     }
 }
 
+record akr.work.desktop-review-gui/1 : work {
+    title "Build the native AKR review workbench"
+    state completed
+    scope [ path "Cargo.toml", path "crates/akr-gui/**" ]
+    intent """
+        Adapt the Lege Viewer native shell into a read-only, multi-workspace AKR review GUI with deterministic tree navigation, detail inspection, filters, and a selected-record relation neighborhood.
+        """
+    acceptance {
+        check gui-tests {
+            statement """
+                GUI model, layout, input, multi-workspace, and software rendering tests pass.
+                """
+            method command
+            command "cargo test -p akr-gui --all-targets"
+            verified_by [ @akr.evidence.human-review-gui-suite/1 ]
+        }
+    }
+    part_of [ @akr.milestone.human-record-review/1 ]
+}
+
 record akr.work.mcp-budget-and-instrumentation/1 : work {
     title "Bound and instrument the MCP surface"
     state completed
@@ -406,6 +426,73 @@ record akr.work.papercut-collation-followthrough/1 : work {
     implements [ @akr.decision.papercut-subject-and-collation ]
 }
 
+record akr.work.reduce-knowledge-write-latency/1 : work {
+    title "Reduce repeated knowledge-write latency"
+    state completed
+    intent """
+        Measure the current knowledge-write path, separate stale-version reports from present bottlenecks, and implement focused improvements that materially reduce repeated evidence and lifecycle update latency without weakening validation or durability guarantees.
+        """
+}
+
+record akr.work.resolve-collated-papercuts/1 : work {
+    title "Resolve newly collated AKR papercuts"
+    state completed
+    intent """
+        Review the collated cross-project papercuts, distinguish reports already fixed in the current AKR from genuinely new issues, and implement focused fixes with regression coverage.
+        """
+}
+
+record akr.work.review-snapshot/1 : work {
+    title "Expose immutable review snapshots"
+    state completed
+    scope [ path "crates/akr-cli/src/**", path "crates/akr-core/src/**" ]
+    intent """
+        Provide one owned read-only projection for human review clients containing resolved record hierarchy, details, typed relations, freshness, diagnostics, provenance, and Git metadata.
+        """
+    acceptance {
+        check projection-tests {
+            statement """
+                Snapshot hierarchy, ordering, relationships, acceptance, freshness, and Git metadata tests pass.
+                """
+            method command
+            command "cargo test -p akr-cli review_snapshot"
+            verified_by [ @akr.evidence.human-review-snapshot-suite/1 ]
+        }
+    }
+    part_of [ @akr.milestone.human-record-review/1 ]
+}
+
+record akr.work.runtime-hardening/1 : work {
+    title "Optimize and harden AKR tool execution"
+    state completed
+    scope [
+        path "crates/akr-cli/src/**",
+        path "crates/akr-core/src/git/**",
+        path "crates/akr-mcp/src/**"
+    ]
+    intent """
+        Avoid Git and history work for commands that do not need it, preserve correct cache invalidation, and ensure malformed, refused, oversized, or internally failed MCP calls do not terminate the server.
+        """
+    acceptance {
+        check search-no-git {
+            statement """
+                A current-index warm knowledge.search performs no Git subprocesses.
+                """
+            method observation
+            verified_by [ @akr.evidence.human-review-warm-search/1 ]
+        }
+        check tool-suite {
+            statement """
+                MCP differential, invalidation, malformed-input, panic-containment, and soak tests pass.
+                """
+            method command
+            command "cargo test -p akr-mcp --tests"
+            verified_by [ @akr.evidence.human-review-mcp-suite/1 ]
+        }
+    }
+    part_of [ @akr.milestone.human-record-review/1 ]
+}
+
 record akr.work.sealed-lifecycle-lock-validation/1 : work {
     title "Distinguish authorized sealed lifecycle transitions"
     state completed
@@ -541,4 +628,22 @@ record akr.work.sister-papercut-fixes/1 : work {
         }
     }
     implements [ @akr.decision.query-words-dirty-tree-ancestry ]
+}
+
+record akr.work.windows-linux-certification/1 : work {
+    title "Certify Windows and Linux GUI builds"
+    state proposed
+    scope [ path ".github/**", path "crates/akr-gui/**" ]
+    intent """
+        Provide CI build and deterministic software-presenter test coverage for the native AKR GUI on Windows and Linux.
+        """
+    acceptance {
+        check platform-ci {
+            statement """
+                Windows and Linux CI build, tests, and smoke checks pass for akr-gui.
+                """
+            method observation
+        }
+    }
+    part_of [ @akr.milestone.human-record-review/1 ]
 }

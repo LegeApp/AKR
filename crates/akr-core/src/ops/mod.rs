@@ -333,6 +333,58 @@ pub fn propose(
     )
 }
 
+/// Creates several revision-one records in one atomic pipeline pass.
+///
+/// This is the bulk primitive used when a verification run produces several evidence
+/// records. Every key is checked before the in-memory edits are applied, the resulting
+/// ledger is validated once, and either every touched file is committed or none is.
+///
+/// # Errors
+/// Refuses an empty batch, an existing or repeated key, or an invalid resulting ledger.
+pub fn propose_many(context: &WriteContext, templates: &[Record]) -> WriteResult {
+    let mut staged = load(context, Operation::Propose)?;
+    if templates.is_empty() {
+        return Err(Refused::new(
+            Operation::Propose,
+            cli::C031,
+            "a proposal batch needs at least one record",
+        ));
+    }
+
+    let mut seen = BTreeSet::new();
+    let mut edits = Vec::with_capacity(templates.len());
+    for template in templates {
+        let key = &template.id.key;
+        if !seen.insert(key.clone()) || !staged.ledger.revisions_of(key).is_empty() {
+            return Err(Refused::new(
+                Operation::Propose,
+                codes::L041,
+                format!("{key} already exists"),
+            )
+            .with_help(format!("use `akr revise {key}` to change it")));
+        }
+
+        let mut record = template.clone();
+        record.id = RevisionId::new(key.clone(), 1);
+        if record.title.is_empty() {
+            record.title = key.to_string();
+        }
+        if record.author.is_none() {
+            record.author.clone_from(&context.author);
+        }
+        if !record.kind.class().states().contains(&record.state) {
+            record.state = record.kind.class().initial()[0];
+        }
+        edits.push((
+            conventional_file(key, record.kind),
+            record,
+            ChangeKind::Created,
+        ));
+    }
+
+    apply_many(context, staged_mut(&mut staged), Operation::Propose, &edits)
+}
+
 /// Edits the head of a key, or creates revision n+1 of it.
 ///
 /// A `proposed` head is edited in place: D-015 makes proposed revisions editable, and

@@ -266,10 +266,9 @@ pub struct AtRisk {
 /// and a warning nobody can act on is a warning that trains people to ignore the rest.
 ///
 /// The same reasoning stops the walk at a terminal record rather than passing through it.
-/// The one relation that can point from a live record at a terminal one is `derived_from`
-/// (V-019 forbids the others), and `derived_from` is provenance: a record derived from a
-/// retired finding was derived from what that finding said at the time, and a change
-/// beneath the retired finding does not reach back through it.
+/// `derived_from` may point at a terminal record as provenance, and `depends_on` may point
+/// at completed planning work because completion satisfies the prerequisite. Neither
+/// carries later doubt back through a settled boundary.
 ///
 /// # Determinism
 ///

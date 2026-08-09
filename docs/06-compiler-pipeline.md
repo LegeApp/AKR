@@ -155,7 +155,7 @@ that stage D's traversals are cheap.
 | All revisions of one key live in one file | V-003 | `AKR-L006` |
 | Claim and check anchors exist; retired anchors reported distinctly | V-004 | `AKR-L012` |
 | Relation and slot targets are kind-correct against the declared range | V-005 | `AKR-L031` |
-| References to terminal records only via historical relations | V-006 | `AKR-L021` |
+| References to invalid terminal records only via historical relations | V-006 | `AKR-L021` |
 
 The anchor check is worth its own sentence. A reference to `@key#anchor` where the head
 revision does not define `anchor` but a previous revision did, *and* the head lists the
@@ -172,7 +172,8 @@ revision if there is one, otherwise the end of the supersession chain. A floatin
 therefore **always** resolves as long as the key exists — finishing a milestone does not
 break `after [ @sys.milestone.m2-deterministic-sim ]`. Whether the resolved revision is
 *live* is a separate question, asked by V-019 of the four relations where it matters
-(`depends_on`, `implements`, `plan_of_record`, `supported_by`) and of no others.
+(`depends_on`, `implements`, `plan_of_record`, `supported_by`) and of no others. For
+`depends_on`, a completed planning head is satisfied rather than invalid.
 
 **Determinism.** Head resolution reads only the record set — never `akr.lock`, never git.
 The lock is *written* from this stage's log and *compared* in stage D; it is never an
@@ -224,7 +225,9 @@ ones passed.
    `after`. Each is checked by a depth-first traversal in canonical key order, so the
    *reported* cycle is the same one on every run.
 4. **Live/terminal coherence (V-019, `AKR-R021`).** A live record may not point at a
-   terminal one through `depends_on`, `implements`, `plan_of_record` or `supported_by`.
+   terminal one through `implements`, `plan_of_record` or `supported_by`. The same holds
+   for `depends_on` except when the target is a completed planning record: completion
+   satisfies the prerequisite and the edge remains as provenance.
    The historical relations — `after`, `part_of`, `blocks`, `verified_by`,
    `derived_from`, `supersedes`, `contradicts`, `resolves` — are exempt, because
    pointing at finished or retired work is exactly what they are for.

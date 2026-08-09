@@ -1,0 +1,47 @@
+akr 0.1
+project akr
+
+record akr.milestone.human-record-review/1 : milestone {
+    title "Deliver native human-facing AKR record review"
+    state proposed
+    scope [
+        path "Cargo.toml",
+        path "crates/akr-cli/src/**",
+        path "crates/akr-core/src/**",
+        path "crates/akr-gui/**",
+        path "crates/akr-mcp/src/**"
+    ]
+    intent """
+        Provide a fast, reliable, read-only native desktop workbench for reviewing AKR planning and knowledge records, their typed relations, freshness, evidence, and Git provenance across multiple local workspaces on Windows and Linux.
+        """
+    acceptance {
+        check desktop-review-usable {
+            statement """
+                The read-only multi-workspace GUI renders and navigates the review hierarchy and selected-record neighborhood.
+                """
+            method command
+            command "cargo test -p akr-gui --all-targets"
+        }
+        check review-snapshot-complete {
+            statement """
+                The immutable review snapshot deterministically exposes hierarchy, details, relations, freshness, diagnostics, and Git metadata.
+                """
+            method command
+            command "cargo test -p akr-cli review_snapshot"
+        }
+        check runtime-fast-reliable {
+            statement """
+                AKR tool calls use capability-aware loading and survive the reliability soak without stale results or server termination.
+                """
+            method command
+            command "cargo test -p akr-mcp --tests"
+        }
+        check windows-linux-build {
+            statement """
+                The GUI and its software presentation path compile and test on Windows and Linux CI targets.
+                """
+            method command
+            command "cargo check -p akr-gui --all-targets"
+        }
+    }
+}

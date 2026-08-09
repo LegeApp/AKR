@@ -96,6 +96,12 @@ pub struct Session {
     pub today: Date,
     /// The global flags.
     pub global: Global,
+    /// Whether repository identity, history facts and source provenance have been loaded.
+    ///
+    /// Search can answer from a current disposable index without any of those facts.  A
+    /// long-lived MCP server therefore starts with a ledger-only session and upgrades it
+    /// only when a command actually asks a Git-backed question.
+    git_facts_loaded: bool,
 }
 
 /// Walks up from `start` looking for a `.akr/` directory.
@@ -144,6 +150,20 @@ impl Session {
     /// # Errors
     /// [`EnvError`] for a missing workspace, an unreadable one, or a shallow repository.
     pub fn open(global: &Global) -> Result<Self, EnvError> {
+        let mut session = Self::open_ledger(global)?;
+        session.ensure_git_facts()?;
+        Ok(session)
+    }
+
+    /// Loads and resolves the AKR sources without spawning Git.
+    ///
+    /// Callers must use [`Self::ensure_git_facts`] before freshness, provenance or
+    /// history-dependent work.  This split is primarily for `search`/`start`: when their
+    /// disposable index is current, Git is not part of the answer at all.
+    ///
+    /// # Errors
+    /// [`EnvError`] for a missing or unreadable workspace.
+    pub fn open_ledger(global: &Global) -> Result<Self, EnvError> {
         let (root, akr_dir) = locate(&global.dir)?;
         let workspace: Workspace = load_workspace(&root, &akr_dir).map_err(|error| {
             EnvError::new(
@@ -152,7 +172,42 @@ impl Session {
             )
         })?;
 
-        let repository = match Repository::open(&root) {
+        let today = global.today.unwrap_or_else(current_date);
+        let mut inputs = workspace.inputs;
+        inputs.tool = format!("akr {TOOL_VERSION}");
+        inputs.grammar = GRAMMAR_VERSION.to_owned();
+        inputs.vocabulary = VOCABULARY_VERSION.to_owned();
+
+        Ok(Self {
+            root,
+            akr_dir,
+            ledger: workspace.ledger,
+            inputs,
+            parse_diagnostics: workspace.diagnostics,
+            lock_text: workspace.lock_text,
+            sources: workspace.sources,
+            spans: workspace.spans,
+            repository: None,
+            commit: None,
+            today,
+            global: global.clone(),
+            git_facts_loaded: false,
+        })
+    }
+
+    /// Adds repository identity, historical facts and exact source provenance once.
+    ///
+    /// Repeated calls are free.  A session is an immutable view of the source graph it
+    /// loaded, so facts never need to be refreshed in-place; callers create a new session
+    /// after a write or external edit.
+    ///
+    /// # Errors
+    /// [`EnvError`] when a requested commit is absent or repository history is shallow.
+    pub fn ensure_git_facts(&mut self) -> Result<(), EnvError> {
+        if self.git_facts_loaded {
+            return Ok(());
+        }
+        let repository = match Repository::open(&self.root) {
             Ok(repository) => Some(repository),
             Err(akr_core::git::GitError::ShallowHistory) => {
                 return Err(EnvError::new(
@@ -163,8 +218,7 @@ impl Session {
             }
             Err(_) => None,
         };
-
-        let commit = match (&global.at, &repository) {
+        let commit = match (&self.global.at, &repository) {
             (Some(at), Some(repository)) => {
                 if !repository.contains(at) {
                     return Err(EnvError::new(
@@ -179,21 +233,18 @@ impl Session {
             (None, None) => None,
         };
 
-        let today = global.today.unwrap_or_else(current_date);
-
-        let mut ledger = workspace.ledger;
         if let Some(repository) = &repository {
-            // V-020's descendant-commit condition needs both, and P5 supplies them.
-            if let Ok(last_change) = akr_core::git::last_changes(repository, &ledger) {
-                ledger.facts.last_change = last_change;
+            if let Ok(last_change) = akr_core::git::last_changes(repository, &self.ledger) {
+                self.ledger.facts.last_change = last_change;
             }
-            let commits: Vec<Commit> = ledger
+            let commits: Vec<Commit> = self
+                .ledger
                 .facts
                 .last_change
                 .values()
                 .cloned()
                 .chain(
-                    ledger
+                    self.ledger
                         .records()
                         .iter()
                         .filter_map(akr_core::freshness::observed_at)
@@ -202,36 +253,17 @@ impl Session {
                 .chain(commit.clone())
                 .collect();
             if let Ok(ancestry) = akr_core::git::ancestry_over(repository, commits) {
-                ledger.facts.ancestry = ancestry;
+                self.ledger.facts.ancestry = ancestry;
             }
         }
 
-        let mut inputs = workspace.inputs;
-        inputs.tool = format!("akr {TOOL_VERSION}");
-        inputs.grammar = GRAMMAR_VERSION.to_owned();
-        inputs.vocabulary = VOCABULARY_VERSION.to_owned();
-        // A source graph belongs to the newest commit that actually contains those exact
-        // source bytes, not necessarily HEAD. Lock/view-only commits advance HEAD without
-        // changing the graph; stamping them into their own generated output creates an
-        // endless rebuild/commit loop. Dirty source bytes still have no commit provenance.
-        inputs.commit = repository.as_ref().and_then(|repository| {
-            source_graph_commit(repository, &inputs.sources, global.at.as_ref())
+        self.inputs.commit = repository.as_ref().and_then(|repository| {
+            source_graph_commit(repository, &self.inputs.sources, self.global.at.as_ref())
         });
-
-        Ok(Self {
-            root,
-            akr_dir,
-            ledger,
-            inputs,
-            parse_diagnostics: workspace.diagnostics,
-            lock_text: workspace.lock_text,
-            sources: workspace.sources,
-            spans: workspace.spans,
-            repository,
-            commit,
-            today,
-            global: global.clone(),
-        })
+        self.repository = repository;
+        self.commit = commit;
+        self.git_facts_loaded = true;
+        Ok(())
     }
 
     /// Attaches the lock's seal facts, so V-024 fires (D-015).

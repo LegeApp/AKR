@@ -1,0 +1,25 @@
+[package]
+name = "akr-gui"
+description = "Read-only native desktop review workbench for AKR ledgers."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "akr_gui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "akr-gui"
+path = "src/main.rs"
+
+[dependencies]
+akr-cli = { path = "../akr-cli" }
+font8x8 = "0.3"
+softbuffer = "0.4"
+winit = "0.30"

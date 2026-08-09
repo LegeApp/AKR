@@ -76,6 +76,47 @@ fn propose_refuses_an_existing_key() {
 }
 
 #[test]
+fn propose_many_writes_every_record_in_one_atomic_pass() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir()).with_author("tester");
+    let records = vec![
+        term("sys.term.batch-alpha", "Batch alpha"),
+        term("sys.term.batch-beta", "Batch beta"),
+    ];
+
+    let applied = ops::propose_many(&context, &records).expect("the batch is valid");
+    assert_eq!(applied.changes.len(), 2);
+    assert_eq!(
+        applied.files.len(),
+        1,
+        "both terms share one canonical file"
+    );
+    let ledger = sandbox.ledger();
+    for key_text in ["sys.term.batch-alpha", "sys.term.batch-beta"] {
+        assert!(
+            ledger.head(&key(key_text)).is_ok(),
+            "{key_text} was written"
+        );
+    }
+    sandbox.assert_canonical();
+}
+
+#[test]
+fn propose_many_rejects_a_duplicate_without_writing_anything() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    let before = sandbox.snapshot();
+    let records = vec![
+        term("sys.term.batch-duplicate", "First"),
+        term("sys.term.batch-duplicate", "Second"),
+    ];
+
+    let refused = ops::propose_many(&context, &records).expect_err("duplicate batch key");
+    assert_eq!(refused.code.as_str(), "AKR-L041");
+    assert_eq!(before, sandbox.snapshot(), "a refused batch writes nothing");
+}
+
+#[test]
 fn propose_refuses_a_record_that_would_not_validate() {
     let sandbox = Sandbox::save_your_skin();
     let context = WriteContext::new(sandbox.akr_dir());

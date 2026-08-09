@@ -294,15 +294,18 @@ only say "no such anchor", and the reader would have to reconstruct what happene
 
 ## 5. Historical access
 
-Live records are for building on; terminal records are for citing. The rule (V-006,
-`AKR-L021`):
+Live records are for building on; terminal records are for citing, except that a
+completed planning record remains a satisfied prerequisite. The rule (V-006,
+`AKR-L021`) is therefore:
 
 > A reference whose target is in a terminal state is an error, **unless** the referring
-> slot is `supersedes`, `contradicts`, or `derived_from`.
+> slot is historical or it is `depends_on` a completed planning record.
 
-Those three are the historical relations: they exist precisely to point backwards. Every
-other relation means "this is part of how things currently work", and pointing it at a
-withdrawn policy or an abandoned work item is a mistake worth catching.
+The historical relations exist precisely to point backwards. Other relations mean "this
+is part of how things currently work", and pointing one at a withdrawn policy or an
+abandoned work item is a mistake worth catching. Completion differs from abandonment:
+it means the prerequisite was satisfied, and removing the edge would discard useful
+provenance.
 
 | Situation | Legal? |
 | --- | --- |
@@ -310,6 +313,7 @@ withdrawn policy or an abandoned work item is a mistake worth catching.
 | `derived_from [ @lege.obs.viewer-imports-engine/1 ]` where the observation is disproven | yes — the derivation is a historical fact |
 | `contradicts [ @sim.evidence.x/1 ]` where the evidence is withdrawn | yes — the contradiction happened |
 | `depends_on [ @sys.policy.weekly-demo ]` where the policy is withdrawn | **no** — `AKR-L021` |
+| `depends_on [ @sys.milestone.m2-deterministic-sim ]` where M2 is completed | **yes** — the prerequisite was satisfied |
 | `implements [ @lege.decision.renderer-boundary/1 ]` where `/1` is superseded | **no** — implement the head, or pin deliberately and explain in prose |
 | `after [ @sys.milestone.m2-deterministic-sim ]` where M2 is completed | **yes** — a finished predecessor is the normal case |
 | `part_of [ @sys.milestone.m3-playable-day ]` where the milestone is completed | **yes** — work under a finished milestone is history, not an error |

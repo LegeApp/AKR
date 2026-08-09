@@ -24,6 +24,8 @@ pub enum Class {
     Environment,
     /// The call succeeded with a caveat that belongs in the agent's report.
     Degraded,
+    /// The server contained an unexpected implementation failure. Retry once.
+    Internal,
 }
 
 impl Class {
@@ -38,6 +40,7 @@ impl Class {
             Self::Conflict => "conflict",
             Self::Environment => "environment",
             Self::Degraded => "degraded",
+            Self::Internal => "internal",
         }
     }
 
@@ -47,7 +50,7 @@ impl Class {
     /// is a different call in every way that matters except the shape.
     #[must_use]
     pub const fn retryable(self) -> bool {
-        matches!(self, Self::Conflict)
+        matches!(self, Self::Conflict | Self::Internal)
     }
 }
 
@@ -65,6 +68,7 @@ pub fn class_of(code: &str) -> Class {
         "AKR-C011" | "AKR-C012" | "AKR-C042" | "AKR-G001" | "AKR-G003" | "AKR-I003"
         | "AKR-I031" | "AKR-I032" | "AKR-I022" => Class::Environment,
         "AKR-X041" => Class::Usage,
+        "AKR-X099" => Class::Internal,
         "AKR-L001" | "AKR-L004" | "AKR-X001" | "AKR-E003" => Class::NotFound,
         "AKR-L006" | "AKR-L012" | "AKR-L021" | "AKR-L031" => Class::Invariant,
         "AKR-X033" | "AKR-G004" | "AKR-X012" | "AKR-X022" => Class::Degraded,

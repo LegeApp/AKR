@@ -88,6 +88,9 @@ pub fn run_standalone(command: &Command) -> Option<Result<Output, EnvError>> {
 /// # Errors
 /// [`EnvError`] when the environment is unusable.
 pub fn run(session: &mut Session, command: &Command) -> Result<Output, EnvError> {
+    if command.needs_git_facts() {
+        session.ensure_git_facts()?;
+    }
     // The envelope's `commit` and `source_graph_hash` are properties of the build, not of
     // any one command, so they are filled in once here rather than by each command that
     // happens to remember.
@@ -2147,6 +2150,10 @@ fn ensure_search_index(session: &mut Session, path: &Path) -> Result<(), EnvErro
         .help("drop `--no-rebuild` to refresh the disposable cache, or run `akr build`"));
     }
 
+    // A current index is a pure ledger lookup and deliberately reaches this point
+    // without spawning Git.  Rebuilding materialises freshness, so upgrade only here.
+    session.ensure_git_facts()?;
+
     // Search is a read of the ledger, but its SQLite index is explicitly disposable.
     // Rebuild only that cache: never the lock, generated views, or source records.
     session.attach_lock();
@@ -2504,6 +2511,13 @@ fn context(
     paths: &[akr_core::model::Glob],
     budget: Option<usize>,
 ) -> Result<Output, EnvError> {
+    if session.ledger.records().is_empty() {
+        return Err(EnvError::new(
+            "AKR-X001",
+            "knowledge ledger has no records yet",
+        )
+        .help("create the first planning record with `knowledge.propose`, then use its key as the context goal"));
+    }
     let model = session.resolve();
     let queue = session.review_queue();
     let freshness = session.freshness(&queue);

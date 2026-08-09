@@ -412,20 +412,29 @@ fn sibling_workspaces(example: &Example) -> std::path::PathBuf {
         )
         .expect("sibling papercuts.akr");
 
-        // …and one whose subject is AKR itself, not this sibling. D-033: this is the
+        // …and one whose subject is the target namespace, not this sibling. D-033: this is the
         // record that used to be invisible to whoever maintains the tool.
         std::fs::write(
             records.join("tool-papercuts.akr"),
             format!(
                 "akr 0.1\nproject {project}\n\nrecord {project}.papercut.{slug}-tool/1 : papercut {{\n    \
-                 title \"{project} hit an akr bug\"\n    state verified\n    statement \"\"\"\n        \
-                 An akr diagnostic was misleading.\n        \"\"\"\n    observed_at \
-                 git:0123456789abcdef0123456789abcdef01234567\n    about \"akr\"\n    author \"test\"\n    created_at \
+                 title \"{project} hit a sys bug\"\n    state verified\n    statement \"\"\"\n        \
+                 A sys diagnostic was misleading.\n        \"\"\"\n    observed_at \
+                 git:0123456789abcdef0123456789abcdef01234567\n    about \"sys\"\n    author \"test\"\n    created_at \
                  2026-08-07\n}}\n"
             ),
         )
         .expect("sibling tool-papercuts.akr");
     }
+    // A scanned workspace that contributes nothing must not appear in the master title
+    // or key; those name the provenance of the selected entries, not the scan breadth.
+    let gamma = scan.join("gamma").join(".akr");
+    std::fs::create_dir_all(gamma.join("records/gamma")).expect("empty sibling records dir");
+    std::fs::write(
+        gamma.join("project.akr"),
+        "akr 0.1\nproject gamma\n\nnamespace gamma \"gamma knowledge.\"\n",
+    )
+    .expect("empty sibling project.akr");
     scan
 }
 
@@ -440,6 +449,7 @@ fn papercut_collate_gathers_sister_papercuts_once() {
         "collate",
         "--projects",
         projects,
+        "--all",
         "--namespace",
         "sys",
     ]);
@@ -489,6 +499,7 @@ fn papercut_collate_gathers_sister_papercuts_once() {
         "collate",
         "--projects",
         projects,
+        "--all",
         "--namespace",
         "sys",
     ]);
@@ -509,7 +520,7 @@ fn papercut_collate_gathers_sister_papercuts_once() {
 }
 
 #[test]
-fn collate_can_narrow_to_one_subject_and_says_what_it_left() {
+fn collate_defaults_to_its_namespace_and_says_what_it_left() {
     let example = Example::materialise("write-collate-about");
     let scan = sibling_workspaces(&example);
     let projects = scan.to_str().expect("utf-8 scan dir");
@@ -521,8 +532,6 @@ fn collate_can_narrow_to_one_subject_and_says_what_it_left() {
         "collate",
         "--projects",
         projects,
-        "--about",
-        "akr",
         "--namespace",
         "sys",
     ]);
@@ -544,10 +553,11 @@ fn collate_can_narrow_to_one_subject_and_says_what_it_left() {
         run.output()
     );
     assert!(
-        run.stdout.contains("subjects seen: akr"),
+        run.stdout.contains("subjects seen: sys"),
         "{}",
         run.output()
     );
+    assert!(source.contains("about \"sys\""), "{source}");
 
     let _ = std::fs::remove_dir_all(&scan);
 }

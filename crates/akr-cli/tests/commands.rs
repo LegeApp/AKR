@@ -54,6 +54,39 @@ fn help_and_version_need_no_workspace() {
 }
 
 #[test]
+fn context_on_an_empty_ledger_explains_how_to_create_the_first_goal() {
+    let example = Example::materialise("commands-empty-ledger");
+    for directory in [".akr/records", ".akr/archive"] {
+        let path = example.root().join(directory);
+        if path.exists() {
+            std::fs::remove_dir_all(&path).expect("fixture knowledge removed");
+        }
+    }
+    std::fs::create_dir_all(example.root().join(".akr/records"))
+        .expect("empty records directory restored");
+
+    let run = example.run(&[
+        "--format",
+        "json",
+        "context",
+        "--goal",
+        "sys.milestone.first",
+    ]);
+    assert_eq!(run.code, 3, "{}", run.output());
+    assert!(
+        run.stdout.contains("knowledge ledger has no records yet"),
+        "{}",
+        run.output()
+    );
+    assert!(
+        run.stdout
+            .contains("create the first planning record with `knowledge.propose`"),
+        "{}",
+        run.output()
+    );
+}
+
+#[test]
 fn every_read_command_runs_and_produces_an_envelope() {
     let example = Example::materialise("commands");
     let cases: &[(&str, &[&str])] = &[

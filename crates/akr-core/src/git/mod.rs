@@ -362,6 +362,53 @@ impl Repository {
         }
     }
 
+    /// Reads one path at many commits through a single `cat-file --batch` process.
+    fn file_versions(
+        &self,
+        commits: &[Commit],
+        path: &str,
+    ) -> Result<BTreeMap<Commit, Option<String>>, GitError> {
+        let input = commits
+            .iter()
+            .map(|commit| format!("{}:{path}\n", commit.as_str()))
+            .collect::<String>();
+        let bytes = self.run_bytes_with_stdin(&["cat-file", "--batch"], &input)?;
+        let mut cursor = 0usize;
+        let mut out = BTreeMap::new();
+        for commit in commits {
+            let Some(relative_end) = bytes[cursor..].iter().position(|byte| *byte == b'\n') else {
+                return Err(GitError::MalformedOutput(
+                    "cat-file --batch response ended before its header".to_owned(),
+                ));
+            };
+            let header_end = cursor + relative_end;
+            let header = String::from_utf8_lossy(&bytes[cursor..header_end]);
+            cursor = header_end + 1;
+            if header.ends_with(" missing") {
+                out.insert(commit.clone(), None);
+                continue;
+            }
+            let size = header
+                .split_whitespace()
+                .nth(2)
+                .and_then(|value| value.parse::<usize>().ok())
+                .ok_or_else(|| GitError::MalformedOutput(header.into_owned()))?;
+            let content_end = cursor.saturating_add(size);
+            if content_end > bytes.len() {
+                return Err(GitError::MalformedOutput(
+                    "cat-file --batch response ended inside an object".to_owned(),
+                ));
+            }
+            let text = String::from_utf8_lossy(&bytes[cursor..content_end]).into_owned();
+            cursor = content_end;
+            if bytes.get(cursor) == Some(&b'\n') {
+                cursor += 1;
+            }
+            out.insert(commit.clone(), Some(text));
+        }
+        Ok(out)
+    }
+
     /// Every tracked path at a commit, sorted.
     ///
     /// Used by V-102's "matches nothing" check, which needs the tree rather than the
@@ -590,6 +637,48 @@ impl Repository {
         Ok(String::from_utf8_lossy(&output.stdout).into_owned())
     }
 
+    fn run_bytes_with_stdin<S: AsRef<OsStr>>(
+        &self,
+        args: &[S],
+        input: &str,
+    ) -> Result<Vec<u8>, GitError> {
+        use std::io::Write as _;
+        use std::process::Stdio;
+        let mut child = Command::new("git")
+            .args(args)
+            .current_dir(&self.root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| GitError::CommandFailed {
+                subcommand: describe(args),
+                stderr: e.to_string(),
+            })?;
+        if let Some(stdin) = child.stdin.as_mut() {
+            stdin
+                .write_all(input.as_bytes())
+                .map_err(|e| GitError::CommandFailed {
+                    subcommand: describe(args),
+                    stderr: e.to_string(),
+                })?;
+        }
+        drop(child.stdin.take());
+        let output = child
+            .wait_with_output()
+            .map_err(|e| GitError::CommandFailed {
+                subcommand: describe(args),
+                stderr: e.to_string(),
+            })?;
+        if !output.status.success() {
+            return Err(GitError::CommandFailed {
+                subcommand: describe(args),
+                stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+            });
+        }
+        Ok(output.stdout)
+    }
+
     fn status<S: AsRef<OsStr>>(&self, args: &[S]) -> Result<i32, GitError> {
         let output = Command::new("git")
             .args(args)
@@ -786,13 +875,83 @@ pub fn last_changes(
     repository: &Repository,
     ledger: &crate::model::Ledger,
 ) -> Result<BTreeMap<crate::model::RevisionId, Commit>, GitError> {
-    let mut out = BTreeMap::new();
+    // Records are conventionally grouped into a handful of ledger files. Walking the
+    // same file history once per record made session startup O(records × file history)
+    // and spawned hundreds of git processes in medium-sized projects. Read and parse
+    // each historical file version once, then advance every record in that file together.
+    let mut by_file: BTreeMap<String, BTreeSet<crate::model::RevisionId>> = BTreeMap::new();
     for record in crate::graph::sorted_records(ledger) {
         let Some(path) = &record.file else { continue };
-        if let Some(commit) = last_change_of(repository, path, &record.id.key, record.id.revision)?
-        {
-            out.insert(record.id.clone(), commit);
+        by_file
+            .entry(path.clone())
+            .or_default()
+            .insert(record.id.clone());
+    }
+
+    let mut out = BTreeMap::new();
+    for (path, wanted) in by_file {
+        let commits = repository.commits_touching(&path)?;
+        let Some(newest) = commits.first() else {
+            continue;
+        };
+        let versions = repository.file_versions(&commits, &path)?;
+        let current = versions
+            .get(newest)
+            .and_then(Option::as_deref)
+            .map_or_else(BTreeMap::new, |text| definitional_hashes(text, &wanted));
+        let mut unresolved: BTreeSet<crate::model::RevisionId> = current.keys().cloned().collect();
+        let mut answers: BTreeMap<crate::model::RevisionId, Commit> = unresolved
+            .iter()
+            .cloned()
+            .map(|id| (id, newest.clone()))
+            .collect();
+
+        for commit in commits.iter().skip(1) {
+            if unresolved.is_empty() {
+                break;
+            }
+            let older = versions
+                .get(commit)
+                .and_then(Option::as_deref)
+                .map_or_else(BTreeMap::new, |text| definitional_hashes(text, &unresolved));
+            unresolved.retain(|id| {
+                if older.get(id) == current.get(id) {
+                    answers.insert(id.clone(), commit.clone());
+                    true
+                } else {
+                    false
+                }
+            });
         }
+        out.extend(answers);
     }
     Ok(out)
+}
+
+/// Definitional hashes for the requested revisions in one historical file version.
+fn definitional_hashes(
+    text: &str,
+    wanted: &BTreeSet<crate::model::RevisionId>,
+) -> BTreeMap<crate::model::RevisionId, crate::model::ContentHash> {
+    let parsed = crate::syntax::parse(text, crate::diagnostics::FileId(0));
+    let Some(file) = parsed.file else {
+        return BTreeMap::new();
+    };
+    let mut out = BTreeMap::new();
+    for (at, item) in file.items.iter().enumerate() {
+        let crate::syntax::cst::Item::Record(record) = item else {
+            continue;
+        };
+        let Ok(key) = crate::model::LogicalKey::parse(&record.key) else {
+            continue;
+        };
+        let id = crate::model::RevisionId::new(key, record.revision);
+        if !wanted.contains(&id) {
+            continue;
+        }
+        if let Some(definitional) = crate::resolve::definitional_record_text(&file, at) {
+            out.insert(id, crate::hash::content_hash(&definitional));
+        }
+    }
+    out
 }

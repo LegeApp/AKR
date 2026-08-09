@@ -286,6 +286,12 @@ fn knowledge_validate_agrees_with_akr_check() {
         Some(&[][..]),
         "a clean ledger has no diagnostics"
     );
+    assert_eq!(
+        tool.get("diagnostics_total").and_then(Value::as_integer),
+        Some(0)
+    );
+    assert_eq!(tool.get("has_more").and_then(Value::as_bool), Some(false));
+    assert_eq!(tool.get("next_offset"), Some(&Value::Null));
 }
 
 #[cfg(feature = "fts5")]
@@ -419,6 +425,35 @@ fn an_uninitialised_workspace_carries_the_remedy_on_both_surfaces() {
         mcp_help, cli_help,
         "the two surfaces disagree on the remedy"
     );
+}
+
+#[test]
+fn an_empty_ledger_explains_how_to_create_the_first_goal() {
+    let example = Example::materialise("differential-empty-ledger");
+    let records = example.root().join(".akr/records");
+    std::fs::remove_dir_all(&records).expect("fixture records removed");
+    std::fs::create_dir_all(&records).expect("empty records directory restored");
+    let archive = example.root().join(".akr/archive");
+    if archive.exists() {
+        std::fs::remove_dir_all(&archive).expect("fixture archive removed");
+    }
+
+    const MESSAGE: &str = "knowledge ledger has no records yet";
+    const REMEDY: &str = "create the first planning record with `knowledge.propose`, then use its key as the context goal";
+
+    let payload = call(
+        &example,
+        "knowledge.context",
+        r#"{"goal":"sys.milestone.first"}"#,
+    );
+    let error = payload.get("error").expect("an error payload");
+    assert_eq!(error.get("summary").and_then(Value::as_str), Some(MESSAGE));
+    let diagnostic = error
+        .get("diagnostics")
+        .and_then(Value::as_array)
+        .and_then(|items| items.first())
+        .expect("one diagnostic");
+    assert_eq!(diagnostic.get("help").and_then(Value::as_str), Some(REMEDY));
 }
 
 // -------------------------------------------------------------------------------------

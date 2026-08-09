@@ -277,6 +277,20 @@ fn v006_passes_for_after_pointing_at_a_completed_milestone() {
 }
 
 #[test]
+fn v006_passes_for_depends_on_pointing_at_a_completed_milestone() {
+    let l = ledger(vec![
+        rec("fx.milestone.done", 1, Kind::Milestone)
+            .state(State::Completed)
+            .build(),
+        rec("fx.work.next", 1, Kind::Work)
+            .state(State::Ready)
+            .rel(Relation::DependsOn, "@fx.milestone.done/1")
+            .build(),
+    ]);
+    assert_clean(&validate::v006_historical_references(&l));
+}
+
+#[test]
 fn v006_passes_for_part_of_a_superseded_plan_when_dispositioned() {
     let l = ledger(vec![
         rec("fx.work.plan", 1, Kind::Work)
@@ -758,6 +772,31 @@ fn v019_fails_when_a_floating_reference_resolves_to_a_terminal_head() {
             .build(),
     ]);
     assert_raises(&validate::v019_live_not_on_terminal(&l), c::R021);
+}
+
+#[test]
+fn v019_accepts_a_completed_dependency_but_not_an_abandoned_one() {
+    let completed = ledger(vec![
+        rec("fx.milestone.done", 1, Kind::Milestone)
+            .state(State::Completed)
+            .build(),
+        rec("fx.work.next", 1, Kind::Work)
+            .state(State::Ready)
+            .rel(Relation::DependsOn, "@fx.milestone.done")
+            .build(),
+    ]);
+    assert_clean(&validate::v019_live_not_on_terminal(&completed));
+
+    let abandoned = ledger(vec![
+        rec("fx.milestone.dropped", 1, Kind::Milestone)
+            .state(State::Abandoned)
+            .build(),
+        rec("fx.work.next", 1, Kind::Work)
+            .state(State::Ready)
+            .rel(Relation::DependsOn, "@fx.milestone.dropped")
+            .build(),
+    ]);
+    assert_raises(&validate::v019_live_not_on_terminal(&abandoned), c::R021);
 }
 
 #[test]

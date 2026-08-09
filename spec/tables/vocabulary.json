@@ -373,7 +373,7 @@
       "cardinality": "many",
       "acyclic": true,
       "propagates_staleness": true,
-      "consequence": "A live source may not depend on a terminal target (V-019).",
+      "consequence": "A completed planning target satisfies the dependency; other terminal targets invalidate it (V-019).",
       "enforced_by": "V-015"
     },
     "supersedes": {
@@ -483,7 +483,7 @@
     "V-003": {"title": "All revisions of one key live in one file", "stage": "link", "code": "AKR-L006", "doc": "docs/05-validation-rules.md"},
     "V-004": {"title": "Claim and check anchors exist; retired anchors are reported distinctly", "stage": "link", "code": "AKR-L012", "doc": "docs/05-validation-rules.md"},
     "V-005": {"title": "Relation and slot targets are kind-correct", "stage": "link", "code": "AKR-L031", "doc": "docs/05-validation-rules.md"},
-    "V-006": {"title": "References to terminal records only via historical relations", "stage": "link", "code": "AKR-L021", "doc": "docs/05-validation-rules.md"},
+    "V-006": {"title": "References to invalid terminal records only via historical relations", "stage": "link", "code": "AKR-L021", "doc": "docs/05-validation-rules.md"},
     "V-007": {"title": "The kind and state combination is legal for the kind's class", "stage": "type", "code": "AKR-T011", "doc": "docs/05-validation-rules.md"},
     "V-008": {"title": "Required slots present; unknown slots rejected", "stage": "type", "code": "AKR-T001", "doc": "docs/05-validation-rules.md"},
     "V-009": {"title": "An observation carries observed_at", "stage": "type", "code": "AKR-T021", "doc": "docs/05-validation-rules.md"},
@@ -496,7 +496,7 @@
     "V-016": {"title": "The after graph is acyclic", "stage": "resolve", "code": "AKR-R013", "doc": "docs/05-validation-rules.md"},
     "V-017": {"title": "A superseding planning record disposes of every unfinished child", "stage": "resolve", "code": "AKR-R014", "doc": "docs/05-validation-rules.md"},
     "V-018": {"title": "At most one live plan_of_record per milestone or track", "stage": "resolve", "code": "AKR-R018", "doc": "docs/05-validation-rules.md"},
-    "V-019": {"title": "A live record does not depend on a terminal record", "stage": "resolve", "code": "AKR-R021", "doc": "docs/05-validation-rules.md"},
+    "V-019": {"title": "A live record does not rely on an invalid terminal record", "stage": "resolve", "code": "AKR-R021", "doc": "docs/05-validation-rules.md"},
     "V-020": {"title": "A completed milestone or work record has every acceptance check satisfied", "stage": "resolve", "code": "AKR-R022", "doc": "docs/05-validation-rules.md"},
     "V-021": {"title": "An active decision cites a requirement, policy, constraint or evidence", "stage": "resolve", "code": "AKR-R031", "doc": "docs/05-validation-rules.md"},
     "V-022": {"title": "A verified observation has provenance", "stage": "resolve", "code": "AKR-R032", "doc": "docs/05-validation-rules.md"},

@@ -105,7 +105,7 @@ Reserved groups: `X001`–`X009` the bundle anchor; `X011`–`X019` path filters
 
 | Code | Title | Severity | Rule | Message template | Cause |
 | --- | --- | --- | --- | --- | --- |
-| `AKR-X001` | goal does not resolve | error | — | `--goal {ref} does not resolve to a record` | A misspelled key, or a key whose namespace is not declared. |
+| `AKR-X001` | goal does not resolve | error | — | `--goal {ref} does not resolve to a record` | A misspelled key, or a key whose namespace is not declared. When the ledger has no records, the message instead says so and directs the caller to create its first planning record. |
 | `AKR-X002` | goal is terminal | error | — | `--goal {key}/{revision} is in terminal state {state}` | Assembling a bundle around finished work is almost always a mistake; `akr get` still retrieves the record. |
 | `AKR-X003` | goal kind cannot anchor a bundle | error | — | `--goal {key} is a {kind}; a bundle anchors on a milestone, work or track record` | The assembly algorithm's step 1 requires a planning record. |
 | `AKR-X011` | path filter is malformed | error | — | `--paths {glob}: {reason}` | A glob outside the D-008 subset — brace expansion, `!` negation, a backslash separator. |

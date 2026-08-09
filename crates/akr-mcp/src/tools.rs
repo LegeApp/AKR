@@ -95,6 +95,7 @@ pub fn call(root: &Path, name: &str, arguments: &Value) -> Result<ToolResult, To
         "knowledge.supersede" => supersede(root, arguments),
         "knowledge.complete" => complete(root, arguments),
         "knowledge.evidence_add" => evidence_add(root, arguments),
+        "knowledge.evidence_add_many" => evidence_add_many(root, arguments),
         "knowledge.papercut" => papercut(root, arguments),
         other => Err(ToolError::new(
             "AKR-X041",
@@ -305,6 +306,9 @@ fn context(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let mut session = open(root, false)?;
     let output = match commands::run(&mut session, &command) {
         Ok(output) => output,
+        Err(error) if error.code == "AKR-X001" && session.ledger.records().is_empty() => {
+            return Err(environment(error));
+        }
         Err(error) if error.code == "AKR-X001" => {
             return Err(unresolved_goal(error, &session, goal, &command));
         }
@@ -492,6 +496,22 @@ fn validate(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     };
     let output = commands::run(&mut session, &command).map_err(environment)?;
     let diagnostics = commands::diagnostics_json(&output.diagnostics, &session.sources);
+    let diagnostics_total = diagnostics.len();
+    let offset = arguments
+        .get("offset")
+        .and_then(Value::as_integer)
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or(0);
+    let limit = arguments
+        .get("limit")
+        .and_then(Value::as_integer)
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or(5)
+        .clamp(1, 100);
+    let diagnostics: Vec<Value> = diagnostics.into_iter().skip(offset).take(limit).collect();
+    let returned = diagnostics.len();
+    let next_offset = offset.saturating_add(returned);
+    let has_more = next_offset < diagnostics_total;
     let counts = Value::object(vec![
         ("records", field(&output.result, "records")),
         ("revisions", field(&output.result, "revisions")),
@@ -503,6 +523,27 @@ fn validate(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     Ok(ToolResult::Structured(Value::object(vec![
         ("ok", Value::bool(output.exit == Exit::Ok)),
         ("diagnostics", Value::array(diagnostics)),
+        (
+            "diagnostics_total",
+            Value::integer(i64::try_from(diagnostics_total).unwrap_or(i64::MAX)),
+        ),
+        (
+            "diagnostics_returned",
+            Value::integer(i64::try_from(returned).unwrap_or(i64::MAX)),
+        ),
+        (
+            "diagnostics_offset",
+            Value::integer(i64::try_from(offset).unwrap_or(i64::MAX)),
+        ),
+        ("has_more", Value::bool(has_more)),
+        (
+            "next_offset",
+            if has_more {
+                Value::integer(i64::try_from(next_offset).unwrap_or(i64::MAX))
+            } else {
+                Value::Null
+            },
+        ),
         ("counts", counts),
     ])))
 }
@@ -648,6 +689,65 @@ fn complete(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
 /// is authored on the check (`verified_by`) or supplied to `knowledge.complete`.
 fn evidence_add(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let session = open(root, true)?;
+    let (parsed, record, commit) = evidence_record(&session, arguments)?;
+    ensure_commits_exist(&session, &[commit])?;
+    let title = record.title.clone();
+
+    let context = write_context(&session);
+    Ok(ToolResult::Structured(write_result(
+        &session,
+        &parsed,
+        akr_core::ops::propose(
+            &context,
+            &parsed,
+            akr_core::model::Kind::Evidence,
+            &title,
+            Some(record),
+        ),
+    )?))
+}
+
+/// Adds several evidence records through one parse/apply/validate/fsync transaction.
+fn evidence_add_many(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
+    let session = open(root, true)?;
+    let items = arguments
+        .get("evidence")
+        .and_then(Value::as_array)
+        .ok_or_else(|| ToolError::new("AKR-C003", "`evidence` must be a non-empty array"))?;
+    if items.is_empty() {
+        return Err(ToolError::new(
+            "AKR-C003",
+            "`evidence` must contain at least one record",
+        ));
+    }
+    if items.len() > 100 {
+        return Err(ToolError::new(
+            "AKR-C004",
+            "`evidence` accepts at most 100 records per transaction",
+        ));
+    }
+
+    let mut records = Vec::with_capacity(items.len());
+    let mut commits = Vec::with_capacity(items.len());
+    for item in items {
+        let (_, record, commit) = evidence_record(&session, item)?;
+        records.push(record);
+        commits.push(commit);
+    }
+    ensure_commits_exist(&session, &commits)?;
+
+    let target = records[0].id.key.clone();
+    let context = write_context(&session);
+    let result = akr_core::ops::propose_many(&context, &records);
+    Ok(ToolResult::Structured(write_many_result(
+        &session, &target, result,
+    )?))
+}
+
+fn evidence_record(
+    session: &Session,
+    arguments: &Value,
+) -> Result<(LogicalKey, akr_core::model::Record, akr_core::model::Commit), ToolError> {
     let key = required_str(arguments, "key")?;
     let parsed = key_of(key)?;
 
@@ -696,23 +796,19 @@ fn evidence_add(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError>
             )
         })?,
     };
-    if let Some(repository) = &session.repository
-        && !repository.contains(&commit)
-    {
-        return Err(ToolError::new(
-            "AKR-G011",
-            format!("observed_at {commit} is not present in this repository"),
-        ));
-    }
-
     let summary = arguments.get("summary").and_then(Value::as_str);
     let title = arguments
         .get("title")
         .and_then(Value::as_str)
         .or(summary)
         .map_or_else(|| parsed.to_string(), ToOwned::to_owned);
-    let mut request =
-        akr_core::evidence::AddEvidence::new(parsed.clone(), &title, result, method, commit);
+    let mut request = akr_core::evidence::AddEvidence::new(
+        parsed.clone(),
+        &title,
+        result,
+        method,
+        commit.clone(),
+    );
     if let Some(command) = arguments.get("command").and_then(Value::as_str) {
         request = request.command(command);
     }
@@ -723,19 +819,32 @@ fn evidence_add(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError>
         request = request.summary(summary);
     }
 
-    let record = request.to_record();
-    let context = write_context(&session);
-    Ok(ToolResult::Structured(write_result(
-        &session,
-        &parsed,
-        akr_core::ops::propose(
-            &context,
-            &parsed,
-            akr_core::model::Kind::Evidence,
-            &title,
-            Some(record),
-        ),
-    )?))
+    Ok((parsed, request.to_record(), commit))
+}
+
+fn ensure_commits_exist(
+    session: &Session,
+    commits: &[akr_core::model::Commit],
+) -> Result<(), ToolError> {
+    let Some(repository) = &session.repository else {
+        return Ok(());
+    };
+    let distinct: Vec<_> = commits
+        .iter()
+        .cloned()
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let present = repository
+        .contains_all(&distinct)
+        .map_err(|error| ToolError::new("AKR-G002", error.to_string()))?;
+    if let Some(missing) = distinct.iter().find(|commit| !present.contains(*commit)) {
+        return Err(ToolError::new(
+            "AKR-G011",
+            format!("observed_at {missing} is not present in this repository"),
+        ));
+    }
+    Ok(())
 }
 
 /// `knowledge.papercut`, over the same [`akr_core::papercut`] request `akr papercut`
@@ -785,14 +894,18 @@ fn papercut(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
 // -------------------------------------------------------------------------------------
 
 /// Opens the workspace, exactly as the command line opens it.
-fn open(root: &Path, _writing: bool) -> Result<Session, ToolError> {
+fn open(root: &Path, writing: bool) -> Result<Session, ToolError> {
     let global = Global {
         dir: PathBuf::from(root),
         profile: Profile::Strict,
         format: Format::Json,
         ..Global::default()
     };
-    Session::open(&global).map_err(environment)
+    let mut session = Session::open_ledger(&global).map_err(environment)?;
+    if writing {
+        session.ensure_git_facts().map_err(environment)?;
+    }
+    Ok(session)
 }
 
 /// Runs a read command, keeping both CLI text and JSON.
@@ -1110,11 +1223,12 @@ fn write_result(
                 ("lock_stale", Value::bool(applied.lock_stale)),
             ];
             // §4's `state` and `content_hash` describe the revision that just landed, so
-            // they have to come from a workspace read *after* the write. `session` is the
-            // snapshot the write was planned against: it does not know the new revision at
-            // all, and for a state move it still holds the state the record left.
+            // they have to come from a workspace read *after* the write. Reload only the
+            // ledger bytes: `Session::open` also derives Git freshness facts and used to
+            // repeat the expensive history walk solely to render these two fields.
             if let Some(change) = first
-                && let Ok(written) = Session::open(&session.global)
+                && let Ok(written) =
+                    akr_core::resolve::load_workspace(&session.root, &session.akr_dir)
             {
                 if let Some(record) = written.ledger.get(&change.id) {
                     fields.insert(2, ("state", Value::string(record.state.name())));
@@ -1190,6 +1304,56 @@ fn write_result(
             Err(error)
         }
     }
+}
+
+fn write_many_result(
+    session: &Session,
+    first_target: &LogicalKey,
+    result: akr_core::ops::WriteResult,
+) -> Result<Value, ToolError> {
+    let applied = match result {
+        Ok(applied) => applied,
+        Err(refused) => return write_result(session, first_target, Err(refused)),
+    };
+    let written = akr_core::resolve::load_workspace(&session.root, &session.akr_dir).ok();
+    let entries = applied
+        .changes
+        .iter()
+        .map(|change| {
+            let path = session
+                .akr_dir
+                .join(&change.file)
+                .strip_prefix(&session.root)
+                .ok()
+                .map(|path| path.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_default();
+            let mut fields = vec![
+                ("key", Value::string(change.id.key.to_string())),
+                ("rev", Value::integer(i64::from(change.id.revision))),
+                ("path", Value::string(path)),
+            ];
+            if let Some(workspace) = &written {
+                if let Some(record) = workspace.ledger.get(&change.id) {
+                    fields.push(("state", Value::string(record.state.name())));
+                }
+                if let Some(text) = workspace.inputs.canonical_text.get(&change.id) {
+                    fields.push((
+                        "content_hash",
+                        Value::string(akr_core::hash::content_hash(text).to_string()),
+                    ));
+                }
+            }
+            Value::object(fields)
+        })
+        .collect();
+    Ok(Value::object(vec![
+        ("evidence", Value::array(entries)),
+        (
+            "written",
+            Value::integer(i64::try_from(applied.changes.len()).unwrap_or(i64::MAX)),
+        ),
+        ("lock_stale", Value::bool(applied.lock_stale)),
+    ]))
 }
 
 fn diagnostic_json(diagnostic: &akr_core::diagnostics::Diagnostic) -> Value {

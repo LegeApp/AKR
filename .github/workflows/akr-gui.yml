@@ -1,0 +1,43 @@
+name: AKR GUI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/akr-gui.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "crates/akr-cli/**"
+      - "crates/akr-core/**"
+      - "crates/akr-gui/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/akr-gui.yml"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "crates/akr-cli/**"
+      - "crates/akr-core/**"
+      - "crates/akr-gui/**"
+
+permissions:
+  contents: read
+
+jobs:
+  native-review-workbench:
+    name: ${{ matrix.os }} native review workbench
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: akr-gui-${{ matrix.os }}
+      - name: Compile every GUI target
+        run: cargo check -p akr-gui --all-targets --locked
+      - name: Exercise the snapshot, model, input, and software presenter
+        run: cargo test -p akr-gui --all-targets --locked

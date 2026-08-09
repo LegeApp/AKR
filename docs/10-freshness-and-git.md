@@ -198,11 +198,10 @@ A record that is itself stale is not additionally marked at risk.
 in both roles. A superseded, withdrawn or disproven record rests on whatever it rested on
 when it was settled; flagging it asks somebody to review a decision the project has
 already moved past, and a warning nobody can act on trains people to ignore the rest. The
-walk therefore stops at a terminal record rather than passing through it. The only
-relation that can point from a live record at a terminal one is `derived_from` — V-019
-forbids the others — and `derived_from` is provenance: a record derived from a retired
-finding was derived from what that finding said at the time, and a later change beneath
-the retired finding does not reach back through it.
+walk therefore stops at a terminal record rather than passing through it. `derived_from`
+may point at a terminal record as provenance, and `depends_on` may point at a completed
+planning record because completion satisfies the prerequisite. Neither passes later
+staleness through that settled boundary.
 
 Neither flag ever changes a record's state, its content, or the truth value of any claim
 (D-003, D-024).

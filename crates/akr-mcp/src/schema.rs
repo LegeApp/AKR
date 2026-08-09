@@ -148,6 +148,13 @@ pub const TOOLS: &[Tool] = &[
         writes: true,
     },
     Tool {
+        name: "knowledge.evidence_add_many",
+        description: "Record up to 100 evidence observations atomically. The workspace is \
+                      opened once and the resulting ledger is validated and written once; \
+                      if any item is invalid, none are written.",
+        writes: true,
+    },
+    Tool {
         name: "knowledge.papercut",
         description: "Log a small friction hit while working — a tool call that missed \
                       and had to be retried, a confusing setup step, a flaky command, a \
@@ -338,10 +345,22 @@ pub fn input_schema(name: &str) -> Option<Value> {
             &[],
         ),
         "knowledge.validate" => object(
-            vec![(
-                "review_clean",
-                boolean("Also fail when the review queue is not empty."),
-            )],
+            vec![
+                (
+                    "review_clean",
+                    boolean("Also fail when the review queue is not empty."),
+                ),
+                (
+                    "limit",
+                    integer(
+                        "Maximum diagnostics to return. Defaults to 5; use with offset to page.",
+                    ),
+                ),
+                (
+                    "offset",
+                    integer("Zero-based diagnostic offset. Defaults to 0."),
+                ),
+            ],
             &[],
         ),
         "knowledge.propose" => object(
@@ -359,7 +378,11 @@ pub fn input_schema(name: &str) -> Option<Value> {
                 ("scope", scope_schema()),
                 (
                     "topic",
-                    string("The exclusivity handle, normative kinds only."),
+                    string(
+                        "The exclusivity handle, normative kinds only. A topic is one \
+                         lowercase ASCII segment containing letters, digits or internal \
+                         hyphens; it is not a dot-delimited key.",
+                    ),
                 ),
                 ("slots", slots_schema()),
                 ("claims", claims_schema()),
@@ -439,48 +462,22 @@ pub fn input_schema(name: &str) -> Option<Value> {
             ],
             &["key"],
         ),
-        "knowledge.evidence_add" => object(
-            vec![
-                (
-                    "key",
-                    string(
-                        "The new evidence key, dot-delimited: namespace.topic.slug, e.g. \
-                         sys.evidence.asset-audit.",
+        "knowledge.evidence_add" => evidence_schema(),
+        "knowledge.evidence_add_many" => object(
+            vec![(
+                "evidence",
+                Value::object(vec![
+                    ("type", Value::string("array")),
+                    (
+                        "description",
+                        Value::string("Evidence records to create in one atomic transaction."),
                     ),
-                ),
-                (
-                    "result",
-                    enumeration("What was observed.", &["pass", "fail", "inconclusive"]),
-                ),
-                (
-                    "method",
-                    enumeration(
-                        "How it was observed.",
-                        &["manual", "command", "observation"],
-                    ),
-                ),
-                (
-                    "command",
-                    string("The exact command that was run, for method command."),
-                ),
-                (
-                    "artifact",
-                    string("A repository path to the artefact, if one exists."),
-                ),
-                ("summary", string("One line on what was observed.")),
-                (
-                    "observed_at",
-                    string(
-                        "The full 40-hex commit the observation was made at. Defaults to \
-                         HEAD.",
-                    ),
-                ),
-                (
-                    "title",
-                    string("The one-line label. Defaults to the summary or the key."),
-                ),
-            ],
-            &["key", "result", "method"],
+                    ("items", evidence_schema()),
+                    ("minItems", Value::integer(1)),
+                    ("maxItems", Value::integer(100)),
+                ]),
+            )],
+            &["evidence"],
         ),
         "knowledge.papercut" => object(
             vec![
@@ -544,9 +541,53 @@ pub fn output_schema(name: &str) -> Option<Value> {
         | "knowledge.supersede"
         | "knowledge.complete"
         | "knowledge.evidence_add"
+        | "knowledge.evidence_add_many"
         | "knowledge.papercut" => Some(Value::object(vec![("type", Value::string("object"))])),
         _ => None,
     }
+}
+
+fn evidence_schema() -> Value {
+    object(
+        vec![
+            (
+                "key",
+                string(
+                    "The new evidence key, dot-delimited: namespace.topic.slug, e.g. \
+                     sys.evidence.asset-audit.",
+                ),
+            ),
+            (
+                "result",
+                enumeration("What was observed.", &["pass", "fail", "inconclusive"]),
+            ),
+            (
+                "method",
+                enumeration(
+                    "How it was observed.",
+                    &["manual", "command", "observation"],
+                ),
+            ),
+            (
+                "command",
+                string("The exact command that was run, for method command."),
+            ),
+            (
+                "artifact",
+                string("A repository path to the artefact, if one exists."),
+            ),
+            ("summary", string("One line on what was observed.")),
+            (
+                "observed_at",
+                string("The full 40-hex commit the observation was made at. Defaults to HEAD."),
+            ),
+            (
+                "title",
+                string("The one-line label. Defaults to the summary or the key."),
+            ),
+        ],
+        &["key", "result", "method"],
+    )
 }
 
 /// `kind`: the closed enumeration of D-001, with each kind's required content slots in
@@ -710,7 +751,11 @@ fn relations_schema() -> Value {
         ("type", Value::string("object")),
         (
             "description",
-            Value::string("relation name -> array of references."),
+            Value::string(
+                "relation name -> array of references. Use depends_on for a prerequisite; \
+                 a completed planning prerequisite remains satisfied. Use derived_from \
+                 for provenance rather than prerequisite ordering.",
+            ),
         ),
         ("additionalProperties", string_array("References.")),
     ])

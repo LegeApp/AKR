@@ -40,8 +40,19 @@ guessing where the message was meant to end.
 | Tool | Kind | CLI equivalent | Idempotent |
 | --- | --- | --- | --- |
 | `knowledge.search` | read | `akr search` | yes |
+| `knowledge.start` | read | `akr start` | yes |
+| `knowledge.explain` | read | `akr explain` | yes |
 | `knowledge.get` | read | `akr get` | yes |
 | `knowledge.context` | read | `akr context` | yes |
+| `knowledge.source_list` | read | `akr source list` | yes |
+| `knowledge.source_add` | write | `akr source add` | by id |
+| `knowledge.source_search` | read | `akr source search` | yes |
+| `knowledge.source_get` | read | `akr source get` | yes |
+| `knowledge.source_verify` | read | `akr source verify` | yes |
+| `knowledge.source_supersede` | write | `akr source supersede` | by state |
+| `knowledge.source_status` | read | `akr source status` | yes |
+| `knowledge.source_dependents` | read | `akr source dependents` | yes |
+| `knowledge.source_finalize` | write | `akr source finalize` | by state |
 | `knowledge.impact` | read | `akr impact` | yes |
 | `knowledge.validate` | read | `akr check` | yes |
 | `knowledge.propose` | write | `akr propose` | by key |
@@ -49,9 +60,10 @@ guessing where the message was meant to end.
 | `knowledge.supersede` | write | `akr supersede` | no |
 | `knowledge.complete` | write | `akr complete` | by state |
 | `knowledge.evidence_add` | write | `akr evidence add` | by key |
+| `knowledge.evidence_add_many` | write | — | by all keys |
 | `knowledge.papercut` | write | `akr papercut` | no |
 
-Eleven tools, and the list is closed for 0.1. Notably absent:
+Twenty-three tools. Notably absent:
 
 - **No `knowledge.query`.** No arbitrary query language, and above all no SQL. Agents
   never see the SQLite cache (§6).
@@ -66,6 +78,11 @@ agent to close out a milestone over MCP had to shell out to the CLI for exactly 
 step. Like the command, the tool deliberately has **no field for what the evidence
 verifies** (D-016) — the link is authored on the check (`verified_by`) or supplied to
 `knowledge.complete`.
+
+`knowledge.evidence_add_many` accepts the same payloads as an `evidence` array and
+validates and commits them in one atomic write. Use it when one verification run closes
+several checks; duplicate or existing keys reject the whole batch without a partial
+write.
 
 ## 3. Read tools
 
@@ -322,6 +339,20 @@ check names its evidence in `verified_by`, or `knowledge.complete` supplies the 
 one direction, one source of truth. The typical closing sequence is `evidence_add`,
 then `complete` with `checks` citing the returned revision.
 
+### `knowledge.evidence_add_many`
+
+```jsonc
+{ "evidence": [
+    { "key": "sys.evidence.native-build", "result": "pass", "method": "command",
+      "command": "cargo check --workspace", "summary": "Workspace compiled" },
+    { "key": "sys.evidence.tick-contract", "result": "pass", "method": "command",
+      "command": "cargo test tick_contract", "summary": "Tick contract passed" }
+] }
+```
+
+The array contains 1–100 ordinary evidence-add payloads. AKR resolves and checks their
+commits together, validates the resulting ledger once, and commits every record or none.
+
 ### `knowledge.papercut`
 
 ```jsonc
@@ -362,9 +393,14 @@ the code table:
 | `conflict` | `AKR-C032`, `AKR-C033` | Re-read the head and rebase the edit. Retryable once. |
 | `environment` | `AKR-C011`, `AKR-C012`, `AKR-G001`, `AKR-G003`, `AKR-I003`, `AKR-I031`, `AKR-I032` | Not the agent's fault and not fixable by it. Stop and report. |
 | `degraded` | `AKR-X033`, `AKR-G004`, `AKR-X012`, `AKR-X022` | Warnings under `--lenient`; the call succeeded with a caveat that belongs in the agent's report. |
+| `internal` | `AKR-X099` | The server contained an unexpected tool panic. Retry once; if it repeats, report the bug. |
 
 `wrote` is always present on a write tool's error and is always `false`. An agent never
 has to guess whether a failed write left something behind.
+
+An internal panic is contained to the request that triggered it and returned as
+`AKR-X099`; it does not terminate the stdio server or prevent the next request from being
+handled.
 
 ## 6. Why agents never see SQLite
 
@@ -409,10 +445,10 @@ shaped to make the difference explicit:
   an already-superseded record, or completing an already-completed one, fails with an
   invariant error rather than doing it twice.
 
-There is no transaction spanning multiple tool calls. An agent that needs several records
-to land together proposes them one at a time and calls `knowledge.validate` at the end;
-if the ledger is incoherent in between, the intermediate `propose` calls will have failed
-already, because every write validates the *resulting* ledger.
+There is no transaction spanning arbitrary tool calls. Evidence is the deliberate bulk
+exception: `knowledge.evidence_add_many` lands several evidence records in one validated
+transaction. Other records are proposed one at a time, and every write still validates
+the resulting ledger.
 
 ## 8. The `AGENTS.md` protocol text
 
@@ -449,7 +485,8 @@ Durable project knowledge lives in `.akr/` as typed records, not in Markdown.
   edit a record that is not `proposed`.
 - Replacing a plan: `knowledge.supersede`, with a disposition for every unfinished
   child. The tool will list them; answer each one.
-- Finishing work: record what you observed with `knowledge.evidence_add`, then
+- Finishing work: record what you observed with `knowledge.evidence_add` (or
+  `knowledge.evidence_add_many` for several proofs), then
   `knowledge.complete` with evidence for every acceptance check. Evidence records
   state what was observed; they never state what they verify.
 

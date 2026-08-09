@@ -73,7 +73,7 @@ catalogue! {
     16, v016_after_acyclic, c::R013, Stage::Resolve, "The after graph is acyclic";
     17, v017_disposition_complete, c::R014, Stage::Resolve, "Supersession disposes of unfinished children";
     18, v018_one_plan_of_record, c::R018, Stage::Resolve, "One plan of record";
-    19, v019_live_not_on_terminal, c::R021, Stage::Resolve, "Live records do not depend on terminal records";
+    19, v019_live_not_on_terminal, c::R021, Stage::Resolve, "Live records do not rely on invalid terminal records";
     20, v020_acceptance_satisfied, c::R022, Stage::Resolve, "Completion requires satisfied acceptance";
     21, v021_decision_cites, c::R031, Stage::Resolve, "Active decisions cite something";
     22, v022_observation_provenance, c::R032, Stage::Resolve, "Live observations have provenance";

@@ -460,7 +460,7 @@ pub mod codes {
         R017 = "AKR-R017";
         /// Multiple plans of record.
         R018 = "AKR-R018";
-        /// Live record depends on a terminal record.
+        /// Live record relies on an invalid terminal record.
         R021 = "AKR-R021";
         /// Completion with unsatisfied acceptance.
         R022 = "AKR-R022";

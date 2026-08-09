@@ -83,25 +83,7 @@ pub fn allocate_key(
     namespace: Option<&str>,
     message: &str,
 ) -> Result<LogicalKey, PapercutKeyError> {
-    let declared: Vec<String> = ledger
-        .project
-        .namespaces
-        .iter()
-        .map(ToString::to_string)
-        .collect();
-    let namespace = match namespace {
-        Some(name) => {
-            if !declared.iter().any(|d| d == name) {
-                return Err(PapercutKeyError::UnknownNamespace(name.to_owned()));
-            }
-            name.to_owned()
-        }
-        None => match declared.as_slice() {
-            [] => return Err(PapercutKeyError::NoNamespaces),
-            [sole] => sole.clone(),
-            _ => return Err(PapercutKeyError::AmbiguousNamespace(declared)),
-        },
-    };
+    let namespace = select_namespace(ledger, namespace)?;
 
     let base = {
         let slug = slug_of(message);
@@ -123,6 +105,36 @@ pub fn allocate_key(
         candidate = format!("{namespace}.papercut.{base}-{n}");
     }
     Ok(LogicalKey::parse(&candidate).expect("namespace and slug are valid segments"))
+}
+
+/// Resolves the namespace used by zero-ceremony papercut commands.
+///
+/// This is shared by logging and collation: a default collation is about the namespace
+/// it will write into, while `--all` is the explicit opt-in to unrelated sister-project
+/// papercuts.
+pub fn select_namespace(
+    ledger: &Ledger,
+    namespace: Option<&str>,
+) -> Result<String, PapercutKeyError> {
+    let declared: Vec<String> = ledger
+        .project
+        .namespaces
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    match namespace {
+        Some(name) => {
+            if !declared.iter().any(|d| d == name) {
+                return Err(PapercutKeyError::UnknownNamespace(name.to_owned()));
+            }
+            Ok(name.to_owned())
+        }
+        None => match declared.as_slice() {
+            [] => Err(PapercutKeyError::NoNamespaces),
+            [sole] => Ok(sole.clone()),
+            _ => Err(PapercutKeyError::AmbiguousNamespace(declared)),
+        },
+    }
 }
 
 impl LogPapercut {

@@ -653,8 +653,9 @@ unchanged.
 
 A state is **live** or **terminal**. Live means the record still speaks for itself;
 terminal means it does not. Only live records participate in ordinary context assembly,
-only live records can be depended on (V-019), and exactly one revision of a key may be
-live at a time (V-012, D-004a).
+and exactly one revision of a key may be live at a time (V-012, D-004a). A completed
+planning record is the deliberate exception to dependency liveness: completion satisfies
+a `depends_on` prerequisite, so the edge remains valid and preserves the plan's history.
 
 ### 5.1 Normative: `term`, `requirement`, `policy`, `constraint`, `decision`
 
@@ -809,7 +810,7 @@ the relation's own name.
 | Relation | Domain | Range | Card. | Acyclic | Carries staleness | Consequence |
 | --- | --- | --- | --- | --- | --- | --- |
 | `supported_by` | all but empirical | `observation`, `evidence`, `assessment` | many | yes | **yes** | The source's standing rests on the target. |
-| `depends_on` | all but `evidence` | any but `question` | many | yes | **yes** | A live source may not depend on a terminal target (V-019). |
+| `depends_on` | all but `evidence` | any but `question` | many | yes | **yes** | A completed planning target satisfies the dependency; other terminal targets invalidate it (V-019). |
 | `supersedes` | any | same kind | many | yes | no | Puts the target in `superseded`; triggers disposition checks. |
 | `contradicts` | any | any | many | n/a | no | Symmetric. Must be dispositioned. Always surfaced. |
 | `implements` | `work`, `decision` | `requirement`, `policy`, `constraint`, `decision` | many | yes | no | Ties change to what motivates it. |
@@ -827,9 +828,10 @@ readable form of the same data and is checked against it.
 ### 7.1 Notes on the ones that trip people
 
 **`supported_by` versus `depends_on`.** `supported_by` points at empirical records and
-means "this is why I believe it". `depends_on` points at anything and means "if that
-goes, this goes". A policy is `supported_by` an assessment; a work item `depends_on` a
-decision. Both carry staleness; only `supported_by` reads as evidence in a view.
+means "this is why I believe it". `depends_on` points at anything and means "this must
+remain valid or be completed successfully". A policy is `supported_by` an assessment; a
+work item `depends_on` a decision or prerequisite milestone. Both carry staleness; only
+`supported_by` reads as evidence in a view.
 
 **`part_of` is single-parent.** A record has at most one parent. Two parents means the
 child set used for disposition is ambiguous, and disposition is the check worth

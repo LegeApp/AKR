@@ -383,6 +383,27 @@ impl Example {
         }
     }
 
+    /// Runs `akr` with no executable named `git` available.
+    ///
+    /// Used to prove that a command's fast path is structurally Git-free rather than
+    /// merely quick on the test machine.
+    pub fn run_without_git(&self, args: &[&str]) -> Run {
+        let empty_path = self.root.join("no-executables");
+        std::fs::create_dir_all(&empty_path).expect("empty PATH directory");
+        let mut command = Command::new(env!("CARGO_BIN_EXE_akr"));
+        command.arg("--today").arg(self.today);
+        command
+            .args(args)
+            .current_dir(&self.root)
+            .env("PATH", empty_path);
+        let output = command.output().expect("the akr binary runs");
+        Run {
+            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+            code: output.status.code().unwrap_or(-1),
+        }
+    }
+
     /// A digest of every source file under `.akr`, for atomicity assertions.
     ///
     /// `docs/07-cli.md` §4 promises that a refused write leaves the working tree

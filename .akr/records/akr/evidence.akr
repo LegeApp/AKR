@@ -1,6 +1,18 @@
 akr 0.1
 project akr
 
+record akr.evidence.collated-papercut-fixes/1 : evidence {
+    title "The full workspace suite passed after subject-scoped collation, paged MCP validation diagnostics, clearer authoring schemas, and corrected CLI help."
+    state verified
+    result pass
+    method command
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    command "cargo test --workspace"
+    summary """
+        The full workspace suite passed after subject-scoped collation, paged MCP validation diagnostics, clearer authoring schemas, and corrected CLI help.
+        """
+}
+
 record akr.evidence.design-coherence-clean/1 : evidence {
     title "links, codes, vocabulary, manifest, references, grammar, fixtures and terminology checks all pass."
     state verified
@@ -25,6 +37,70 @@ record akr.evidence.fmt-clean/1 : evidence {
         cargo fmt --all --check exits 0 across the whole workspace
         """
     author "GitHub Uploader"
+}
+
+record akr.evidence.human-review-gui-suite/1 : evidence {
+    title "Eight GUI model, tree, filtering, multi-workspace, input-layout, and software-renderer tests passed."
+    state verified
+    result pass
+    method command
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    command "cargo test -p akr-gui --all-targets --locked"
+    artifact "crates/akr-gui/src/main.rs"
+    summary """
+        Eight GUI model, tree, filtering, multi-workspace, input-layout, and software-renderer tests passed.
+        """
+}
+
+record akr.evidence.human-review-mcp-suite/1 : evidence {
+    title "MCP unit, differential, write, malformed-frame, panic-containment, and 1,000-request soak tests passed."
+    state verified
+    result pass
+    method command
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    command "cargo test -p akr-mcp --tests"
+    artifact "crates/akr-mcp/src/protocol.rs"
+    summary """
+        MCP unit, differential, write, malformed-frame, panic-containment, and 1,000-request soak tests passed.
+        """
+}
+
+record akr.evidence.human-review-snapshot-suite/1 : evidence {
+    title "Three owned review snapshot projection, freshness, Git provenance, and failure-state tests passed."
+    state verified
+    result pass
+    method command
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    command "cargo test -p akr-cli review_snapshot"
+    artifact "crates/akr-cli/src/review_snapshot.rs"
+    summary """
+        Three owned review snapshot projection, freshness, Git provenance, and failure-state tests passed.
+        """
+}
+
+record akr.evidence.human-review-warm-search/1 : evidence {
+    title "Warm indexed search completed in 0.03 seconds and spawned no Git executable."
+    state verified
+    result pass
+    method observation
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    command "target/debug/akr search human --limit 5; strace -f -e trace=process target/debug/akr search human --limit 5"
+    artifact "crates/akr-cli/tests/search.rs"
+    summary """
+        Warm indexed search completed in 0.03 seconds and spawned no Git executable.
+        """
+}
+
+record akr.evidence.human-review-workspace-suite/1 : evidence {
+    title "The complete workspace test suite, including the new GUI, snapshot, search, and MCP reliability tests, passed."
+    state verified
+    result pass
+    method command
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    command "cargo test --workspace --locked"
+    summary """
+        The complete workspace test suite, including the new GUI, snapshot, search, and MCP reliability tests, passed.
+        """
 }
 
 record akr.evidence.knowledge-provenance-lifecycle-suite/1 : evidence {
@@ -173,5 +249,17 @@ record akr.evidence.workspace-green-2026-08-08/1 : evidence {
     observed_at git:a77dc6606334df984b3fef605716c4fc361b9c15
     summary """
         scripts/run-tests-sliced.sh: all 45 test binaries passed. cargo clippy --workspace --all-targets reports nothing in the new modules. python tools/check-design.py: all eight checks passed. akr check: no diagnostics.
+        """
+}
+
+record akr.evidence.write-latency-and-lifecycle-suite/1 : evidence {
+    title "The workspace suite passed with batched Git facts, atomic evidence batches, completed dependency semantics, and empty-ledger guidance."
+    state verified
+    result pass
+    method command
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    command "cargo test --workspace"
+    summary """
+        The workspace suite passed with batched Git facts, atomic evidence batches, completed dependency semantics, and empty-ledger guidance.
         """
 }

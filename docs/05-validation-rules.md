@@ -199,16 +199,19 @@ range and names the relations that would accept the target kind.
 
 ---
 
-### V-006 — Terminal records are cited, not built on
+### V-006 — Invalid terminal records are cited, not built on
 
 **Stage** link · **Code** `AKR-L021`
 
 **Statement.** A reference to a record in a terminal state is an error unless the
-referring slot is `supersedes`, `contradicts`, or `derived_from`.
+referring slot is historical, it has an explicit structural exemption, or it is
+`depends_on` a completed planning record.
 
-**Why.** Those three exist to point backwards. Every other relation asserts something
-about how the project currently works, and pointing one at a withdrawn policy is a
-mistake worth catching at build time.
+**Why.** Historical relations exist to point backwards. Every other relation asserts
+something about how the project currently works, and pointing one at a withdrawn policy
+is a mistake worth catching at build time. But completion satisfies a prerequisite;
+requiring callers to erase that dependency before completing the predecessor both adds
+bookkeeping and destroys the milestone chain.
 
 ```
 # fails — the weekly-demo policy is withdrawn
@@ -575,19 +578,22 @@ which is intended. Model an alternative as a revision of the plan, not a second 
 
 ---
 
-### V-019 — Live records do not depend on terminal records
+### V-019 — Live records do not rely on invalid terminal records
 
 **Stage** resolve · **Code** `AKR-R021`
 
-**Statement.** A record in a live state must not have a `depends_on`, `implements`,
-`plan_of_record`, or `supported_by` edge to a record in a terminal state.
+**Statement.** A record in a live state must not have an `implements`, `plan_of_record`,
+or `supported_by` edge to a record in a terminal state. A `depends_on` edge is also
+invalid when its target was abandoned, superseded, rejected, withdrawn, or disproven,
+but remains valid when a planning target was completed.
 
 `after`, `part_of`, `blocks`, and `verified_by` are excluded, deliberately. A completed
 predecessor is what `after` normally points at; work under a completed milestone is
 history rather than an error; a terminal blocker means the blockage lifted (see
 `AKR-R023`); and evidence is cited precisely because it was recorded once. `part_of`
 pointing at a *superseded plan revision* is governed instead by the disposition
-exemption in `docs/04` §5.1.
+exemption in `docs/04` §5.1. Completed `depends_on` is the prerequisite equivalent: it
+records that the required work finished successfully.
 
 **Why.** V-006 catches the syntactic case at link time by looking at the referring slot.
 This is the resolved case: a floating `@key` that was fine when written and now points at
@@ -603,8 +609,9 @@ implements [ @lege.decision.renderer-boundary/1 ]
 implements [ @lege.decision.renderer-boundary ]
 ```
 
-**Fix.** Float the reference to the head, or revise the dependent record to point at the
-replacement. This rule firing after someone else's supersession is the system working:
+**Fix.** For an invalid terminal target, float the reference to a live head or revise the
+dependent record to point at the replacement. Do not remove an edge merely because its
+target completed. This rule firing after someone else's supersession is the system working:
 it is exactly the "current record at risk" signal the planning notes asked for, made
 mandatory rather than advisory for hard dependencies.
 

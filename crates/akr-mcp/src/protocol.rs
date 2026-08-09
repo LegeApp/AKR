@@ -21,6 +21,7 @@ use akr_core::json::{Value, parse};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
+use crate::errors::ToolError;
 use crate::schema::{TOOLS, input_schema, output_schema};
 use crate::tools;
 
@@ -267,7 +268,7 @@ impl Server {
             .unwrap_or(Value::Object(Vec::new()));
 
         let started = std::time::Instant::now();
-        let outcome = tools::call(&self.root, name, &arguments);
+        let outcome = guarded_tool_call(|| tools::call(&self.root, name, &arguments));
         let (text, structured, is_error) = match outcome {
             Ok(payload) => {
                 let requested_hard_tokens = (name == "knowledge.context")
@@ -315,6 +316,21 @@ impl Server {
         );
 
         content(text.as_deref(), &structured, is_error)
+    }
+}
+
+/// Contains an implementation panic to the request that triggered it.
+///
+/// The ledger write pipeline performs its durable write only after validation and uses
+/// atomic file replacement. A panic is nevertheless an internal bug, so the response is
+/// retryable once and the long-lived stdio server stays available for diagnostics.
+fn guarded_tool_call<T>(call: impl FnOnce() -> Result<T, ToolError>) -> Result<T, ToolError> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(call)) {
+        Ok(result) => result,
+        Err(_) => Err(ToolError::new(
+            "AKR-X099",
+            "the AKR tool implementation failed unexpectedly; the server contained the failure",
+        )),
     }
 }
 
@@ -399,4 +415,63 @@ fn compact(value: &Value) -> String {
         .map(str::trim_start)
         .collect::<Vec<_>>()
         .join("")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use akr_core::json::parse;
+
+    use super::{Server, guarded_tool_call, serve};
+
+    #[test]
+    fn a_tool_panic_becomes_a_retryable_internal_error() {
+        let error = guarded_tool_call::<()>(|| panic!("injected tool panic"))
+            .expect_err("the panic is contained");
+        let payload = error.to_json().to_pretty();
+        assert!(payload.contains("\"class\": \"internal\""), "{payload}");
+        assert!(payload.contains("\"retryable\": true"), "{payload}");
+        assert!(payload.contains("AKR-X099"), "{payload}");
+    }
+
+    #[test]
+    fn a_thousand_requests_and_a_malformed_frame_do_not_end_the_session() {
+        let mut input = String::new();
+        for id in 0..1_000 {
+            let request = match id % 3 {
+                0 => format!(r#"{{"jsonrpc":"2.0","id":{id},"method":"ping"}}"#),
+                1 => format!(r#"{{"jsonrpc":"2.0","id":{id},"method":"tools/list"}}"#),
+                _ => format!(
+                    r#"{{"jsonrpc":"2.0","id":{id},"method":"tools/call","params":{{"name":"knowledge.unknown","arguments":{{}}}}}}"#
+                ),
+            };
+            input.push_str(&request);
+            input.push('\n');
+            if id == 499 {
+                input.push_str("{malformed\n");
+            }
+        }
+
+        let mut output = Vec::new();
+        serve(
+            &Server::new("/workspace-not-opened-by-this-test"),
+            Cursor::new(input),
+            &mut output,
+        )
+        .expect("the session remains available");
+
+        let output = String::from_utf8(output).expect("responses are UTF-8");
+        let responses = output.lines().collect::<Vec<_>>();
+        assert_eq!(responses.len(), 1_001);
+        for response in &responses {
+            parse(response).expect("every response is valid JSON");
+        }
+        assert!(responses[500].contains("\"code\": -32700"));
+        assert!(
+            responses
+                .last()
+                .is_some_and(|line| line.contains("\"id\": 999"))
+        );
+    }
 }

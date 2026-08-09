@@ -537,6 +537,16 @@ pub enum Command {
 }
 
 impl Command {
+    /// Whether the command needs Git history before dispatch.
+    ///
+    /// Search and task orientation can use a current disposable index without Git.  If
+    /// they discover that the index needs rebuilding they upgrade the session at that
+    /// point.  Every other workspace command keeps the conservative full-session path.
+    #[must_use]
+    pub const fn needs_git_facts(&self) -> bool {
+        !matches!(self, Self::Search { .. } | Self::Start { .. })
+    }
+
     /// The name the JSON envelope reports.
     #[must_use]
     pub fn name(&self) -> String {
@@ -1950,7 +1960,7 @@ pub fn help_for(name: &str) -> Option<String> {
              \x20   close <ingest-id>      finalize and stop accepting edits\n"
         }
         "propose" => {
-            "akr propose <key> --kind <kind> [--title <text>] [--from <file>] [--edit]\n\
+            "akr propose <key> --kind <kind> [--title <text>] [--from <file>]\n\
              \n\
              Creates revision 1 of a new key in its class's initial state. An existing\n\
              key is an error: use `akr revise`.\n\
@@ -1958,19 +1968,18 @@ pub fn help_for(name: &str) -> Option<String> {
              <key> is dot-delimited: namespace.topic.slug — the first segment must be a\n\
              namespace declared in .akr/project.akr.\n\
              \n\
-             A body source is effectively mandatory: every kind requires its prose slot\n\
-             (definition, statement, intent, rule ...), so a propose with neither --from\n\
-             nor --edit is refused before anything reaches the disk. Run\n\
+             A body source is mandatory in this build: every kind requires its prose slot\n\
+             (definition, statement, intent, rule ...), so a propose without --from is\n\
+             refused before anything reaches the disk. Run\n\
              `akr explain <kind>` for the kind's required slots.\n\
              \n\
              FLAGS\n\
              \x20   --kind <kind>     required; one of the twelve kinds\n\
              \x20   --title <text>    the one-line label\n\
-             \x20   --from <file>     a file holding the record body\n\
-             \x20   --edit            open $EDITOR on a template\n"
+             \x20   --from <file>     a file holding the record body\n"
         }
         "revise" => {
-            "akr revise <key> [--from <file>] [--edit] [--state <state>] [--title <text>]\n\
+            "akr revise <key> [--from <file>] [--state <state>] [--title <text>]\n\
              \x20          [--in-place] [--disposition <child>=<outcome>[:<into>] ...]\n\
              \n\
              Creates revision n+1 by copying the head and applying edits; a sealed old\n\
@@ -1980,7 +1989,6 @@ pub fn help_for(name: &str) -> Option<String> {
              \n\
              FLAGS\n\
              \x20   --from <file>     a file holding the replacement body\n\
-             \x20   --edit            open $EDITOR on the head\n\
              \x20   --state <state>   move along the class's lifecycle\n\
              \x20   --title <text>    replace the title\n\
              \x20   --in-place        force the in-place path; AKR-C032 on a sealed head\n\

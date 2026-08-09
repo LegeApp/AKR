@@ -70,6 +70,113 @@ record akr.papercut.cargo-fmt-check-fails-on-the-committed-tree/2 : papercut {
     supersedes [ @akr.papercut.cargo-fmt-check-fails-on-the-committed-tree/1 ]
 }
 
+record akr.papercut.collated-1-papercuts-from-evidence-intake/1 : papercut {
+    title "Collated 1 papercut from Evidence-intake-project"
+    state verified
+    statement """
+        Collated 1 papercut from /mnt/Samsung980_1TB/Rust-projects on 2026-08-09 (D-030). Each source key is also in the collated slot, which is the dedup set for the next run; the sisters were read and never written.
+
+        ## Evidence-intake-project @evidence-intake-project.papercut.ran-knowledge-context-goal-on-a-project-whose [about akr]
+        Ran knowledge.context --goal on a project whose ledger held only the namespace stub in project.akr; it failed with AKR-X001 "does not resolve to a record" rather than saying the ledger is empty. On a fresh project that reads as a broken tool call. A distinct message ("no records yet; start with knowledge.propose") would tell an agent to author the first record instead of retrying with different goal strings.
+        """
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    about "akr"
+    collated [
+        "evidence-intake-project.papercut.ran-knowledge-context-goal-on-a-project-whose"
+    ]
+    created_at 2026-08-09
+}
+
+record akr.papercut.collated-10-papercuts-from-evidence-intake/1 : papercut {
+    title "Collated 10 papercuts from Evidence-intake-project, Kitchen-Concept, Lege-ecosystem, SaveYourSkin and 5 more"
+    state superseded
+    statement """
+        Collated 10 papercuts from /mnt/Samsung980_1TB/Rust-projects on 2026-08-09 (D-030). Each source key is also in the collated slot, which is the dedup set for the next run; the sisters were read and never written.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.a-release-profiler-rebuild-from-the-repository
+        A release-profiler rebuild from the repository root rejected `--features bench-profiling` because the `pdfium-diff` tool is deliberately outside the workspace; the feature belongs to its own manifest. The command must run from `lege-pdf/render/tools/pdfium-diff` or pass that manifest explicitly.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.after-committing-validated-akr-record-changes [about akr]
+        After committing validated AKR record changes with ordinary Git, `akr lock --check` rejected the embedded build commit because the lock was generated against the parent source commit. The workflow needs an atomic documented commit path or an explicit follow-up lock-only commit; otherwise a seemingly clean knowledge commit fails the required post-commit audit.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.at-handoff-knowledge-validate-withheld-its [about akr]
+        At handoff, knowledge.validate withheld its entire 8.5k-token result and suggested narrower arguments even though the tool exposes no scope/filter argument; diagnosing required the separate `akr check` CLI (the protocol's `knowledge.validate` name is not a CLI subcommand). A summarized diagnostics mode would make the required handoff check actionable.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.correcting-an-inaccurate-papercut-via-knowledge [about akr]
+        Correcting an inaccurate papercut via knowledge.supersede failed because the connected workspace vocabulary 0.1 does not support the tool schema's `new_key` option. The correction had to reuse the original key instead of creating a clearer replacement key.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.creating-the-finalization-work-record-failed [about akr]
+        Creating the finalization work record failed because `depends_on` cannot reference a completed work record, but the propose schema does not identify which relation should capture historical provenance. The write was retried with only the live decision dependency.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.knowledge-context-withheld-a-4-1k-token-bundle [about akr]
+        knowledge.context withheld a 4.1k-token bundle even though I requested a 16k budget, then advised requesting fewer tokens. The MCP response ceiling is lower than the tool's advertised budget parameter, so context had to be retried with narrower paths.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.running-cargo-fmt-check-from-lege-pdf-render
+        Running `cargo fmt --check` from `lege-pdf/render` failed with “Failed to find targets” because that directory is not a usable Cargo formatting root even though renderer crates are nested beneath it. The verification workflow needs to point rustfmt/cargo at the concrete crate or the external tool manifest.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.the-targeted-renderer-image-clippy-check-is
+        The targeted renderer/image clippy check is blocked by an unrelated existing `-D clippy::expect-used` violation in `lege-pdf/render/crates/pdf-document/src/pages.rs:594`, reached through `pdf-cli` dependencies. Renderer/image tests pass, but the documented clippy gate cannot complete until that pre-existing lint is resolved or the check is scoped differently.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.while-recording-the-renderer-decision-knowledge [about akr]
+        While recording the renderer decision, knowledge.propose rejected a dotted decision topic even though the key is dot-delimited; the topic segment syntax was not apparent from the tool schema, so the write had to be retried with a single hyphenated segment. The response also warned that the connected MCP vocabulary 0.2 is newer than the workspace build vocabulary 0.1.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.while-reproducing-the-structures-pdf-mrc
+        While reproducing the Structures.pdf MRC profile, the performance handoff labels the 2222x3191 run as scale 2.0833333, but the supplied 444.4x638.2-point page produces 926x1330 at that scale and 2222x3191 at scale 5.0. Benchmark records should store both requested scale and resulting dimensions so comparisons cannot silently mix them.
+        """
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    collated [
+        "lege-ecosystem-perf.papercut.a-release-profiler-rebuild-from-the-repository",
+        "lege-ecosystem-perf.papercut.after-committing-validated-akr-record-changes",
+        "lege-ecosystem-perf.papercut.at-handoff-knowledge-validate-withheld-its",
+        "lege-ecosystem-perf.papercut.correcting-an-inaccurate-papercut-via-knowledge",
+        "lege-ecosystem-perf.papercut.creating-the-finalization-work-record-failed",
+        "lege-ecosystem-perf.papercut.knowledge-context-withheld-a-4-1k-token-bundle",
+        "lege-ecosystem-perf.papercut.running-cargo-fmt-check-from-lege-pdf-render",
+        "lege-ecosystem-perf.papercut.the-targeted-renderer-image-clippy-check-is",
+        "lege-ecosystem-perf.papercut.while-recording-the-renderer-decision-knowledge",
+        "lege-ecosystem-perf.papercut.while-reproducing-the-structures-pdf-mrc"
+    ]
+    created_at 2026-08-09
+}
+
+record akr.papercut.collated-10-papercuts-from-evidence-intake/2 : papercut {
+    title "Collated 6 AKR papercuts from Lege-ecosystem"
+    state verified
+    statement """
+        Collated 6 AKR papercuts from /mnt/Samsung980_1TB/Rust-projects on 2026-08-09 (D-030). Four untagged Lege-ecosystem papercuts were mistakenly absorbed by the previous revision and are excluded here; each retained source key is in the collated slot.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.after-committing-validated-akr-record-changes [about akr]
+        After committing validated AKR record changes with ordinary Git, `akr lock --check` rejected the embedded build commit because the lock was generated against the parent source commit. The workflow needs an atomic documented commit path or an explicit follow-up lock-only commit; otherwise a seemingly clean knowledge commit fails the required post-commit audit.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.at-handoff-knowledge-validate-withheld-its [about akr]
+        At handoff, knowledge.validate withheld its entire 8.5k-token result and suggested narrower arguments even though the tool exposes no scope/filter argument; diagnosing required the separate `akr check` CLI (the protocol's `knowledge.validate` name is not a CLI subcommand). A summarized diagnostics mode would make the required handoff check actionable.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.correcting-an-inaccurate-papercut-via-knowledge [about akr]
+        Correcting an inaccurate papercut via knowledge.supersede failed because the connected workspace vocabulary 0.1 does not support the tool schema's `new_key` option. The correction had to reuse the original key instead of creating a clearer replacement key.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.creating-the-finalization-work-record-failed [about akr]
+        Creating the finalization work record failed because `depends_on` cannot reference a completed work record, but the propose schema does not identify which relation should capture historical provenance. The write was retried with only the live decision dependency.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.knowledge-context-withheld-a-4-1k-token-bundle [about akr]
+        knowledge.context withheld a 4.1k-token bundle even though I requested a 16k budget, then advised requesting fewer tokens. The MCP response ceiling is lower than the tool's advertised budget parameter, so context had to be retried with narrower paths.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.while-recording-the-renderer-decision-knowledge [about akr]
+        While recording the renderer decision, knowledge.propose rejected a dotted decision topic even though the key is dot-delimited; the topic segment syntax was not apparent from the tool schema, so the write had to be retried with a single hyphenated segment. The response also warned that the connected MCP vocabulary 0.2 is newer than the workspace build vocabulary 0.1.
+        """
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    about "akr"
+    collated [
+        "lege-ecosystem-perf.papercut.after-committing-validated-akr-record-changes",
+        "lege-ecosystem-perf.papercut.at-handoff-knowledge-validate-withheld-its",
+        "lege-ecosystem-perf.papercut.correcting-an-inaccurate-papercut-via-knowledge",
+        "lege-ecosystem-perf.papercut.creating-the-finalization-work-record-failed",
+        "lege-ecosystem-perf.papercut.knowledge-context-withheld-a-4-1k-token-bundle",
+        "lege-ecosystem-perf.papercut.while-recording-the-renderer-decision-knowledge"
+    ]
+    supersedes [ @akr.papercut.collated-10-papercuts-from-evidence-intake/1 ]
+    created_at 2026-08-09
+}
+
 record akr.papercut.collated-18-papercuts-from-kitchen-concept-lege/1 : papercut {
     title "Collated 18 papercuts from Kitchen-Concept, Lege-ecosystem, SaveYourSkin, bpg-rs and 4 more"
     state verified
@@ -192,6 +299,17 @@ record akr.papercut.collated-20-papercuts-from-kitchen-concept-lege/1 : papercut
     created_at 2026-08-08
 }
 
+record akr.papercut.completing-a-milestone-failed-because-a/1 : papercut {
+    title "Completing a milestone failed because a downstream depends_on edge…"
+    state verified
+    statement """
+        Completing a milestone failed because a downstream depends_on edge treated completed work like abandonment, forcing agents to remove the satisfied dependency and manufacture lifecycle revisions. Completion should satisfy depends_on while preserving the edge as provenance.
+        """
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    author "codex"
+    created_at 2026-08-09
+}
+
 record akr.papercut.historical-port-design-gap-recovered-from-a/1 : papercut {
     title "Historical-port design gap, recovered from a lost agent session…"
     state superseded
@@ -283,6 +401,17 @@ record akr.papercut.root-cause-of-the-discoverability-miss-the-cli/2 : papercut 
     supersedes [ @akr.papercut.root-cause-of-the-discoverability-miss-the-cli/1 ]
 }
 
+record akr.papercut.strict-clippy-for-the-new-gui-crate-promoted/1 : papercut {
+    title "Strict clippy for the new GUI crate promoted more than 200 existing…"
+    state verified
+    statement """
+        Strict clippy for the new GUI crate promoted more than 200 existing missing-docs warnings from the in-progress ingest APIs and obscured the one GUI lint. A target-scoped lint profile or temporary ingest-specific allowance would keep unrelated dependency warnings from swamping focused checks.
+        """
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    author "codex"
+    created_at 2026-08-09
+}
+
 record akr.papercut.the-akr-mcp-knowledge-tools-failed-with-akr/1 : papercut {
     title "The akr MCP knowledge.* tools failed with AKR-C011 'no .akr directory…"
     state superseded
@@ -304,4 +433,38 @@ record akr.papercut.the-akr-mcp-knowledge-tools-failed-with-akr/2 : papercut {
         """
     observed_at git:30579aeb4960ca7b4de2659953ce0694541bfa96
     supersedes [ @akr.papercut.the-akr-mcp-knowledge-tools-failed-with-akr/1 ]
+}
+
+record akr.papercut.the-cli-help-advertises-edit-for-propose-and/1 : papercut {
+    title "The CLI help advertises --edit for propose and revise, but this build…"
+    state verified
+    statement """
+        The CLI help advertises --edit for propose and revise, but this build rejects it as unavailable; the documented path caused an avoidable failed write before falling back to --from.
+        """
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    author "codex"
+    created_at 2026-08-09
+}
+
+record akr.papercut.the-repository-instructions-direct-agents-to/1 : papercut {
+    title "The repository instructions direct agents to use…"
+    state verified
+    statement """
+        The repository instructions direct agents to use `knowledge.start`/`knowledge.context`, but the installed `akr.exe` has no `knowledge` CLI command; the MCP ledger tools were required instead. The documented CLI and installed binary are out of sync.
+        """
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    about "akr"
+    author "Codex"
+    created_at 2026-08-09
+}
+
+record akr.papercut.writing-several-evidence-and-lifecycle-records/1 : papercut {
+    title "Writing several evidence and lifecycle records repeated full…"
+    state verified
+    statement """
+        Writing several evidence and lifecycle records repeated full Git-history work and a post-write session reload, turning small ledger mutations into minute-scale operations. Batch Git facts by ledger file, avoid the redundant reload, and provide atomic bulk evidence.
+        """
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    author "codex"
+    created_at 2026-08-09
 }

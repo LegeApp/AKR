@@ -22,6 +22,7 @@ pub mod fmt;
 pub mod import;
 pub mod ingest;
 pub mod init;
+pub mod review_snapshot;
 pub mod session;
 pub mod source;
 pub mod write;

@@ -378,13 +378,22 @@ fn papercut_collate(
         ));
     }
 
-    // `--about akr` is the case the kind exists for: a friction with *this* tool, logged
-    // wherever the agent happened to be working (D-033). `--all` keeps D-030's original
-    // take-everything behaviour, which is still what a single-project owner wants.
-    let subject = match (about, all) {
+    // With no filter, collate reports aimed at the namespace this master record belongs
+    // to. Taking unrelated sister-project friction requires the explicit `--all`; this is
+    // the distinction promised by the CLI help and D-033.
+    let default_subject = if about.is_none() && !all {
+        Some(
+            akr_core::papercut::select_namespace(&session.ledger, namespace)
+                .map_err(|e| EnvError::new("AKR-C004", e.to_string()))?,
+        )
+    } else {
+        None
+    };
+    let effective_about = about.or(default_subject.as_deref());
+    let subject = match (effective_about, all) {
         (Some(name), _) => akr_core::papercut::collate::Subject::Named(name.to_owned()),
         (None, true) => akr_core::papercut::collate::Subject::Any,
-        (None, false) => akr_core::papercut::collate::Subject::Any,
+        (None, false) => unreachable!("a default subject was resolved above"),
     };
     let already = akr_core::papercut::collate::already_collated(&session.ledger);
     let collate =
@@ -443,21 +452,28 @@ fn papercut_collate(
             "no commit to record: not inside a git repository",
         )
     })?;
+    let mut entry_projects: Vec<String> = collate
+        .entries
+        .iter()
+        .map(|entry| entry.project.clone())
+        .collect();
+    entry_projects.sort();
+    entry_projects.dedup();
     let message = format!(
         "collated {} papercuts from {}",
         collate.entries.len(),
-        collate.projects.join(", ")
+        entry_projects.join(", ")
     );
     let key = akr_core::papercut::allocate_key(&session.ledger, namespace, &message)
         .map_err(|e| EnvError::new("AKR-C004", e.to_string()))?;
     let request = akr_core::papercut::collate::CollateRequest {
         source: collate.source,
-        projects: collate.projects,
+        projects: entry_projects,
         entries: collate.entries,
         observed_at: commit,
         created_at: session.today,
         author: context.author.clone(),
-        about: about.map(ToOwned::to_owned),
+        about: effective_about.map(ToOwned::to_owned),
     };
     let record = request.to_record(key.clone());
     let title = record.title.clone();

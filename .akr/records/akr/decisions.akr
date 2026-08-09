@@ -48,6 +48,24 @@ record akr.decision.change-transaction-not-commit-kind/1 : decision {
     supported_by [ @akr.evidence.p11-change-protocol-suite/1 ]
 }
 
+record akr.decision.completed-planning-work-satisfies-dependency/1 : decision {
+    title "Completed planning work satisfies a dependency"
+    state active
+    scope [
+        path "crates/akr-core/src/validate/**",
+        path "docs/02-data-model.md",
+        path "docs/04-references-and-versioning.md",
+        path "docs/05-validation-rules.md",
+        path "docs/06-compiler-pipeline.md",
+        path "docs/10-freshness-and-git.md",
+        path "spec/**"
+    ]
+    decision """
+        A completed planning record satisfies a depends_on prerequisite. Both pinned and floating depends_on references may therefore retain a completed target; abandonment, supersession, rejection, withdrawal, and disproof remain invalid dependency outcomes. Completion must preserve the edge as provenance instead of forcing a bookkeeping revision that deletes the milestone chain. Recorded as D-035.
+        """
+    supported_by [ @akr.evidence.write-latency-and-lifecycle-suite ]
+}
+
 record akr.decision.dirty-source-graph-has-no-commit-provenance/1 : decision {
     title "Dirty source graphs do not claim HEAD provenance"
     state proposed
@@ -150,6 +168,20 @@ record akr.decision.external-sources-immutable-library/2 : decision {
     ]
 }
 
+record akr.decision.git-facts-batched-by-ledger-file/1 : decision {
+    title "Git facts are batched by ledger file"
+    state active
+    scope [
+        path "crates/akr-cli/src/session.rs",
+        path "crates/akr-core/src/git/**",
+        path "crates/akr-mcp/src/tools.rs"
+    ]
+    decision """
+        Git remains the snapshot and acceptance-provenance boundary, but knowledge writes must not derive one record at a time by spawning Git history queries for every revision. Compute definitional last-change facts in batches by ledger file, parse each historical file version once, and avoid a second Git-enriched session open merely to format a successful write response. Lifecycle state, notes, verified_by links, unrelated records in the same file, and commits that only alter those bookkeeping fields do not move a record's definitional last change. Recorded as D-036.
+        """
+    supported_by [ @akr.evidence.write-latency-and-lifecycle-suite ]
+}
+
 record akr.decision.mcp-budgeted-and-instrumented/1 : decision {
     title "The MCP surface is budgeted and instrumented"
     state superseded
@@ -170,15 +202,18 @@ record akr.decision.mcp-budgeted-and-instrumented/2 : decision {
     state proposed
     scope [ path "crates/akr-mcp/**" ]
     decision """
-        knowledge.get takes summary|body|canonical, defaulting to body. MCP results without a caller-selected output budget are measured across both text and structured halves and one over its per-tool hard limit is withheld rather than shortened, with its counts and a ready-made narrower call. knowledge.context is different: when budget_tokens is explicit, context assembly owns that budget and the MCP adapter must not discard the assembled bundle behind a smaller fixed ceiling. akr-mcp --surface read omits the write tools; --accounting appends one JSON line per call. The server publishes its vocabulary version and reports a workspace disagreement as a named skew. Recorded as D-034.
+        knowledge.get takes summary|body|canonical, defaulting to body. MCP results without a caller-selected output budget are measured across both text and structured halves and one over its per-tool hard limit is withheld rather than shortened, with its counts and a ready-made narrower call. knowledge.context is different: when budget_tokens is explicit, context assembly owns that budget and the MCP adapter must not discard the assembled bundle behind a smaller fixed ceiling. knowledge.validate pages diagnostics by limit and offset, defaults to a bounded first page, and reports the total and next offset so a required handoff validation cannot be withheld without an actionable continuation. knowledge.evidence_add_many accepts 1–100 ordinary evidence payloads and commits all of them through one atomic validation pass or none; single writes and bulk writes reload only the written workspace state for their response rather than reopening a Git-enriched session. Authoring schemas state that topics are single segments and distinguish depends_on prerequisites, including completed planning prerequisites, from derived_from provenance. akr-mcp --surface read omits the write tools; --accounting appends one JSON line per call. The server publishes its vocabulary version and reports a workspace disagreement as a named skew. Recorded as D-034.
         """
     supersedes [ @akr.decision.mcp-budgeted-and-instrumented/1 ]
-    supported_by [ @akr.evidence.mcp-budget-and-skew-suite ]
+    supported_by [
+        @akr.evidence.collated-papercut-fixes,
+        @akr.evidence.mcp-budget-and-skew-suite
+    ]
 }
 
 record akr.decision.papercut-subject-and-collation/1 : decision {
     title "A papercut says what it was about"
-    state active
+    state superseded
     scope [
         path "crates/akr-core/src/papercut/**",
         path "crates/akr-core/src/render/papercuts.rs"
@@ -192,6 +227,20 @@ record akr.decision.papercut-subject-and-collation/1 : decision {
         subject-bearing papercuts their own heading. Recorded as D-033.
         """
     supported_by [ @akr.evidence.papercut-subject-suite ]
+}
+
+record akr.decision.papercut-subject-and-collation/2 : decision {
+    title "A papercut says what it was about"
+    state proposed
+    scope [
+        path "crates/akr-cli/src/write.rs",
+        path "crates/akr-core/src/papercut/**",
+        path "crates/akr-core/src/render/papercuts.rs"
+    ]
+    decision """
+        A papercut has an optional `about` slot naming what the friction was with when that is not its owning project. By default `akr papercut collate` gathers only sister papercuts whose `about` matches the namespace receiving the master record; `--about <subject>` selects another subject, and `--all` explicitly takes every subject. The command counts filtered records rather than dropping them silently, carries every selected statement in full, and names only contributing projects in the master title. PAPERCUTS.md renders a collation as one summary line and gives subject-bearing papercuts their own heading. Recorded as D-033.
+        """
+    supported_by [ @akr.evidence.collated-papercut-fixes ]
 }
 
 record akr.decision.query-words-dirty-tree-ancestry/1 : decision {

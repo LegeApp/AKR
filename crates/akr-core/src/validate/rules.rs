@@ -431,6 +431,12 @@ pub fn v006_historical_references(ledger: &Ledger) -> Vec<Diagnostic> {
             if !target.is_terminal() {
                 continue;
             }
+            // Completion satisfies a prerequisite; abandonment and supersession still
+            // invalidate it. Keeping this edge preserves the milestone chain and avoids
+            // a bookkeeping revision merely to forget a successfully met dependency.
+            if relation == Relation::DependsOn && target.state == State::Completed {
+                continue;
+            }
             if relation == Relation::PartOf {
                 if target.state == State::Completed {
                     continue;
@@ -1057,11 +1063,11 @@ pub fn v018_one_plan_of_record(ledger: &Ledger) -> Vec<Diagnostic> {
         .collect()
 }
 
-/// V-019: a live record does not `depends_on`, `implements`, `plan_of_record` or
-/// `supported_by` a terminal record.
+/// V-019: a live record does not rely on an invalid terminal record.
 ///
 /// The resolved counterpart of V-006: it catches a floating reference whose head became
-/// terminal after it was written.
+/// terminal after it was written. A completed `depends_on` prerequisite is satisfied,
+/// not invalid, and remains legal.
 #[must_use]
 pub fn v019_live_not_on_terminal(ledger: &Ledger) -> Vec<Diagnostic> {
     const RULE: RuleId = RuleId(19);
@@ -1076,6 +1082,9 @@ pub fn v019_live_not_on_terminal(ledger: &Ledger) -> Vec<Diagnostic> {
                     continue;
                 };
                 if target.is_terminal() {
+                    if *relation == Relation::DependsOn && target.state == State::Completed {
+                        continue;
+                    }
                     out.push(
                         Diagnostic::error(
                             c::R021,
@@ -1086,7 +1095,9 @@ pub fn v019_live_not_on_terminal(ledger: &Ledger) -> Vec<Diagnostic> {
                                 record.id, record.state, target.id, target.state
                             ),
                         )
-                        .help("repoint the reference, or revise this record"),
+                        .help(
+                            "repoint the reference, revise this record, or use `after` for ordering",
+                        ),
                     );
                 }
             }

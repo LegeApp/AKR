@@ -48,6 +48,16 @@ fn the_same_query_returns_the_same_order_twice() {
 }
 
 #[test]
+fn a_current_index_search_does_not_invoke_git() {
+    let example = Example::materialise("search-no-git-fast-path");
+    assert_eq!(example.run(&["build"]).code, 0);
+
+    let run = example.run_without_git(&["search", "projection"]);
+    assert_eq!(run.code, 0, "{}", run.output());
+    assert!(run.stdout.contains("results"), "{}", run.stdout);
+}
+
+#[test]
 fn zero_results_is_an_answer_and_exits_zero() {
     let example = Example::materialise("search-empty");
     assert_eq!(example.run(&["build"]).code, 0);

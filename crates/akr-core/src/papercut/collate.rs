@@ -238,7 +238,7 @@ fn same_dir(a: &Path, b: &Path) -> bool {
 pub struct CollateRequest {
     /// The scan directory, named in the statement.
     pub source: String,
-    /// Every sibling project that held a workspace, for the title.
+    /// Every project that contributed an entry, for the title.
     pub projects: Vec<String>,
     /// The papercuts being absorbed.
     pub entries: Vec<CollatedPapercut>,
