@@ -3,7 +3,7 @@ $ akr context --goal sys.milestone.m3-playable-day --paths "sim/src/project/**"
 
 AKR CONTEXT BUNDLE
 goal        sys.milestone.m3-playable-day/1 — M3 — playable day
-commit      e806b3f54a2d7091c5e13b8a26f490dc7b135e64
+commit      (none)
 paths       sim/src/project/**
 generated   akr 0.1.0, source-graph
             sha256:5159d2714f688627a85906b161def17b0358155fbfc2a3fc00b681d29a305f55

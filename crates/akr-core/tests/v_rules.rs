@@ -1007,6 +1007,7 @@ fn sealed(recorded: Option<&str>, computed: Option<&str>, lock_present: bool) ->
             RevisionId::new(key("fx.policy.sealed"), 1),
             SealFact {
                 recorded: recorded.map(|h| ContentHash(h.to_owned())),
+                recorded_state: recorded.map(|_| State::Active),
                 computed: computed.map(|h| ContentHash(h.to_owned())),
             },
         );

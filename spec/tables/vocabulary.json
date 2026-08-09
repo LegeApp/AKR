@@ -243,6 +243,8 @@
       "content_slots": [
         {"name": "statement", "type": "prose", "required": true},
         {"name": "observed_at", "type": "commit", "required": true},
+        {"name": "about", "type": "string", "required": false,
+         "doc": "What the friction was with, when that is not this project: a tool name such as `akr`. Absent means this project's own code or setup. `akr papercut collate --about <subject>` gathers the sisters' papercuts aimed at one subject (D-033)."},
         {"name": "collated", "type": "string[]", "required": false,
          "doc": "Source papercut keys this collation record absorbed from sister projects; written by `akr papercut collate`, the dedup set for the next run (D-030)."}
       ],
@@ -329,11 +331,17 @@
       "slots": [
         {"name": "kind", "type": "enum", "required": true,
          "values": ["legacy", "external", "internal"]},
+        {"name": "document", "type": "string", "required": false},
         {"name": "path", "type": "string", "required": false},
         {"name": "url", "type": "string", "required": false},
+        {"name": "start_byte", "type": "integer", "required": false},
+        {"name": "end_byte", "type": "integer", "required": false},
+        {"name": "start_line", "type": "integer", "required": false},
+        {"name": "end_line", "type": "integer", "required": false},
+        {"name": "excerpt_hash", "type": "string", "required": false},
         {"name": "excerpt", "type": "prose", "required": false}
       ],
-      "doc": "Where this record's content came from. Migration provenance uses kind legacy (D-022)."
+      "doc": "Where this record's content came from. Migration provenance uses kind legacy (D-022). A citation into the immutable source library names document plus start_byte, end_byte, start_line and end_line, which are all-or-nothing (D-031); excerpt_hash lets akr check prove the range still holds the cited passage. A citation names a document and a byte range, never a chunk id, because chunk boundaries belong to a rebuildable index."
     },
     "disposition": {
       "head": "ref",

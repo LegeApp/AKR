@@ -270,7 +270,20 @@ impl Server {
         let outcome = tools::call(&self.root, name, &arguments);
         let (text, structured, is_error) = match outcome {
             Ok(payload) => {
-                let enforced = crate::budget::enforce(name, payload.text(), payload.structured());
+                let requested_hard_tokens = (name == "knowledge.context")
+                    .then(|| {
+                        arguments
+                            .get("budget_tokens")
+                            .and_then(Value::as_integer)
+                            .and_then(|value| usize::try_from(value).ok())
+                    })
+                    .flatten();
+                let enforced = crate::budget::enforce(
+                    name,
+                    payload.text(),
+                    payload.structured(),
+                    requested_hard_tokens,
+                );
                 (enforced.text, enforced.structured, false)
             }
             Err(mut error) => {

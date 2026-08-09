@@ -3,7 +3,7 @@ $ akr check
 
 akr check — save-your-skin
   40 records, 42 revisions, 26 files
-  commit e806b3f5, grammar 0.1, vocabulary 0.2, today 2026-08-03
+  commit (none), grammar 0.1, vocabulary 0.2, today 2026-08-03
 
   stage A  parse          42 revisions       ok
   stage B  type-check     42 revisions       ok
@@ -37,7 +37,7 @@ $ akr check --format json
   "akr": "0.1",
   "tool_version": "0.1.0",
   "command": "check",
-  "commit": "e806b3f54a2d7091c5e13b8a26f490dc7b135e64",
+  "commit": null,
   "source_graph_hash": "sha256:5159d2714f688627a85906b161def17b0358155fbfc2a3fc00b681d29a305f55",
   "ok": true,
   "exit_code": 0,
@@ -74,7 +74,7 @@ $ akr check --review-clean
 
 akr check — save-your-skin
   40 records, 42 revisions, 26 files
-  commit e806b3f5, grammar 0.1, vocabulary 0.2, today 2026-08-03
+  commit (none), grammar 0.1, vocabulary 0.2, today 2026-08-03
 
   stage A  parse          42 revisions       ok
   stage B  type-check     42 revisions       ok
@@ -115,7 +115,7 @@ $ akr check --views-current
 
 akr check — save-your-skin
   40 records, 42 revisions, 26 files
-  commit e806b3f5, grammar 0.1, vocabulary 0.2, today 2026-08-03
+  commit (none), grammar 0.1, vocabulary 0.2, today 2026-08-03
 
   stages A-D                                 ok
   stage F  emit (in memory)   7 views        ok
@@ -140,7 +140,7 @@ $ akr check --views-current
 
 akr check — save-your-skin
   40 records, 42 revisions, 26 files
-  commit e806b3f5, grammar 0.1, vocabulary 0.2, today 2026-08-03
+  commit (none), grammar 0.1, vocabulary 0.2, today 2026-08-03
 
   stages A-D                                 ok
   stage F  emit (in memory)   7 views        FAILED
@@ -166,7 +166,7 @@ $ git checkout docs/generated/ROADMAP.md
 $ akr check --views-current
 akr check — save-your-skin
   40 records, 42 revisions, 26 files
-  commit e806b3f5, grammar 0.1, vocabulary 0.2, today 2026-08-03
+  commit (none), grammar 0.1, vocabulary 0.2, today 2026-08-03
 
   stages A-D                                 ok
   stage F  emit (in memory)   7 views        ok

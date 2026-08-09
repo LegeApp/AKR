@@ -6,7 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 AKR (Agent Knowledge Records) is a versioned project-knowledge ledger: a typed record language (`.akr` files), a deterministic compiler (`akr build`: parse → type-check → link → resolve → index → emit), and generated Markdown views. It is framed as **a compiler and build system for project knowledge, not a retrieval store** — the build fails on contradictions, output is byte-reproducible, and no language model participates in any pipeline stage.
 
-Note: `README.md` still says "design only"; the implementation actually exists through roadmap phase P8 (see `docs/13-implementation-roadmap.md` for phases P1–P9).
+Note: `README.md` still says "design only"; the implementation actually exists through roadmap phase P8, plus P10 (the immutable source library and its chunk index) and P11 (the AKR ↔ git change protocol). See `docs/13-implementation-roadmap.md`.
+
+Two adjacent systems share the repo and are deliberately *not* the ledger:
+
+- **`sources/`** — an immutable, content-hashed library of outside advice (D-031, `docs/15-external-sources.md`). Registering a document creates no records; editing one is `AKR-S021`. `.akr/cache/sources.sqlite` chunks and ranks it on its own cache generation. Records cite it by `document` + byte range, never by chunk id.
+- **The change transaction** (D-032, `docs/16-change-protocol.md`) — a per-worktree file under the git dir that binds a commit to the work it advances. The staged tree is the synchronisation boundary, and the durable link is commit trailers, not stored commit hashes.
 
 ## Commands
 
@@ -21,7 +26,9 @@ cargo fmt
 python tools/check-design.py             # design-set coherence checker over docs/spec/fixtures
 ```
 
-The `fts5` feature (default on, plumbed through all three crates) controls whether stage E builds the full-text index; `--no-default-features` exercises the no-FTS path that `akr search` handles with `AKR-I022`.
+The `fts5` feature (default on, plumbed through all three crates) controls whether stage E builds the full-text index; `--no-default-features` exercises the no-FTS path that `akr search` handles with `AKR-I022`. `akr source search` degrades the same way.
+
+If you are in a sandbox with no Rust toolchain and `static.rust-lang.org` blocked, `scripts/fetch-rust-sandbox.sh` fetches one from the npm mirror of the official component tarballs, and `scripts/run-tests-sliced.sh` runs the test binaries a few at a time for environments that cap a command's wall clock.
 
 ## Workspace layout
 

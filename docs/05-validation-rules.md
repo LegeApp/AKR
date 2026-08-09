@@ -773,6 +773,11 @@ do by accident.
 Comments are excluded from the hash on purpose: adding a clarifying comment to a sealed
 record must not trip this rule, or people stop writing comments.
 
+A legal lifecycle transition can change the canonical text of an existing sealed
+revision. When re-rendering the current record with the state stored in `akr.lock`
+reproduces the recorded hash, validation reports `AKR-R052`: the record body is intact
+and the lock needs rebuilding. A simultaneous body edit still reports `AKR-R051`.
+
 ---
 
 ## 3. Rule-to-stage matrix

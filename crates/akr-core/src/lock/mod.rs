@@ -343,8 +343,8 @@ impl Lock {
     /// must not accuse anyone of editing a sealed record.
     pub fn apply_facts(&self, ledger: &mut Ledger, computed: &BTreeMap<RevisionId, ContentHash>) {
         ledger.facts.lock_present = true;
-        let recorded: BTreeMap<&RevisionId, &ContentHash> =
-            self.seals.iter().map(|s| (&s.id, &s.hash)).collect();
+        let recorded: BTreeMap<&RevisionId, &SealEntry> =
+            self.seals.iter().map(|seal| (&seal.id, seal)).collect();
 
         let mut seals: BTreeMap<RevisionId, SealFact> = BTreeMap::new();
         let ids: BTreeSet<&RevisionId> = recorded.keys().copied().chain(computed.keys()).collect();
@@ -352,7 +352,8 @@ impl Lock {
             seals.insert(
                 id.clone(),
                 SealFact {
-                    recorded: recorded.get(id).map(|h| (*h).clone()),
+                    recorded: recorded.get(id).map(|seal| seal.hash.clone()),
+                    recorded_state: recorded.get(id).map(|seal| seal.state),
                     computed: computed.get(id).cloned(),
                 },
             );

@@ -51,6 +51,16 @@ pub const TOOLS: &[Tool] = &[
         writes: false,
     },
     Tool {
+        name: "knowledge.source_list",
+        description: "List registered source documents and their retention state.",
+        writes: false,
+    },
+    Tool {
+        name: "knowledge.source_add",
+        description: "Register an immutable source document from a local path.",
+        writes: true,
+    },
+    Tool {
         name: "knowledge.source_search",
         description: "Search the immutable source library — registered outside advice, \
                       audits and reports. Results are NON-AUTHORITATIVE: they say where a \
@@ -64,6 +74,31 @@ pub const TOOLS: &[Tool] = &[
                       default detail is `section`, not the whole document; ask for \
                       `whole` only when the entire report is genuinely wanted.",
         writes: false,
+    },
+    Tool {
+        name: "knowledge.source_verify",
+        description: "Verify hashes and retained fragments of every registered source.",
+        writes: false,
+    },
+    Tool {
+        name: "knowledge.source_supersede",
+        description: "Replace a registered source with a new immutable version.",
+        writes: true,
+    },
+    Tool {
+        name: "knowledge.source_status",
+        description: "Show one source's availability, references, and retained fragments.",
+        writes: false,
+    },
+    Tool {
+        name: "knowledge.source_dependents",
+        description: "List exact and lineage record references to a source.",
+        writes: false,
+    },
+    Tool {
+        name: "knowledge.source_finalize",
+        description: "Retain cited fragments or metadata, then optionally remove the full source.",
+        writes: true,
     },
     Tool {
         name: "knowledge.impact",
@@ -191,6 +226,24 @@ pub fn input_schema(name: &str) -> Option<Value> {
             ],
             &["goal"],
         ),
+        "knowledge.source_list" => object(
+            vec![(
+                "all_versions",
+                boolean("Include superseded source registrations."),
+            )],
+            &[],
+        ),
+        "knowledge.source_add" => object(
+            vec![
+                ("path", string("Local Markdown file to register.")),
+                ("id", string("Optional stable source id.")),
+                ("title", string("Optional human-readable title.")),
+                ("origin", string("external or internal-reference.")),
+                ("observed_at", string("Optional observed Git commit.")),
+                ("scope", string("Optional project path glob.")),
+            ],
+            &["path"],
+        ),
         "knowledge.source_search" => object(
             vec![
                 ("query", string("What to look for. Punctuation is safe.")),
@@ -240,6 +293,33 @@ pub fn input_schema(name: &str) -> Option<Value> {
                 ),
             ],
             &[],
+        ),
+        "knowledge.source_verify" => object(Vec::new(), &[]),
+        "knowledge.source_supersede" => object(
+            vec![
+                ("old_id", string("Existing source id.")),
+                ("new_path", string("Local replacement Markdown file.")),
+                ("new_id", string("Optional replacement source id.")),
+            ],
+            &["old_id", "new_path"],
+        ),
+        "knowledge.source_status" => object(vec![("id", string("Source id."))], &["id"]),
+        "knowledge.source_dependents" => object(vec![("id", string("Source id."))], &["id"]),
+        "knowledge.source_finalize" => object(
+            vec![
+                ("id", string("Source id.")),
+                ("retain", string("cited (default) or metadata.")),
+                ("context", string("exact or block (default).")),
+                (
+                    "remove_file",
+                    boolean("Remove the full source after durable retention."),
+                ),
+                (
+                    "dry_run",
+                    boolean("Report the plan without changing files."),
+                ),
+            ],
+            &["id"],
         ),
         "knowledge.impact" => object(
             vec![
@@ -449,8 +529,15 @@ pub fn output_schema(name: &str) -> Option<Value> {
         | "knowledge.explain"
         | "knowledge.get"
         | "knowledge.context"
+        | "knowledge.source_list"
+        | "knowledge.source_add"
         | "knowledge.source_search"
         | "knowledge.source_get"
+        | "knowledge.source_verify"
+        | "knowledge.source_supersede"
+        | "knowledge.source_status"
+        | "knowledge.source_dependents"
+        | "knowledge.source_finalize"
         | "knowledge.impact"
         | "knowledge.validate"
         | "knowledge.propose"
@@ -656,6 +743,41 @@ fn source_schema() -> Value {
                     (
                         "excerpt".to_owned(),
                         string("Excerpt of the source material associated with this record."),
+                    ),
+                    (
+                        "document".to_owned(),
+                        string("Registered source document id for an exact citation."),
+                    ),
+                    (
+                        "role".to_owned(),
+                        enumeration(
+                            "How the source contributes to this record.",
+                            &["origin", "rationale", "evidence", "constraint", "example"],
+                        ),
+                    ),
+                    (
+                        "start_byte".to_owned(),
+                        integer("First cited byte, inclusive."),
+                    ),
+                    (
+                        "end_byte".to_owned(),
+                        integer("First byte after the cited passage."),
+                    ),
+                    (
+                        "start_line".to_owned(),
+                        integer("First cited line, one-based."),
+                    ),
+                    (
+                        "end_line".to_owned(),
+                        integer("Last cited line, one-based."),
+                    ),
+                    (
+                        "excerpt_hash".to_owned(),
+                        string("Optional sha256 hash of the cited bytes."),
+                    ),
+                    (
+                        "use".to_owned(),
+                        string("What the project adopted or retained from this source."),
                     ),
                 ]
                 .into_iter()

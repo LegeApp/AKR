@@ -88,14 +88,25 @@ pub struct Enforced {
 /// them would be silly. Over it, both halves are replaced by a compact summary naming the
 /// tool, the size that was refused and how to ask for less.
 #[must_use]
-pub fn enforce(tool: &str, text: Option<&str>, structured: &Value) -> Enforced {
+pub fn enforce(
+    tool: &str,
+    text: Option<&str>,
+    structured: &Value,
+    requested_hard_tokens: Option<usize>,
+) -> Enforced {
     let budget = budget_for(tool);
+    // `knowledge.context` already assembled to the caller's explicit budget. Applying a
+    // second ceiling afterwards both wastes that work and makes the input contract
+    // untrue, especially because MCP duplicates some information across text and
+    // structured halves. Other tools have no caller-selected budget and keep their fixed
+    // engineering limit.
+    let hard_tokens = requested_hard_tokens.map_or(budget.hard_tokens, |_| usize::MAX);
     let rendered = structured.to_pretty();
     // Both halves, because both reach the model: a client that shows `content` and a
     // client that parses `structuredContent` are each paying for their own half.
     let estimated = estimate_tokens(text.unwrap_or_default()) + estimate_tokens(&rendered);
 
-    if estimated <= budget.hard_tokens {
+    if estimated <= hard_tokens {
         return Enforced {
             text: text.map(ToOwned::to_owned),
             structured: structured.clone(),
@@ -108,7 +119,7 @@ pub fn enforce(tool: &str, text: Option<&str>, structured: &Value) -> Enforced {
     let summary = format!(
         "{tool} produced about {estimated} tokens, over its {} limit, so it was withheld \
          rather than truncated.\n{advice}",
-        budget.hard_tokens
+        hard_tokens
     );
     let structured = Value::object(vec![
         ("truncated", Value::bool(true)),
@@ -119,7 +130,7 @@ pub fn enforce(tool: &str, text: Option<&str>, structured: &Value) -> Enforced {
         ),
         (
             "hard_limit_tokens",
-            Value::integer(i64::try_from(budget.hard_tokens).unwrap_or(i64::MAX)),
+            Value::integer(i64::try_from(hard_tokens).unwrap_or(i64::MAX)),
         ),
         ("continuation", narrowing_arguments(tool)),
         ("help", Value::string(advice)),
@@ -301,7 +312,7 @@ mod tests {
     #[test]
     fn a_small_result_passes_through_untouched() {
         let structured = Value::object(vec![("ok", Value::bool(true))]);
-        let enforced = enforce("knowledge.validate", Some("ok\n"), &structured);
+        let enforced = enforce("knowledge.validate", Some("ok\n"), &structured, None);
         assert!(!enforced.truncated);
         assert_eq!(enforced.text.as_deref(), Some("ok\n"));
         assert_eq!(enforced.structured, structured);
@@ -310,7 +321,7 @@ mod tests {
     #[test]
     fn an_oversized_result_is_withheld_rather_than_shortened() {
         let structured = big(400);
-        let enforced = enforce("knowledge.search", None, &structured);
+        let enforced = enforce("knowledge.search", None, &structured, None);
         assert!(enforced.truncated);
         // Withheld, not trimmed: a partial list that does not say it is partial is worse
         // than no list.
@@ -323,7 +334,7 @@ mod tests {
 
     #[test]
     fn a_withheld_result_says_how_to_ask_for_less() {
-        let enforced = enforce("knowledge.get", None, &big(400));
+        let enforced = enforce("knowledge.get", None, &big(400), None);
         let continuation = enforced
             .structured
             .get("continuation")
@@ -340,7 +351,7 @@ mod tests {
 
     #[test]
     fn a_withheld_result_still_carries_its_counts() {
-        let enforced = enforce("knowledge.search", None, &big(400));
+        let enforced = enforce("knowledge.search", None, &big(400), None);
         assert_eq!(
             enforced
                 .structured
@@ -357,8 +368,8 @@ mod tests {
         // structure pays for both, so the guard has to measure both.
         let structured = big(200);
         let text = structured.to_pretty();
-        let with_text = enforce("knowledge.search", Some(&text), &structured);
-        let without = enforce("knowledge.search", None, &structured);
+        let with_text = enforce("knowledge.search", Some(&text), &structured, None);
+        let without = enforce("knowledge.search", None, &structured, None);
         assert!(with_text.estimated_tokens > without.estimated_tokens);
     }
 
@@ -368,6 +379,16 @@ mod tests {
             budget_for("knowledge.propose").hard_tokens
                 < budget_for("knowledge.context").hard_tokens
         );
+    }
+
+    #[test]
+    fn an_explicit_context_budget_replaces_the_default_transport_ceiling() {
+        let structured = big(1_000);
+        let estimated = estimate_tokens(&structured.to_pretty());
+        assert!(estimated > budget_for("knowledge.context").hard_tokens);
+        let enforced = enforce("knowledge.context", None, &structured, Some(1));
+        assert!(!enforced.truncated);
+        assert_eq!(enforced.structured, structured);
     }
 
     #[test]

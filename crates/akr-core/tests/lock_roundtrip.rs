@@ -309,11 +309,15 @@ record fx.policy.sealed/1 : policy {
 ";
 
 fn sealed_ledger() -> Ledger {
+    sealed_ledger_in(State::Active)
+}
+
+fn sealed_ledger_in(state: State) -> Ledger {
     let mut ledger = Ledger::new(Project::new("fixtures", &["fx"]));
     ledger.insert(
         RecordBuilder::new("fx.policy.sealed", 1, Kind::Policy)
             .filled()
-            .state(State::Active)
+            .state(state)
             .build(),
     );
     ledger
@@ -380,6 +384,40 @@ fn editing_a_sealed_revision_produces_r051_naming_key_revision_and_hashes() {
             .is_some_and(|h| h.contains("akr revise")),
         "points at the fix"
     );
+}
+
+#[test]
+fn a_supported_state_transition_is_stale_lock_not_seal_tampering() {
+    let active = sealed_ledger();
+    let active_text = akr_core::syntax::record_text(
+        active
+            .get(&id("fx.policy.sealed", 1))
+            .expect("sealed record"),
+        &active.project.name,
+    );
+    let retired = active_text.replace("state active", "state superseded");
+    let mut ledger = sealed_ledger_in(State::Superseded);
+    let computed: BTreeMap<_, _> = [(id("fx.policy.sealed", 1), content_hash(&retired))].into();
+    lock_for(&active_text).apply_facts(&mut ledger, &computed);
+
+    let diagnostics = v024_seals_match(&ledger);
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, codes::R052);
+    assert!(diagnostics[0].message.contains("active to superseded"));
+}
+
+#[test]
+fn a_state_transition_does_not_hide_a_simultaneous_body_edit() {
+    let edited = SEALED_TEXT
+        .replace("state active", "state superseded")
+        .replace("The original text.", "Text changed while retiring.");
+    let mut ledger = sealed_ledger_in(State::Superseded);
+    let computed: BTreeMap<_, _> = [(id("fx.policy.sealed", 1), content_hash(&edited))].into();
+    lock_for(SEALED_TEXT).apply_facts(&mut ledger, &computed);
+
+    let diagnostics = v024_seals_match(&ledger);
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, codes::R051);
 }
 
 #[test]

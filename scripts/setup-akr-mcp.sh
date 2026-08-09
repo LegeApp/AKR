@@ -64,28 +64,35 @@ if [[ ! -d "$REPO_DIR/crates/akr-mcp" ]]; then
 fi
 
 AKR_BIN_DIR="${HOME}/.local/bin"
+AKR_BIN="$AKR_BIN_DIR/akr"
 AKR_MCP_BIN="$AKR_BIN_DIR/akr-mcp"
 
 log() { echo "[setup-akr-mcp] $*"; }
-run() { if [[ "$DRY_RUN" -eq 1 ]]; then log "DRY-RUN: $*"; else eval "$@"; fi }
+run() { if [[ "$DRY_RUN" -eq 1 ]]; then log "DRY-RUN: $*"; else "$@"; fi; }
 
 # Build and install AKR MCP
 if [[ "$USE_DEBUG" -eq 1 ]]; then
   BUILD_MODE="debug"
-  BUILD_CMD="cargo build --package akr-mcp"
+  BUILD_CMD=(cargo build --package akr-cli --package akr-mcp)
+  SOURCE_AKR="$REPO_DIR/target/debug/akr"
   SOURCE_BIN="$REPO_DIR/target/debug/akr-mcp"
 else
   BUILD_MODE="release"
-  BUILD_CMD="cargo build --release --package akr-mcp"
+  BUILD_CMD=(cargo build --release --package akr-cli --package akr-mcp)
+  SOURCE_AKR="$REPO_DIR/target/release/akr"
   SOURCE_BIN="$REPO_DIR/target/release/akr-mcp"
 fi
 
 log "Using repo: $REPO_DIR"
 log "Build mode: $BUILD_MODE"
-run "cd \"$REPO_DIR\" && $BUILD_CMD"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  log "DRY-RUN: (cd $REPO_DIR && ${BUILD_CMD[*]})"
+else
+  (cd "$REPO_DIR" && "${BUILD_CMD[@]}")
+fi
 
-if [[ ! -x "$SOURCE_BIN" ]]; then
-  echo "error: built binary not found: $SOURCE_BIN" >&2
+if [[ "$DRY_RUN" -eq 0 && ( ! -x "$SOURCE_AKR" || ! -x "$SOURCE_BIN" ) ]]; then
+  echo "error: built binaries not found: $SOURCE_AKR, $SOURCE_BIN" >&2
   echo "Hint: rerun with --debug or build first manually." >&2
   exit 1
 fi
@@ -97,7 +104,14 @@ fi
 # reason you are running this. `rename(2)` swaps the directory entry instead, so the
 # running process keeps the inode it already opened and the next start picks up the new
 # one — and it is atomic, so there is never a half-written binary on the path.
-run "mkdir -p \"$AKR_BIN_DIR\" && cp \"$SOURCE_BIN\" \"$AKR_MCP_BIN.new\" && mv -f \"$AKR_MCP_BIN.new\" \"$AKR_MCP_BIN\""
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  log "DRY-RUN: install $SOURCE_AKR -> $AKR_BIN and $SOURCE_BIN -> $AKR_MCP_BIN"
+else
+  mkdir -p "$AKR_BIN_DIR"
+  cp "$SOURCE_AKR" "$AKR_BIN.new" && mv -f "$AKR_BIN.new" "$AKR_BIN"
+  cp "$SOURCE_BIN" "$AKR_MCP_BIN.new" && mv -f "$AKR_MCP_BIN.new" "$AKR_MCP_BIN"
+fi
+log "Installed $AKR_BIN"
 log "Installed $AKR_MCP_BIN"
 log "NOTE: a server that is already running keeps the old binary until it restarts."
 log "      Reconnect the MCP server (or restart the session) before using knowledge.* tools."
@@ -122,7 +136,7 @@ PY
       fi
     else
       log "Appending [mcp_servers.akr] to Codex config"
-      run "printf '\n[mcp_servers.akr]\ncommand = \"%s\"\n' \"$AKR_MCP_BIN\" >> \"$CODEX_CFG\""
+      if [[ "$DRY_RUN" -eq 1 ]]; then log "DRY-RUN: append AKR MCP config to $CODEX_CFG"; else printf '\n[mcp_servers.akr]\ncommand = "%s"\n' "$AKR_MCP_BIN" >> "$CODEX_CFG"; fi
     fi
   fi
 fi
@@ -139,7 +153,7 @@ if [[ "$DO_OPENCODE" -eq 1 ]]; then
     fi
     log "Updating OpenCode MCP section"
     TMPFILE="$(mktemp)"
-    run "jq --arg cmd \"$AKR_MCP_BIN\" '.mcp.akr = { type: \"local\", command: [ \$cmd ], enabled: true }' \"$OPCFG\" > \"$TMPFILE\" && mv \"$TMPFILE\" \"$OPCFG\""
+    if [[ "$DRY_RUN" -eq 1 ]]; then log "DRY-RUN: update OpenCode MCP section"; else jq --arg cmd "$AKR_MCP_BIN" '.mcp.akr = { type: "local", command: [ $cmd ], enabled: true }' "$OPCFG" > "$TMPFILE" && mv "$TMPFILE" "$OPCFG"; fi
   fi
 fi
 
@@ -152,7 +166,7 @@ if [[ "$DO_CLAUDE" -eq 1 ]]; then
       log "Claude already has an AKR MCP server configured"
     else
       log "Registering AKR MCP in Claude (user scope)"
-      run "claude mcp add --scope user akr \"$AKR_MCP_BIN\""
+      run claude mcp add --scope user akr "$AKR_MCP_BIN"
     fi
   fi
 fi

@@ -1344,18 +1344,37 @@ pub fn v024_seals_match(ledger: &Ledger) -> Vec<Diagnostic> {
             continue;
         };
         match (&fact.recorded, &fact.computed) {
-            (Some(recorded), Some(computed)) if recorded != computed => out.push(
-                Diagnostic::error(
-                    c::R051,
-                    RULE,
-                    subject(record),
-                    format!(
-                        "{} is {} and sealed; recorded {recorded}, computed {computed}",
-                        record.id, record.state
-                    ),
-                )
-                .help("create a new revision with `akr revise` instead"),
-            ),
+            (Some(recorded), Some(computed)) if recorded != computed => {
+                if lifecycle_only_seal_drift(ledger, record, fact, recorded) {
+                    out.push(
+                        Diagnostic::error(
+                            c::R052,
+                            RULE,
+                            subject(record),
+                            format!(
+                                "{} moved from {} to {}; akr.lock still records the earlier lifecycle state",
+                                record.id,
+                                fact.recorded_state.expect("checked by lifecycle drift"),
+                                record.state
+                            ),
+                        )
+                        .help("run `akr build`"),
+                    );
+                } else {
+                    out.push(
+                        Diagnostic::error(
+                            c::R051,
+                            RULE,
+                            subject(record),
+                            format!(
+                                "{} is {} and sealed; recorded {recorded}, computed {computed}",
+                                record.id, record.state
+                            ),
+                        )
+                        .help("create a new revision with `akr revise` instead"),
+                    );
+                }
+            }
             (None, _) => out.push(Diagnostic::error(
                 c::R052,
                 RULE,
@@ -1366,4 +1385,33 @@ pub fn v024_seals_match(ledger: &Ledger) -> Vec<Diagnostic> {
         }
     }
     out
+}
+
+/// Whether a mismatched seal is exactly one legal lifecycle transition.
+///
+/// Re-rendering the current record in the state stored by the lock proves that no other
+/// hashed content changed. This lets supported operations retire a revision without
+/// disguising a simultaneous body edit as ordinary lock staleness.
+fn lifecycle_only_seal_drift(
+    ledger: &Ledger,
+    record: &Record,
+    fact: &crate::model::SealFact,
+    recorded_hash: &crate::model::ContentHash,
+) -> bool {
+    let Some(recorded_state) = fact.recorded_state else {
+        return false;
+    };
+    if !record
+        .kind
+        .class()
+        .transitions()
+        .iter()
+        .any(|transition| transition.from == recorded_state && transition.to == record.state)
+    {
+        return false;
+    }
+    let mut before = record.clone();
+    before.state = recorded_state;
+    crate::hash::content_hash(&crate::syntax::record_text(&before, &ledger.project.name))
+        == *recorded_hash
 }

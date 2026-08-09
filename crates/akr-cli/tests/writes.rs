@@ -243,6 +243,11 @@ fn revise_on_a_sealed_head_retires_it_in_the_same_write() {
     let source = example.read_file(".akr/records/sys/terms.akr");
     assert!(source.contains("state superseded"));
     assert!(source.contains("supersedes [ @sys.term.playable-day/1 ]"));
+
+    let before_build = example.run(&["check"]);
+    assert_eq!(before_build.code, 1, "{}", before_build.output());
+    assert!(before_build.output().contains("AKR-R052"));
+    assert!(!before_build.output().contains("AKR-R051"));
 }
 
 #[test]
@@ -378,11 +383,10 @@ fn the_json_form_carries_the_structured_refusal() {
 /// Lays down a minimal `.akr` workspace holding one live papercut, next to the example's
 /// own temp root, and returns the scan directory the command should point at.
 fn sibling_workspaces(example: &Example) -> std::path::PathBuf {
-    let scan = example
-        .root()
-        .parent()
-        .expect("a temp root has a parent")
-        .join(format!("collate-scan-{}", std::process::id()));
+    // Each Example root already carries a process id plus an atomic counter. Keeping the
+    // scan below it prevents the two collation tests in this binary from deleting each
+    // other's process-id-only directory when the test harness runs them in parallel.
+    let scan = example.root().join("collate-scan");
     let _ = std::fs::remove_dir_all(&scan);
     for (project, slug) in [("alpha", "alpha-annoyance"), ("beta", "beta-friction")] {
         let akr = scan.join(project).join(".akr");

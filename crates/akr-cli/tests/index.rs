@@ -88,6 +88,24 @@ fn a_build_writes_a_cache_that_agrees_with_the_sources() {
         "SELECT file_hash FROM sources ORDER BY path LIMIT 1",
     );
     assert_eq!(file_hash.len(), 64, "{file_hash}");
+    // The harness lays the ledger over an older committed fixture. The cache is still
+    // exactly identified by the source-graph hash above, but must not pretend those
+    // uncommitted bytes came from the fixture's HEAD.
+    assert_eq!(
+        text(&example, "SELECT value FROM meta WHERE key = 'commit'"),
+        ""
+    );
+    let json = example.run(&["build", "--format", "json"]);
+    assert_eq!(json.code, 0, "{}", json.output());
+    let envelope = akr_core::json::parse(&json.stdout).expect("build emits JSON");
+    assert!(
+        envelope
+            .get("commit")
+            .is_some_and(akr_core::json::Value::is_null)
+    );
+    let check = example.run(&["check"]);
+    assert_eq!(check.code, 0, "{}", check.output());
+    assert!(check.stdout.contains("commit (none)"), "{}", check.stdout);
 }
 
 #[test]

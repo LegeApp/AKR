@@ -48,6 +48,20 @@ record akr.decision.change-transaction-not-commit-kind/1 : decision {
     supported_by [ @akr.evidence.p11-change-protocol-suite/1 ]
 }
 
+record akr.decision.dirty-source-graph-has-no-commit-provenance/1 : decision {
+    title "Dirty source graphs do not claim HEAD provenance"
+    state proposed
+    scope [
+        path "crates/akr-cli/src/session.rs",
+        path "crates/akr-core/src/store/**",
+        path "docs/06-compiler-pipeline.md",
+        path "docs/07-cli.md"
+    ]
+    decision """
+        The source-graph hash is the exact identity of the AKR bytes a command read. The Git commit is attached only when those loaded AKR sources match the committed tree. A mid-flight build may still write rebuildable caches, the lock, and views from dirty AKR sources, but their commit provenance is absent rather than naming the pre-change HEAD. Freshness may still use HEAD as its history boundary; source provenance and history comparison are separate facts.
+        """
+}
+
 record akr.decision.external-sources-immutable-library/1 : decision {
     title "External sources are an immutable library, indexed separately, cited by byte range"
     state superseded
@@ -106,28 +120,11 @@ record akr.decision.external-sources-immutable-library/2 : decision {
         path "spec/schema/sources.sql"
     ]
     decision """
-        Outside advice is held in three layers with one responsibility each. The source
-        library is non-authoritative and content-hashed: registered bytes are immutable while
-        present, but registration is not permanent. `akr source add` copies a document under
-        `sources/external/` and creates no records. `akr source finalize` can transition a
-        document from `full` to `cited-only`, retaining exact cited ranges in shared
-        content-addressed `.akr/source-fragments/` blobs, or to `metadata-only` when no exact
-        citations remain. The catalog tombstone retains title, origin, identity and the full
-        document hash; the original Markdown may leave the active source tree.
+        Outside advice is held in three layers with one responsibility each. The source library is non-authoritative and content-hashed: registered bytes are immutable while present, but registration is not permanent. `akr source add` copies a document under `sources/external/` and creates no records. `akr source finalize` can transition a document from `full` to `cited-only`, retaining exact cited ranges in shared content-addressed `.akr/source-fragments/` blobs, or to `metadata-only` when no exact citations remain. The catalog tombstone retains title, origin, identity and the full document hash; the original Markdown may leave the active source tree.
 
-        The derived source index, `.akr/cache/sources.sqlite`, holds rebuildable,
-        non-authoritative semantic chunks on its own generation, distinct from the ledger's
-        `source_graph_hash`. Full sources are searchable; finalized fragments are explicit
-        provenance, not ordinary project search results. The ledger holds the project's
-        interpretation: records cite a document and exact byte range, optionally with a role
-        and `use` note explaining what the project adopted. A record must remain semantically
-        self-contained when its provenance blocks are hidden. `akr check` resolves exact
-        citations from the full document or retained fragments and refuses a citation whose
-        bytes are unavailable. Lineage-only references are valid in `metadata-only` state.
+        The derived source index, `.akr/cache/sources.sqlite`, holds rebuildable, non-authoritative semantic chunks on its own generation, distinct from the ledger's `source_graph_hash`. Full sources are searchable; finalized fragments are explicit provenance, not ordinary project search results. The ledger holds the project's interpretation: records cite a document and exact byte range, optionally with a role and `use` note explaining what the project adopted. Both CLI authoring and `knowledge.propose`/`knowledge.revise` must accept that exact locator; registration without an explicit adoption path is not a plan import. A record must remain semantically self-contained when its provenance blocks are hidden. `akr check` resolves exact citations from the full document or retained fragments and refuses a citation whose bytes are unavailable. Lineage-only references are valid in `metadata-only` state.
 
-        Finalization does not rewrite records, duplicate excerpts into them, change a work
-        state, satisfy evidence, or imply that outside advice was implemented. It is a source
-        retention transition, separate from provenance interpretation and work completion.
+        Finalization does not rewrite records, duplicate excerpts into them, change a work state, satisfy evidence, or imply that outside advice was implemented. It is a source retention transition, separate from provenance interpretation and work completion.
         """
     context """
         The first source-library design made registered Markdown permanently undeletable in
@@ -155,7 +152,7 @@ record akr.decision.external-sources-immutable-library/2 : decision {
 
 record akr.decision.mcp-budgeted-and-instrumented/1 : decision {
     title "The MCP surface is budgeted and instrumented"
-    state active
+    state superseded
     scope [ path "crates/akr-mcp/**" ]
     decision """
         knowledge.get takes summary|body|canonical, defaulting to body. Every MCP result is
@@ -165,6 +162,17 @@ record akr.decision.mcp-budgeted-and-instrumented/1 : decision {
         vocabulary version and reports a workspace disagreement as a named skew. Recorded as
         D-034.
         """
+    supported_by [ @akr.evidence.mcp-budget-and-skew-suite ]
+}
+
+record akr.decision.mcp-budgeted-and-instrumented/2 : decision {
+    title "The MCP surface is budgeted and instrumented"
+    state proposed
+    scope [ path "crates/akr-mcp/**" ]
+    decision """
+        knowledge.get takes summary|body|canonical, defaulting to body. MCP results without a caller-selected output budget are measured across both text and structured halves and one over its per-tool hard limit is withheld rather than shortened, with its counts and a ready-made narrower call. knowledge.context is different: when budget_tokens is explicit, context assembly owns that budget and the MCP adapter must not discard the assembled bundle behind a smaller fixed ceiling. akr-mcp --surface read omits the write tools; --accounting appends one JSON line per call. The server publishes its vocabulary version and reports a workspace disagreement as a named skew. Recorded as D-034.
+        """
+    supersedes [ @akr.decision.mcp-budgeted-and-instrumented/1 ]
     supported_by [ @akr.evidence.mcp-budget-and-skew-suite ]
 }
 

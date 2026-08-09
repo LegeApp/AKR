@@ -134,12 +134,17 @@ Consequences, all of them load-bearing:
 | `akr` | string | Envelope version. Bumped only on a breaking change to the envelope. |
 | `tool_version` | string | Semver of the binary. |
 | `command` | string | The command as invoked, with subcommand: `"evidence add"`. |
-| `commit` | string | 40 hex, the commit the build resolved against. |
+| `commit` | string or null | 40 hex when the loaded AKR source graph is exactly committed; null outside Git or while those source bytes are dirty. |
 | `source_graph_hash` | string | `sha256:` + 64 hex. |
 | `ok` | boolean | `exit_code == 0`. |
 | `exit_code` | integer | Mirrors the process exit status. |
 | `diagnostics` | array | See below. Present and empty on success. |
 | `result` | object | Command-specific; documented per command. |
+
+The source-graph hash is the exact identity of the bytes a command read. A mid-flight
+`akr build` may still refresh views, the lock, and derived indexes, but it does not attach
+the pre-change `HEAD` as provenance for dirty AKR sources: the envelope and index store a
+null/empty commit until those bytes are committed.
 
 A diagnostic object:
 
@@ -412,6 +417,25 @@ answer. If `.akr` sources changed since the last `akr build`, search still exits
 prints `warning: search results are from a stale index; run akr build to include recent
 writes`. JSON output carries `"index_stale": true` in the same case. Search does not
 silently rebuild: D-019 reserves index writes to `akr build`.
+
+---
+
+### `akr start`
+
+```
+akr start <task> [--paths <glob> ...] [--budget <tokens>]
+```
+
+Use this when a task arrives without an exact planning key. It searches live milestones,
+work and tracks, then returns candidates and a ready-made `akr context` request when one
+match is unambiguous. It is the CLI counterpart of `knowledge.start`.
+
+If no planning record matches, the result explicitly says that this is a ledger-coverage
+miss, not evidence that no plan exists. It also includes a bounded workspace text scan of
+tracked and untracked files. Those hits are labelled `workspace text scan;
+non-authoritative and not AKR knowledge`; they are discovery leads, not planning authority.
+For multi-word tasks, a fallback hit must contain at least two useful task terms so generic
+words do not swamp more specific intake material.
 
 ---
 
@@ -802,9 +826,10 @@ akr lock [--check] [--update]
 ```
 
 `--check` recomputes what `akr.lock` should contain and reports drift without writing:
-a sealed revision whose hash no longer matches is `AKR-R051`, a head resolution absent
-from an otherwise-current lock is `AKR-R052`. `--update` rewrites the lock from the
-current build, which is also what step 11 of `akr build` does.
+a sealed revision whose immutable content no longer matches is `AKR-R051`; a legal
+lifecycle-only transition or a head resolution absent from an otherwise-current lock is
+`AKR-R052`. `--update` rewrites the lock from the current build, which is also what step
+11 of `akr build` does.
 
 The lock is written in AKR syntax with an `akr-lock 0.1` header and is committed
 (D-014). Its schema is [`../spec/schema/akr-lock.md`](../spec/schema/akr-lock.md).

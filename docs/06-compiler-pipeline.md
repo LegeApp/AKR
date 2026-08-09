@@ -192,7 +192,8 @@ command consumes:
 
 ```
 ResolvedModel
-    commit              the HEAD commit the build resolved against
+    commit              HEAD only when it exactly contains the loaded AKR sources;
+                        absent for a dirty source graph or outside Git
     tool_version        semver of the binary
     grammar_version     from the file headers
     source_graph_hash   §9

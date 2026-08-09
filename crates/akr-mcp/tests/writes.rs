@@ -159,6 +159,49 @@ fn propose_can_create_a_milestone_with_an_acceptance_block() {
 }
 
 #[test]
+fn propose_can_adopt_an_exact_registered_source_passage() {
+    let example = Example::materialise("mcp-propose-source-citation");
+    let advice = "The day loop must remain deterministic.\n";
+    example.write_file("incoming-plan.md", advice);
+    let added = example.run(&["source", "add", "incoming-plan.md", "--id", "incoming-plan"]);
+    assert_eq!(added.code, 0, "{}", added.output());
+
+    let arguments = format!(
+        r#"{{
+            "key": "sys.requirement.deterministic-day-loop",
+            "kind": "requirement",
+            "title": "The day loop stays deterministic",
+            "scope": ["all"],
+            "slots": {{ "statement": "The day loop must remain deterministic." }},
+            "sources": [{{
+                "kind": "external",
+                "role": "origin",
+                "document": "incoming-plan",
+                "start_byte": 0,
+                "end_byte": {},
+                "start_line": 1,
+                "end_line": 1,
+                "use": "Adopted as a project requirement."
+            }}]
+        }}"#,
+        advice.len()
+    );
+    let (payload, is_error) = call(&example, "knowledge.propose", &arguments);
+    assert!(!is_error, "{}", error_text(&payload));
+    let written = example.read_file(".akr/records/sys/requirements.akr");
+    assert!(written.contains("document \"incoming-plan\""), "{written}");
+    assert!(
+        written.contains(&format!("end_byte {}", advice.len())),
+        "{written}"
+    );
+    assert!(written.contains("role origin"), "{written}");
+    assert!(written.contains("use \"\"\""), "{written}");
+    assert_eq!(example.run(&["build"]).code, 0);
+    let checked = example.run(&["check"]);
+    assert_eq!(checked.code, 0, "{}", checked.output());
+}
+
+#[test]
 fn a_malformed_payload_is_a_schema_error_and_writes_nothing() {
     let example = Example::materialise("mcp-schema");
     let before = example.sources();

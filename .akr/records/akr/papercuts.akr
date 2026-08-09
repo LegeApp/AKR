@@ -3,7 +3,7 @@ project akr
 
 record akr.papercut.bug-needs-a-decision-d-028-is-incomplete/1 : papercut {
     title "BUG (needs a decision, D-028 is incomplete): completing a COMMITTED…"
-    state verified
+    state superseded
     statement """
         BUG (needs a decision, D-028 is incomplete): completing a COMMITTED non-legacy milestone always fails akr check with AKR-R022. Proven in a throwaway repo: define milestone (commit A), add evidence, complete + commit (commit B); check then reports 'evidence predates the last content change'. Root cause: last_change_of hashes the full canonical record text (crate::hash::content_hash via canonical_hash_input, which strips only comments), so the completion itself - state proposed->completed plus the acceptance verified_by citations - counts as the newest content change, and any cited evidence necessarily predates it. D-028 waived the descendant comparison only for source { kind legacy }, so ongoing non-legacy milestone completion is structurally impossible to keep green once committed. Fix direction: compute last_change over the milestone's DEFINITIONAL content only (exclude state and acceptance verified_by, and lifecycle/provenance fields like reason), matching D-016's stated intent ('stop a test from 200 commits ago closing a milestone redefined yesterday'). Warrants a D-029 decision + tests in validate/rules.rs and git/last_change_of.
         """
@@ -12,9 +12,21 @@ record akr.papercut.bug-needs-a-decision-d-028-is-incomplete/1 : papercut {
     created_at 2026-08-05
 }
 
+record akr.papercut.bug-needs-a-decision-d-028-is-incomplete/2 : papercut {
+    title "BUG (needs a decision, D-028 is incomplete): completing a COMMITTED…"
+    state withdrawn
+    statement """
+        BUG (needs a decision, D-028 is incomplete): completing a COMMITTED non-legacy milestone always fails akr check with AKR-R022. Proven in a throwaway repo: define milestone (commit A), add evidence, complete + commit (commit B); check then reports 'evidence predates the last content change'. Root cause: last_change_of hashes the full canonical record text (crate::hash::content_hash via canonical_hash_input, which strips only comments), so the completion itself - state proposed->completed plus the acceptance verified_by citations - counts as the newest content change, and any cited evidence necessarily predates it. D-028 waived the descendant comparison only for source { kind legacy }, so ongoing non-legacy milestone completion is structurally impossible to keep green once committed. Fix direction: compute last_change over the milestone's DEFINITIONAL content only (exclude state and acceptance verified_by, and lifecycle/provenance fields like reason), matching D-016's stated intent ('stop a test from 200 commits ago closing a milestone redefined yesterday'). Warrants a D-029 decision + tests in validate/rules.rs and git/last_change_of.
+
+        RESOLVED: D-029 (2026-08-06). The descendant gate now measures the last DEFINITIONAL change rather than the last transition, so completing a committed non-legacy milestone stays green.
+        """
+    observed_at git:c3c5c4c243aa1256eee11fa43aee8ac6df62abfa
+    supersedes [ @akr.papercut.bug-needs-a-decision-d-028-is-incomplete/1 ]
+}
+
 record akr.papercut.calling-the-knowledge-papercut-mcp-tool/1 : papercut {
     title "Calling the knowledge.papercut MCP tool returned 'unsupported call',…"
-    state verified
+    state superseded
     statement """
         Calling the knowledge.papercut MCP tool returned 'unsupported call', even though knowledge.search and knowledge.context route fine and crates/akr-mcp/src/tools.rs wires knowledge.papercut. The installed MCP server binary predates the D-027 papercut work; it needs a rebuild/reinstall from this branch to expose the tool.
         """
@@ -23,15 +35,39 @@ record akr.papercut.calling-the-knowledge-papercut-mcp-tool/1 : papercut {
     created_at 2026-08-05
 }
 
+record akr.papercut.calling-the-knowledge-papercut-mcp-tool/2 : papercut {
+    title "Calling the knowledge.papercut MCP tool returned 'unsupported call',…"
+    state withdrawn
+    statement """
+        Calling the knowledge.papercut MCP tool returned 'unsupported call', even though knowledge.search and knowledge.context route fine and crates/akr-mcp/src/tools.rs wires knowledge.papercut. The installed MCP server binary predates the D-027 papercut work; it needs a rebuild/reinstall from this branch to expose the tool.
+
+        RESOLVED: this session (2026-08-08), after it recurred verbatim. scripts/setup-akr-mcp.sh now installs by rename rather than cp (no ETXTBSY over a running server), the server publishes its vocabulary version in serverInfo, and crates/akr-mcp/src/skew.rs turns the resulting AKR-T002 into a named skew warning that says to reconnect.
+        """
+    observed_at git:30579aeb4960ca7b4de2659953ce0694541bfa96
+    supersedes [ @akr.papercut.calling-the-knowledge-papercut-mcp-tool/1 ]
+}
+
 record akr.papercut.cargo-fmt-check-fails-on-the-committed-tree/1 : papercut {
     title "cargo fmt --check fails on the committed tree: several files from the…"
-    state verified
+    state superseded
     statement """
         cargo fmt --check fails on the committed tree: several files from the last two commits (render/*, resolve/mod.rs, validate/rules.rs, akr-mcp record.rs/schema.rs/tools.rs, args.rs, write.rs) have formatting drift. A contributor running the documented 'cargo fmt' gets a large diff unrelated to their change, and a CI fmt gate would already be red.
         """
     observed_at git:30579aeb4960ca7b4de2659953ce0694541bfa96
     author "fugu"
     created_at 2026-08-05
+}
+
+record akr.papercut.cargo-fmt-check-fails-on-the-committed-tree/2 : papercut {
+    title "cargo fmt --check fails on the committed tree: several files from the…"
+    state withdrawn
+    statement """
+        cargo fmt --check fails on the committed tree: several files from the last two commits (render/*, resolve/mod.rs, validate/rules.rs, akr-mcp record.rs/schema.rs/tools.rs, args.rs, write.rs) have formatting drift. A contributor running the documented 'cargo fmt' gets a large diff unrelated to their change, and a CI fmt gate would already be red.
+
+        RESOLVED: commit 7cf53ce (style: cargo fmt the workspace), which landed after this was observed. scripts/verify-distribution.sh now runs cargo fmt --check, so the drift cannot return unnoticed.
+        """
+    observed_at git:30579aeb4960ca7b4de2659953ce0694541bfa96
+    supersedes [ @akr.papercut.cargo-fmt-check-fails-on-the-committed-tree/1 ]
 }
 
 record akr.papercut.collated-18-papercuts-from-kitchen-concept-lege/1 : papercut {
@@ -83,9 +119,82 @@ record akr.papercut.collated-18-papercuts-from-kitchen-concept-lege/1 : papercut
     created_at 2026-08-07
 }
 
+record akr.papercut.collated-2-papercuts-from-evidence-intake/1 : papercut {
+    title "Collated 2 papercuts from Evidence-intake-project, Kitchen-Concept, Lege-ecosystem, SaveYourSkin and 5 more"
+    state verified
+    statement """
+        Collated 2 papercuts from /mnt/Samsung980_1TB/Rust-projects on 2026-08-09 (D-030). Each source key is also in the collated slot, which is the dedup set for the next run; the sisters were read and never written.
+
+        ## SaveYourSkin @saveyourskin.papercut.fff-find-files-transport-closed-while-locating [about FFF]
+        FFF find_files transport closed while locating the user-directed Sources/current-plan-80626.md, so discovery had to fall back to direct read-only shell inspection.
+
+        ## SaveYourSkin @saveyourskin.papercut.knowledge-context-accepted-budget-tokens-18000 [about akr]
+        knowledge.context accepted budget_tokens=18000 but then withheld a 16208-token bundle because of an undocumented 4000-token response ceiling; callers should be told/capped before the expensive assembly.
+        """
+    observed_at git:911c29573461ba912cc141f49f4d8c05c61ec5e1
+    collated [
+        "saveyourskin.papercut.fff-find-files-transport-closed-while-locating",
+        "saveyourskin.papercut.knowledge-context-accepted-budget-tokens-18000"
+    ]
+    created_at 2026-08-09
+}
+
+record akr.papercut.collated-20-papercuts-from-kitchen-concept-lege/1 : papercut {
+    title "Collated 20 papercuts from Kitchen-Concept, Lege-ecosystem, SaveYourSkin, bpg-rs and 4 more"
+    state verified
+    statement """
+        Collated 20 papercuts from /mnt/Samsung980_1TB/Rust-projects on 2026-08-08 (D-030). Each source key is in the collated slot; see the owning project's ledger for the full statement.
+
+        - Kitchen-Concept @kitchen.papercut.adding-sql-migration-0015-also-requires — Adding SQL migration 0015 also requires updating the handwritten…
+        - Kitchen-Concept @kitchen.papercut.akr-propose-from-describes-a-record-body-source — akr propose --from describes a record body source, but rejects one…
+        - Kitchen-Concept @kitchen.papercut.akr-propose-from-expects-a-complete-akr-record — akr propose --from expects a complete AKR record rather than the prose…
+        - Kitchen-Concept @kitchen.papercut.akr-search-kind-milestone-returned-zero-results — akr search --kind milestone returned zero results without explaining…
+        - Kitchen-Concept @kitchen.papercut.cargo-test-workspace-warns-that-keypad-lab-and — cargo test --workspace warns that keypad-lab and back-office both…
+        - Kitchen-Concept @kitchen.papercut.project-instructions-name-knowledge-context-but — Project instructions name knowledge.context, but this workspace exposes…
+        - Kitchen-Concept @kitchen.papercut.the-agents-protocol-names-knowledge-propose-but — The AGENTS protocol names knowledge.propose, but the installed CLI has…
+        - Kitchen-Concept @kitchen.papercut.the-first-multi-file-apply-patch-missed-the — The first multi-file apply_patch missed the escaped newline in…
+        - Kitchen-Concept @kitchen.papercut.the-requested-restaurant-post-sources-path-did — The requested restaurant-post/sources path did not exist; the material…
+        - raw-autotune @raw-autotune.papercut.a-release-build-invocation-returned-without — A release build invocation returned without Cargo's Finished line and…
+        - raw-autotune @raw-autotune.papercut.a-targeted-cargo-test-invocation-with-two-exact — A targeted `cargo test` invocation with two exact test filters fails…
+        - raw-autotune @raw-autotune.papercut.a-two-frame-lens-correction-profile-exact — A two-frame --lens-correction profile-exact render was killed after…
+        - raw-autotune @raw-autotune.papercut.forwarding-six-full-resolution-diagnostic-pngs — Forwarding six full-resolution diagnostic PNGs through the image viewer…
+        - raw-autotune @raw-autotune.papercut.grade-sky-py-reported-zero-pairs-on-a-normal — `grade_sky.py` reported zero pairs on a normal recursive batch output…
+        - raw-autotune @raw-autotune.papercut.knowledge-context-rejects-a-completed-work — knowledge.context rejects a completed work record even when a follow-up…
+        - raw-autotune @raw-autotune.papercut.re-running-stage-dumps-into-an-explicit-tmp — Re-running stage dumps into an explicit `/tmp` diagnostic directory was…
+        - raw-autotune @raw-autotune.papercut.the-full-batch-process-stopped-at-the-execution — The full batch process stopped at the execution harness's ~30-second…
+        - raw-autotune @raw-autotune.papercut.the-unit-tests-that-pinned-the-da23c5f-near — The unit tests that pinned the da23c5f near-white anchor rule were kept…
+        - raw-autotune @raw-autotune.papercut.while-proposing-the-follow-on-work-record-a — While proposing the follow-on work record, a dense inline MCP payload…
+        - raw-autotune @raw-autotune.papercut.while-running-three-targeted-rust-tests-i — While running three targeted Rust tests I passed multiple test filters…
+        """
+    observed_at git:911c29573461ba912cc141f49f4d8c05c61ec5e1
+    collated [
+        "kitchen.papercut.adding-sql-migration-0015-also-requires",
+        "kitchen.papercut.akr-propose-from-describes-a-record-body-source",
+        "kitchen.papercut.akr-propose-from-expects-a-complete-akr-record",
+        "kitchen.papercut.akr-search-kind-milestone-returned-zero-results",
+        "kitchen.papercut.cargo-test-workspace-warns-that-keypad-lab-and",
+        "kitchen.papercut.project-instructions-name-knowledge-context-but",
+        "kitchen.papercut.the-agents-protocol-names-knowledge-propose-but",
+        "kitchen.papercut.the-first-multi-file-apply-patch-missed-the",
+        "kitchen.papercut.the-requested-restaurant-post-sources-path-did",
+        "raw-autotune.papercut.a-release-build-invocation-returned-without",
+        "raw-autotune.papercut.a-targeted-cargo-test-invocation-with-two-exact",
+        "raw-autotune.papercut.a-two-frame-lens-correction-profile-exact",
+        "raw-autotune.papercut.forwarding-six-full-resolution-diagnostic-pngs",
+        "raw-autotune.papercut.grade-sky-py-reported-zero-pairs-on-a-normal",
+        "raw-autotune.papercut.knowledge-context-rejects-a-completed-work",
+        "raw-autotune.papercut.re-running-stage-dumps-into-an-explicit-tmp",
+        "raw-autotune.papercut.the-full-batch-process-stopped-at-the-execution",
+        "raw-autotune.papercut.the-unit-tests-that-pinned-the-da23c5f-near",
+        "raw-autotune.papercut.while-proposing-the-follow-on-work-record-a",
+        "raw-autotune.papercut.while-running-three-targeted-rust-tests-i"
+    ]
+    created_at 2026-08-08
+}
+
 record akr.papercut.historical-port-design-gap-recovered-from-a/1 : papercut {
     title "Historical-port design gap, recovered from a lost agent session…"
-    state verified
+    state superseded
     statement """
         Historical-port design gap, recovered from a lost agent session (originally logged in the bpg-rs ledger as bpg.papercut.v-020-s-descendant-commit-freshness-gate-akr/1). A single-commit port of old history validated clean before commit, but once the ledger was committed akr check raised 19 AKR-R022: D-016/V-020's descendant-commit rule wants each completed record's evidence to postdate the record's last content change, which is structurally impossible for a transcription of history whose evidence commits predate the port commit. RESOLVED by D-028 (2026-08-05): a completed record carrying source { kind legacy } waives the descendant-commit comparison only (evidence must still resolve, record result pass, and be a commit the repo has). Ports like bpg-rs and the planned jp2lam go green once re-checked with a D-028 binary and their completed records carry a legacy source block.
         """
@@ -94,9 +203,55 @@ record akr.papercut.historical-port-design-gap-recovered-from-a/1 : papercut {
     created_at 2026-08-05
 }
 
+record akr.papercut.historical-port-design-gap-recovered-from-a/2 : papercut {
+    title "Historical-port design gap, recovered from a lost agent session…"
+    state withdrawn
+    statement """
+        Historical-port design gap, recovered from a lost agent session (originally logged in the bpg-rs ledger as bpg.papercut.v-020-s-descendant-commit-freshness-gate-akr/1). A single-commit port of old history validated clean before commit, but once the ledger was committed akr check raised 19 AKR-R022: D-016/V-020's descendant-commit rule wants each completed record's evidence to postdate the record's last content change, which is structurally impossible for a transcription of history whose evidence commits predate the port commit. RESOLVED by D-028 (2026-08-05): a completed record carrying source { kind legacy } waives the descendant-commit comparison only (evidence must still resolve, record result pass, and be a commit the repo has). Ports like bpg-rs and the planned jp2lam go green once re-checked with a D-028 binary and their completed records carry a legacy source block.
+
+        RESOLVED: D-028 (2026-08-05), and the general case by D-029 (2026-08-06). A completed record carrying source { kind legacy } waives the descendant-commit comparison, and the gate now measures definitional change for everyone else.
+        """
+    observed_at git:047a684214734d19ebc8a477030ceb9cfbc98ceb
+    supersedes [ @akr.papercut.historical-port-design-gap-recovered-from-a/1 ]
+}
+
+record akr.papercut.i-tried-assuming-get-supported-a-source/1 : papercut {
+    title "I tried , assuming get supported a source rendering mode; --format is…"
+    state verified
+    statement """
+        I tried , assuming get supported a source rendering mode; --format is only the global text/json selector. The get help could make raw-record inspection guidance explicit for agents closing acceptance checks.
+        """
+    observed_at git:911c29573461ba912cc141f49f4d8c05c61ec5e1
+    author "codex"
+    created_at 2026-08-09
+}
+
+record akr.papercut.knowledge-context-rejects-completed-work-goals/1 : papercut {
+    title "knowledge.context rejects completed work goals with AKR-X002 even when…"
+    state verified
+    statement """
+        knowledge.context rejects completed work goals with AKR-X002 even when the repository protocol says to call context with the exact planning key; corrective follow-up needs a new work record before the prior bundle can be inspected.
+        """
+    observed_at git:911c29573461ba912cc141f49f4d8c05c61ec5e1
+    about "akr"
+    author "codex"
+    created_at 2026-08-09
+}
+
+record akr.papercut.revising-a-sealed-record-through-the-supported/1 : papercut {
+    title "Revising a sealed record through the supported knowledge.revise path…"
+    state verified
+    statement """
+        Revising a sealed record through the supported knowledge.revise path changes its old revision to superseded and causes knowledge.validate to report AKR-R051 until rebuild, while ops documentation says lifecycle writes should produce AKR-R052. This makes an authorized lifecycle transition look like sealed-content tampering; distinguish it or document the exact rebuild boundary.
+        """
+    observed_at git:911c29573461ba912cc141f49f4d8c05c61ec5e1
+    author "codex"
+    created_at 2026-08-09
+}
+
 record akr.papercut.root-cause-of-the-discoverability-miss-the-cli/1 : papercut {
     title "Root cause of the discoverability miss: the CLI's AKR-C011 error…"
-    state verified
+    state superseded
     statement """
         Root cause of the discoverability miss: the CLI's AKR-C011 error carries help 'run akr init to create one', but the MCP surface drops it — crates/akr-mcp/src/errors.rs builds its diagnostic object with only code and message (no help field), so an agent hitting C011 over MCP sees 'no .akr directory found' with no remedy. Fix: propagate EnvError.help into the MCP diagnostics payload.
         """
@@ -105,13 +260,37 @@ record akr.papercut.root-cause-of-the-discoverability-miss-the-cli/1 : papercut 
     created_at 2026-08-05
 }
 
+record akr.papercut.root-cause-of-the-discoverability-miss-the-cli/2 : papercut {
+    title "Root cause of the discoverability miss: the CLI's AKR-C011 error…"
+    state withdrawn
+    statement """
+        Root cause of the discoverability miss: the CLI's AKR-C011 error carries help 'run akr init to create one', but the MCP surface drops it — crates/akr-mcp/src/errors.rs builds its diagnostic object with only code and message (no help field), so an agent hitting C011 over MCP sees 'no .akr directory found' with no remedy. Fix: propagate EnvError.help into the MCP diagnostics payload.
+
+        RESOLVED: commit 8866c42 (cli/mcp: carry the error help line into environment-error JSON). EnvError.help now reaches the MCP diagnostics payload, so an agent hitting AKR-C011 over MCP is told to run akr init.
+        """
+    observed_at git:30579aeb4960ca7b4de2659953ce0694541bfa96
+    supersedes [ @akr.papercut.root-cause-of-the-discoverability-miss-the-cli/1 ]
+}
+
 record akr.papercut.the-akr-mcp-knowledge-tools-failed-with-akr/1 : papercut {
     title "The akr MCP knowledge.* tools failed with AKR-C011 'no .akr directory…"
-    state verified
+    state superseded
     statement """
         The akr MCP knowledge.* tools failed with AKR-C011 'no .akr directory found' at the repo root because AKR had no root ledger of its own — the only papercut records lived inside example fixtures the MCP server could not reach. Finding recorded papercuts meant grepping the filesystem. Fixed by running akr init at the repo root (this ledger).
         """
     observed_at git:30579aeb4960ca7b4de2659953ce0694541bfa96
     author "fugu"
     created_at 2026-08-05
+}
+
+record akr.papercut.the-akr-mcp-knowledge-tools-failed-with-akr/2 : papercut {
+    title "The akr MCP knowledge.* tools failed with AKR-C011 'no .akr directory…"
+    state withdrawn
+    statement """
+        The akr MCP knowledge.* tools failed with AKR-C011 'no .akr directory found' at the repo root because AKR had no root ledger of its own — the only papercut records lived inside example fixtures the MCP server could not reach. Finding recorded papercuts meant grepping the filesystem. Fixed by running akr init at the repo root (this ledger).
+
+        RESOLVED: commit 047a684 (chore: dogfood AKR with a root ledger). The repository root now carries its own ledger, so knowledge.* resolves there and papercuts no longer have to be found by grep.
+        """
+    observed_at git:30579aeb4960ca7b4de2659953ce0694541bfa96
+    supersedes [ @akr.papercut.the-akr-mcp-knowledge-tools-failed-with-akr/1 ]
 }

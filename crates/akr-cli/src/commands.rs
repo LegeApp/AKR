@@ -16,6 +16,7 @@ use akr_core::json::Value;
 use akr_core::model::{ContentSlot, ContentValue, Date, Kind, Reference, Relation, RevisionId};
 use akr_core::render::{View, check_views_current, render, write_views};
 use std::collections::BTreeSet;
+use std::path::Path;
 
 /// What a command produced.
 pub struct Output {
@@ -91,7 +92,11 @@ pub fn run(session: &mut Session, command: &Command) -> Result<Output, EnvError>
     // any one command, so they are filled in once here rather than by each command that
     // happens to remember.
     let mut output = dispatch(session, command)?;
-    output.commit = session.commit.as_ref().map(|c| c.as_str().to_owned());
+    output.commit = session
+        .inputs
+        .commit
+        .as_ref()
+        .map(|c| c.as_str().to_owned());
     output.source_graph = session.source_graph();
     Ok(output)
 }
@@ -127,6 +132,11 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
             paths,
             budget,
         } => context(session, goal, paths, *budget),
+        Command::Start {
+            task,
+            paths,
+            budget,
+        } => start(session, task, paths, *budget),
         Command::Search {
             query,
             raw_fts,
@@ -475,6 +485,7 @@ fn is_lock_currency(diagnostic: &Diagnostic) -> bool {
 fn summary_lines(session: &Session, model: &akr_core::resolve::ResolvedModel<'_>) -> String {
     let counts = counts_of(session, model);
     let commit = session
+        .inputs
         .commit
         .as_ref()
         .map_or_else(|| "(none)".to_owned(), |c| c.as_str()[..8].to_owned());
@@ -2214,6 +2225,248 @@ fn search(
             ),
         ),
     ])))
+}
+
+/// `akr start` — orient an ambiguous task before committing to a context anchor.
+#[cfg(feature = "fts5")]
+fn start(
+    session: &Session,
+    task: &str,
+    paths: &[akr_core::model::Glob],
+    budget: Option<usize>,
+) -> Result<Output, EnvError> {
+    let mut output = search(
+        session,
+        task,
+        false,
+        &["milestone".into(), "work".into(), "track".into()],
+        &[],
+        None,
+    )?;
+    let results = output
+        .result
+        .get("results")
+        .and_then(Value::as_array)
+        .map(|results| results.to_vec())
+        .unwrap_or_default();
+    if let Value::Object(fields) = &mut output.result {
+        if results.is_empty() {
+            let (fallback, hit_count) = workspace_fallback(&session.root, task);
+            output.text.push_str(
+                "\nNo live AKR planning record matched this task. This does not mean no plan exists.\n\
+                 Next: read any user-supplied plan, inspect Git history, register outside advice\n\
+                 with `akr source add`, then adopt the governing intent into an AKR record.\n",
+            );
+            if hit_count > 0 {
+                output.text.push_str(&format!(
+                    "Workspace fallback found {hit_count} non-authoritative text hit(s); inspect them before adopting a plan.\n"
+                ));
+            }
+            fields.push((
+                "coverage".into(),
+                Value::object(vec![
+                    ("status".into(), Value::string("no_planning_match")),
+                    (
+                        "message".into(),
+                        Value::string(
+                            "No live AKR planning record matched this task; this is a ledger-coverage result, not proof that no plan exists.",
+                        ),
+                    ),
+                    (
+                        "next_steps".into(),
+                        Value::array(vec![
+                            Value::string("Read any user-supplied plan or path before broadening the query."),
+                            Value::string("Inspect relevant Git history and the current worktree."),
+                            Value::string("Register outside advice with `akr source add` (or `knowledge.source_add`) when it should remain provenance."),
+                            Value::string("Adopt the governing intent into a self-contained AKR planning record before continuing implementation."),
+                        ]),
+                    ),
+                ]),
+            ));
+            fields.push(("workspace_fallback".into(), fallback));
+        } else {
+            fields.push(("planning_candidates".into(), Value::array(results.clone())));
+        }
+        if results.len() == 1
+            && let Some(goal) = results[0].get("key").and_then(Value::as_str)
+        {
+            let mut arguments = vec![("goal".into(), Value::string(goal.to_owned()))];
+            if !paths.is_empty() {
+                arguments.push((
+                    "paths".into(),
+                    Value::array(
+                        paths
+                            .iter()
+                            .map(|path| Value::string(path.as_str()))
+                            .collect(),
+                    ),
+                ));
+            }
+            if let Some(budget) = budget {
+                arguments.push(("budget".into(), Value::integer(budget as i64)));
+            }
+            fields.push((
+                "recommended_context".into(),
+                Value::object(vec![
+                    ("command".into(), Value::string("akr context")),
+                    ("arguments".into(), Value::Object(arguments)),
+                ]),
+            ));
+        }
+    }
+    Ok(output)
+}
+
+/// A bounded, non-authoritative fallback for a task that has no ledger planning match.
+///
+/// This deliberately scans the working tree itself instead of invoking an MCP connector or
+/// shell utility: it is available on every supported platform and can reveal untracked intake
+/// documents without claiming that their contents are adopted project knowledge.
+fn workspace_fallback(root: &Path, task: &str) -> (Value, usize) {
+    const MAX_FILES: usize = 10_000;
+    const MAX_FILE_BYTES: u64 = 1_000_000;
+    const MAX_HITS: usize = 12;
+    let mut terms: Vec<String> = task
+        .split(|c: char| !c.is_alphanumeric())
+        .map(|term| term.to_ascii_lowercase())
+        .filter(|term| term.len() >= 4)
+        .filter(|term| {
+            !matches!(
+                term.as_str(),
+                "with"
+                    | "from"
+                    | "that"
+                    | "this"
+                    | "while"
+                    | "into"
+                    | "their"
+                    | "which"
+                    | "before"
+                    | "after"
+            )
+        })
+        .collect();
+    terms.sort();
+    terms.dedup();
+    // A multi-word task needs corroboration from more than one useful term. This keeps a
+    // generic word such as "work" from drowning out a specific untracked plan document.
+    let minimum_score = if terms.len() > 1 { 2 } else { 1 };
+    let mut pending = vec![root.to_path_buf()];
+    let mut scanned = 0usize;
+    let mut hits: Vec<(usize, String, usize, String)> = Vec::new();
+    while let Some(directory) = pending.pop() {
+        let Ok(entries) = std::fs::read_dir(&directory) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if path.is_dir() {
+                if !matches!(
+                    name.as_ref(),
+                    ".git" | ".akr" | "target" | "node_modules" | ".agent" | ".agents"
+                ) {
+                    pending.push(path);
+                }
+                continue;
+            }
+            if scanned >= MAX_FILES
+                || entry
+                    .metadata()
+                    .map(|meta| meta.len() > MAX_FILE_BYTES)
+                    .unwrap_or(true)
+            {
+                continue;
+            }
+            scanned += 1;
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let relative = path
+                .strip_prefix(root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            let searchable = format!(
+                "{}\n{}",
+                relative.to_ascii_lowercase(),
+                text.to_ascii_lowercase()
+            );
+            let score = terms
+                .iter()
+                .filter(|term| searchable.contains(term.as_str()))
+                .count();
+            if score < minimum_score {
+                continue;
+            }
+            let best_line = text.lines().enumerate().max_by_key(|(_, line)| {
+                let lower = line.to_ascii_lowercase();
+                terms
+                    .iter()
+                    .filter(|term| lower.contains(term.as_str()))
+                    .count()
+            });
+            let (line_index, line) = best_line.unwrap_or((0, ""));
+            let excerpt: String = line.trim().chars().take(240).collect();
+            hits.push((score, relative, line_index + 1, excerpt));
+        }
+    }
+    hits.sort_by(|left, right| {
+        right
+            .0
+            .cmp(&left.0)
+            .then_with(|| left.1.cmp(&right.1))
+            .then_with(|| left.2.cmp(&right.2))
+    });
+    hits.truncate(MAX_HITS);
+    let hit_count = hits.len();
+    (
+        Value::object(vec![
+            (
+                "provenance".into(),
+                Value::string("workspace text scan; non-authoritative and not AKR knowledge"),
+            ),
+            ("scanned_files".into(), Value::integer(scanned as i64)),
+            (
+                "terms".into(),
+                Value::array(terms.into_iter().map(Value::string).collect()),
+            ),
+            (
+                "hits".into(),
+                Value::array(
+                    hits.into_iter()
+                        .map(|(score, path, line, excerpt)| {
+                            Value::object(vec![
+                                ("path".into(), Value::string(path)),
+                                ("line".into(), Value::integer(line as i64)),
+                                ("excerpt".into(), Value::string(excerpt)),
+                                ("matched_terms".into(), Value::integer(score as i64)),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
+        ]),
+        hit_count,
+    )
+}
+
+#[cfg(not(feature = "fts5"))]
+fn start(
+    session: &Session,
+    task: &str,
+    paths: &[akr_core::model::Glob],
+    budget: Option<usize>,
+) -> Result<Output, EnvError> {
+    search(
+        session,
+        task,
+        false,
+        &["milestone".into(), "work".into(), "track".into()],
+        &[],
+        None,
+    )
 }
 
 #[cfg(feature = "fts5")]

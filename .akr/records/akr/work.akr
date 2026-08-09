@@ -1,6 +1,116 @@
 akr 0.1
 project akr
 
+record akr.work.context-import-provenance-hardening/1 : work {
+    title "Harden context budgets, plan import, and build provenance"
+    state active
+    scope [
+        path "crates/akr-cli/src/**",
+        path "crates/akr-cli/tests/**",
+        path "crates/akr-mcp/src/**",
+        path "crates/akr-mcp/tests/**",
+        path "docs/07-cli.md",
+        path "docs/08-mcp.md"
+    ]
+    intent """
+        Investigate the newly collated context-budget papercut and audit the recent external-plan import and source-index work. Make knowledge.context accept reasonable caller budgets without an undocumented lower transport ceiling, make plan import behavior explicit and reliable, and ensure akr build cannot silently make post-write source indexing appear to carry pre-build provenance.
+        """
+    acceptance {
+        check context-budget-honored {
+            statement """
+                An explicit knowledge.context budget is not withheld by the adapter's default 4,000-token ceiling.
+                """
+            method command
+            command "cargo test -p akr-mcp"
+        }
+        check dirty-build-provenance {
+            statement """
+                A cache built from uncommitted AKR sources retains the exact source-graph hash but does not claim the pre-change HEAD commit.
+                """
+            method command
+            command "cargo test -p akr-cli --test index"
+        }
+        check exact-source-adoption {
+            statement """
+                knowledge.propose and knowledge.revise can preserve a registered source document's exact byte and line range, role, excerpt hash, and adoption note.
+                """
+            method command
+            command "cargo test -p akr-mcp --test writes"
+        }
+        check plan-path-discovery {
+            statement """
+                knowledge.start can locate a user-supplied plan from its path even when the plan body uses unrelated vocabulary.
+                """
+            method command
+            command "cargo test -p akr-mcp --test differential"
+        }
+        check workspace-compiles {
+            statement """
+                The workspace compiles across all targets.
+                """
+            method command
+            command "cargo check --workspace --all-targets"
+        }
+    }
+}
+
+record akr.work.mcp-budget-and-instrumentation/1 : work {
+    title "Bound and instrument the MCP surface"
+    state completed
+    intent """
+        Take the token-reduction advice in sources/context-reduction.md as far as the MCP
+        surface itself: detail levels, per-tool output budgets, a read-only surface, per-call
+        accounting, and a named diagnostic for a server older than its workspace.
+        """
+    acceptance {
+        check accounting {
+            statement """
+                akr-mcp --accounting appends one JSON line per call carrying sizes, estimated
+                tokens, duration and whether the budget withheld the result.
+                """
+            method command
+            command "cargo test -p akr-mcp"
+            verified_by [ @akr.evidence.mcp-budget-and-skew-suite ]
+        }
+        check budgets-withhold {
+            statement """
+                A result over its per-tool hard limit is withheld with its counts and a
+                ready-made narrower call, never silently shortened, and both halves of the
+                payload count towards the limit.
+                """
+            method command
+            command "cargo test -p akr-mcp"
+            verified_by [ @akr.evidence.mcp-budget-and-skew-suite ]
+        }
+        check detail-levels {
+            statement """
+                knowledge.get takes summary, body or canonical, and canonical source text is an
+                explicit request rather than the default payload.
+                """
+            method command
+            command "cargo test -p akr-mcp"
+            verified_by [ @akr.evidence.mcp-budget-and-skew-suite ]
+        }
+        check read-surface {
+            statement """
+                akr-mcp --surface read lists only the tools that answer questions.
+                """
+            method observation
+            verified_by [ @akr.evidence.workspace-green-2026-08-08 ]
+        }
+        check skew-named {
+            statement """
+                A server whose vocabulary disagrees with the workspace lock reports AKR-X042 on
+                a failing call, naming the reinstall and the reconnect.
+                """
+            method command
+            command "cargo test -p akr-mcp"
+            verified_by [ @akr.evidence.mcp-budget-and-skew-suite ]
+        }
+    }
+    implements [ @akr.decision.mcp-budgeted-and-instrumented ]
+}
+
 record akr.work.mcp-help-and-format-cleanup/1 : work {
     title "Propagate MCP error help and restore formatting hygiene"
     state completed
@@ -13,4 +123,296 @@ record akr.work.mcp-help-and-format-cleanup/1 : work {
     intent """
         Preserve AKR's explicit initialization and read/write separation while making MCP environment errors actionable, then restore repository-wide rustfmt cleanliness without semantic changes.
         """
+}
+
+record akr.work.p10-external-sources/1 : work {
+    title "P10 -- immutable source library, chunk index, citations"
+    state completed
+    scope [
+        path "crates/akr-cli/src/source.rs",
+        path "crates/akr-core/src/source/**",
+        path "crates/akr-core/src/store/sources.rs",
+        path "crates/akr-mcp/src/**",
+        path "docs/15-external-sources.md",
+        path "sources/**",
+        path "spec/schema/sources.sql"
+    ]
+    intent """
+        Hold outside advice as exact bytes, make it findable, and let a record cite a passage of
+        it, without turning somebody else's report into project state (D-031). Deliver
+        `sources/catalog.json`; `akr source add|list|get|verify|supersede` and AKR-S021; a
+        deterministic Markdown chunker producing heading paths and byte/line ranges packed to
+        450-700 estimated tokens with code and tables never split; `.akr/cache/sources.sqlite` on
+        its own generation; `akr source search` (escaped by default, --literal, --fts) and
+        `akr source get --chunk --neighbors`; `knowledge.source_search` and `knowledge.source_get`;
+        and `source { document ... start_byte ... }` citations checked by `akr check` (AKR-S022).
+        """
+    acceptance {
+        check byte-ranges-exact {
+            statement """
+                Every chunk's recorded byte range slices the registered document to exactly the
+                original bytes.
+                """
+            method command
+            command "cargo test -p akr-core --lib source::chunk::tests::byte_ranges_slice_the_original_exactly"
+            verified_by [ @akr.evidence.p10-chunk-unit-suite ]
+        }
+        check edit-fails-verify {
+            statement """
+                Editing a registered file under sources/ makes akr source verify exit non-zero
+                (AKR-S021).
+                """
+            method command
+            command "cargo test -p akr-cli --test source_library editing_a_registered_source_is_an_error"
+            verified_by [ @akr.evidence.p10-source-library-suite ]
+        }
+        check generations-independent {
+            statement """
+                A ledger record write leaves every chunk id in the source index untouched, and a
+                source registration leaves the record tables untouched.
+                """
+            method command
+            command "cargo test -p akr-cli --test source_library"
+            verified_by [ @akr.evidence.p10-source-library-suite ]
+        }
+        check no-records-on-register {
+            statement """
+                Registering a source with akr source add creates zero ledger records and never
+                reaches an unreviewed work board.
+                """
+            method command
+            command "cargo test -p akr-cli --test source_library registering_a_source_creates_no_records"
+            verified_by [ @akr.evidence.p10-source-library-suite ]
+        }
+        check results-marked-non-authoritative {
+            statement """
+                Every akr source search and knowledge.source_search result carries the word
+                non-authoritative.
+                """
+            method command
+            command "cargo test -p akr-cli --test source_library a_search_finds_the_section_and_says_it_is_not_authoritative"
+            verified_by [ @akr.evidence.p10-source-library-suite ]
+        }
+        check rewrap-search-text-stable {
+            statement """
+                Re-wrapping a paragraph's line breaks does not change the chunk's normalised
+                search text.
+                """
+            method command
+            command "cargo test -p akr-core --lib source::chunk::tests::wrapping_prose_differently_does_not_change_the_search_text"
+            verified_by [ @akr.evidence.p10-chunk-unit-suite ]
+        }
+    }
+    implements [ @akr.decision.external-sources-immutable-library ]
+}
+
+record akr.work.p11-change-protocol/1 : work {
+    title "P11 -- the AKR <-> git change protocol"
+    state completed
+    scope [
+        path "crates/akr-cli/src/change.rs",
+        path "crates/akr-core/src/change/**",
+        path "crates/akr-core/src/git/**",
+        path "docs/16-change-protocol.md"
+    ]
+    intent """
+        Make the synchronised path easier than the unsynchronised one, without giving git
+        history a record kind (D-032). Deliver `akr diff --staged` as a semantic delta computed
+        by parsing two ledgers; `akr change begin|show|prepare|verify|abort`, stored per worktree
+        under the git dir; `akr git message|commit|log|install-hooks` and `akr git-hook`; the
+        implementation digest excluding `.akr/**` and `docs/generated/**`; and the AKR-* commit
+        trailers.
+        """
+    acceptance {
+        check commit-findable-from-record {
+            statement """
+                A commit made through akr git commit carries AKR-* trailers that make it
+                findable from the record it advanced.
+                """
+            method command
+            command "cargo test -p akr-cli --test change_protocol committing_through_the_bridge_leaves_the_trailers_in_history"
+            verified_by [ @akr.evidence.p11-change-protocol-suite ]
+        }
+        check hooks-are-thin-wrappers {
+            statement """
+                Installed git hooks are thin wrappers; the checks themselves live in the akr
+                binary.
+                """
+            method command
+            command "cargo test -p akr-cli --test change_protocol hooks_are_thin_wrappers_around_the_binary"
+            verified_by [ @akr.evidence.p11-change-protocol-suite ]
+        }
+        check message-byte-identical {
+            statement """
+                The same transaction and staged tree produce a byte-identical akr git message
+                output across runs.
+                """
+            method command
+            command "cargo test -p akr-cli --test change_protocol a_message_is_byte_identical_across_runs"
+            verified_by [ @akr.evidence.p11-change-protocol-suite ]
+        }
+        check moved-tree-invalidates-preparation {
+            statement """
+                A staged tree that changes after akr change prepare invalidates that
+                preparation.
+                """
+            method command
+            command "cargo test -p akr-cli --test change_protocol a_staged_tree_that_moved_invalidates_the_preparation"
+            verified_by [ @akr.evidence.p11-change-protocol-suite ]
+        }
+        check reformat-not-semantic {
+            statement """
+                A whitespace-only ledger edit produces an empty semantic delta from
+                akr diff --staged.
+                """
+            method command
+            command "cargo test -p akr-cli --test change_protocol a_reformat_is_not_a_semantic_change"
+            verified_by [ @akr.evidence.p11-change-protocol-suite ]
+        }
+        check refuse-missing-work-reference {
+            statement """
+                A staged code change with neither a work reference nor an explicit exemption is
+                refused by akr change prepare.
+                """
+            method command
+            command "cargo test -p akr-cli --test change_protocol preparing_a_code_change_with_no_work_reference_is_refused"
+            verified_by [ @akr.evidence.p11-change-protocol-suite ]
+        }
+    }
+    implements [ @akr.decision.change-transaction-not-commit-kind ]
+}
+
+record akr.work.papercut-collation-followthrough/1 : work {
+    title "Act on the collated sister papercuts"
+    state completed
+    intent """
+        Work the frictions the 2026-08-07 collation gathered, and fix the two things that kept
+        them from being worked: papercuts could not say which tool they were about, and the
+        collation stored titles rather than statements.
+        """
+    acceptance {
+        check resolved-retired {
+            statement """
+                Papercuts already fixed are in a terminal state with the resolution recorded, so
+                PAPERCUTS.md shows what still hurts.
+                """
+            method observation
+            verified_by [ @akr.evidence.workspace-green-2026-08-08 ]
+        }
+        check statements-carried {
+            statement """
+                A collation carries each absorbed papercut's full statement, not a truncated title.
+                """
+            method command
+            command "cargo test -p akr-cli --test writes"
+            verified_by [ @akr.evidence.papercut-subject-suite ]
+        }
+        check subject-slot {
+            statement """
+                A papercut can name what the friction was with, and collate can narrow to one subject.
+                """
+            method command
+            command "cargo test -p akr-cli --test writes"
+            verified_by [ @akr.evidence.papercut-subject-suite ]
+        }
+        check tooling-frictions-fixed {
+            statement """
+                akr propose --from accepts a slot-only body, and setup-akr-mcp.sh installs by
+                rename so replacing a running server does not fail with Text file busy.
+                """
+            method observation
+            verified_by [ @akr.evidence.workspace-green-2026-08-08 ]
+        }
+        check workspace-green {
+            statement """
+                The workspace tests, clippy and the design checker all pass.
+                """
+            method command
+            command "scripts/run-tests-sliced.sh"
+            verified_by [ @akr.evidence.workspace-green-2026-08-08 ]
+        }
+    }
+    implements [ @akr.decision.papercut-subject-and-collation ]
+}
+
+record akr.work.sealed-lifecycle-lock-validation/1 : work {
+    title "Distinguish authorized sealed lifecycle transitions"
+    state active
+    scope [
+        path "crates/akr-cli/tests/**",
+        path "crates/akr-core/src/**",
+        path "crates/akr-core/tests/**",
+        path "docs/07-cli.md"
+    ]
+    intent """
+        Fix the papercut where supported lifecycle writes such as revise and supersede change a sealed record's state, then validation reports AKR-R051 as if its immutable body had been tampered with before the required rebuild.
+        """
+    acceptance {
+        check authorized-transition {
+            statement """
+                A supported sealed-record lifecycle transition validates as ordinary stale-lock state rather than AKR-R051 content tampering before rebuild.
+                """
+            method command
+            command "cargo test -p akr-core -p akr-cli"
+        }
+        check tampering-detected {
+            statement """
+                Editing immutable content of a sealed record still produces AKR-R051.
+                """
+            method command
+            command "cargo test -p akr-core --test lock_roundtrip"
+        }
+        check workspace-compiles {
+            statement """
+                The workspace compiles across all targets.
+                """
+            method command
+            command "cargo check --workspace --all-targets"
+        }
+    }
+}
+
+record akr.work.sister-papercut-fixes/1 : work {
+    title "Work the sister-project papercuts that are AKR's to fix"
+    state completed
+    intent """
+        Take the eighteen collated frictions, separate the ones that are AKR's from the ones
+        that belong to the reporting project, and fix AKR's.
+        """
+    acceptance {
+        check ancestry-batched {
+            statement """
+                Ancestry costs two git processes rather than one per evidence citation.
+                """
+            method command
+            command "cargo test -p akr-core --test git_queries --test freshness"
+            verified_by [ @akr.evidence.sister-papercut-fixes ]
+        }
+        check fts-escaping {
+            statement """
+                The three queries that failed with fts5 errors in the field return results, and
+                raw FTS5 stays reachable behind an explicit flag.
+                """
+            method command
+            command "cargo test -p akr-cli --test search"
+            verified_by [ @akr.evidence.sister-papercut-fixes ]
+        }
+        check stale-reports-verified {
+            statement """
+                The AKR-E003 view-renderer reports from bpg-rs and jpegXL-rs are confirmed
+                stale: all seven views render.
+                """
+            method observation
+            verified_by [ @akr.evidence.sister-papercut-fixes ]
+        }
+        check strict-and-dirty {
+            statement """
+                AKR-G004 alone no longer fails strict mode, so a clean check is reachable
+                mid-task.
+                """
+            method observation
+            verified_by [ @akr.evidence.sister-papercut-fixes ]
+        }
+    }
+    implements [ @akr.decision.query-words-dirty-tree-ancestry ]
 }

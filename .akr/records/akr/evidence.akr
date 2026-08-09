@@ -1,6 +1,19 @@
 akr 0.1
 project akr
 
+record akr.evidence.design-coherence-clean/1 : evidence {
+    title "links, codes, vocabulary, manifest, references, grammar, fixtures and terminology checks all pass."
+    state verified
+    result pass
+    method command
+    observed_at git:a77dc6606334df984b3fef605716c4fc361b9c15
+    command "python tools/check-design.py"
+    artifact "tools/check-design.py"
+    summary """
+        links, codes, vocabulary, manifest, references, grammar, fixtures and terminology checks all pass.
+        """
+}
+
 record akr.evidence.fmt-clean/1 : evidence {
     title "cargo fmt --all --check exits 0 across the whole workspace"
     state verified
@@ -12,6 +25,17 @@ record akr.evidence.fmt-clean/1 : evidence {
         cargo fmt --all --check exits 0 across the whole workspace
         """
     author "GitHub Uploader"
+}
+
+record akr.evidence.mcp-budget-and-skew-suite/1 : evidence {
+    title "MCP budget and version-skew unit suite"
+    state verified
+    result pass
+    method command
+    observed_at git:a77dc6606334df984b3fef605716c4fc361b9c15
+    summary """
+        cargo test -p akr-mcp: 11 unit tests over budget.rs and skew.rs — oversized results withheld rather than shortened, both halves counted, counts and a ready-made narrower call preserved, and the skew message naming the reconnect.
+        """
 }
 
 record akr.evidence.mcp-help-parity/1 : evidence {
@@ -27,6 +51,68 @@ record akr.evidence.mcp-help-parity/1 : evidence {
     author "GitHub Uploader"
 }
 
+record akr.evidence.p10-chunk-unit-suite/1 : evidence {
+    title "All 14 chunker unit tests pass, including byte_ranges_slice_the_original_exactly and wrapping_prose_differently_does_not_change_the_search_text."
+    state verified
+    result pass
+    method command
+    observed_at git:a77dc6606334df984b3fef605716c4fc361b9c15
+    command "cargo test -p akr-core --lib source::chunk::"
+    artifact "crates/akr-core/src/source/chunk.rs"
+    summary """
+        All 14 chunker unit tests pass, including byte_ranges_slice_the_original_exactly and wrapping_prose_differently_does_not_change_the_search_text.
+        """
+}
+
+record akr.evidence.p10-p11-workspace-verified/1 : evidence {
+    title "cargo check --workspace --all-targets is clean and all 44 test binaries pass, including the items the prior pass left unverified after a sandbox disk failure (args.rs help topics, change.rs source_graph wiring)."
+    state verified
+    result pass
+    method command
+    observed_at git:a77dc6606334df984b3fef605716c4fc361b9c15
+    command "cargo check --workspace --all-targets && cargo test --workspace"
+    summary """
+        cargo check --workspace --all-targets is clean and all 44 test binaries pass, including the items the prior pass left unverified after a sandbox disk failure (args.rs help topics, change.rs source_graph wiring).
+        """
+}
+
+record akr.evidence.p10-source-library-suite/1 : evidence {
+    title "All 9 tests pass: registering a source creates no records, editing a registered file fails verify, a record write does not rechunk the corpus, a second build leaves the source index alone, and search results say non-authoritative."
+    state verified
+    result pass
+    method command
+    observed_at git:a77dc6606334df984b3fef605716c4fc361b9c15
+    command "cargo test -p akr-cli --test source_library"
+    artifact "crates/akr-cli/tests/source_library.rs"
+    summary """
+        All 9 tests pass: registering a source creates no records, editing a registered file fails verify, a record write does not rechunk the corpus, a second build leaves the source index alone, and search results say non-authoritative.
+        """
+}
+
+record akr.evidence.p11-change-protocol-suite/1 : evidence {
+    title "All 13 tests pass: a reformat is not a semantic change, an unreferenced code change is refused, a moved staged tree invalidates preparation, the message is byte-identical across runs, trailers land in history, and installed hooks are thin wrappers."
+    state verified
+    result pass
+    method command
+    observed_at git:a77dc6606334df984b3fef605716c4fc361b9c15
+    command "cargo test -p akr-cli --test change_protocol"
+    artifact "crates/akr-cli/tests/change_protocol.rs"
+    summary """
+        All 13 tests pass: a reformat is not a semantic change, an unreferenced code change is refused, a moved staged tree invalidates preparation, the message is byte-identical across runs, trailers land in history, and installed hooks are thin wrappers.
+        """
+}
+
+record akr.evidence.papercut-subject-suite/1 : evidence {
+    title "papercut about-subject and collation suite"
+    state verified
+    result pass
+    method command
+    observed_at git:a77dc6606334df984b3fef605716c4fc361b9c15
+    summary """
+        cargo test -p akr-cli --test writes: 16 passed, including a_papercut_can_name_what_it_was_about and collate_can_narrow_to_one_subject_and_says_what_it_left, which pin the about slot, the subject filter's left-behind count and the full statement carried into the master record.
+        """
+}
+
 record akr.evidence.search-stale-warning/1 : evidence {
     title "akr search flags a stale index after a write instead of silently returning old rows"
     state verified
@@ -38,4 +124,30 @@ record akr.evidence.search-stale-warning/1 : evidence {
         akr search flags a stale index after a write instead of silently returning old rows
         """
     author "GitHub Uploader"
+}
+
+record akr.evidence.sister-papercut-fixes/1 : evidence {
+    title "Sister-papercut fixes verified"
+    state verified
+    result pass
+    method command
+    observed_at git:a77dc6606334df984b3fef605716c4fc361b9c15
+    summary """
+        The three field queries that failed with fts5 errors now return results
+        (cargo test -p akr-cli --test search::punctuation_is_words_and_only_raw_fts_can_be_malformed);
+        all seven view renderers answer, so the bpg-rs and jpegXL-rs AKR-E003 reports are
+        stale; and the full suite is green at 45 of 45 binaries after the ancestry batching
+        and the AKR-G004 strict exemption.
+        """
+}
+
+record akr.evidence.workspace-green-2026-08-08/1 : evidence {
+    title "Workspace verified after the papercut and token pass"
+    state verified
+    result pass
+    method command
+    observed_at git:a77dc6606334df984b3fef605716c4fc361b9c15
+    summary """
+        scripts/run-tests-sliced.sh: all 45 test binaries passed. cargo clippy --workspace --all-targets reports nothing in the new modules. python tools/check-design.py: all eight checks passed. akr check: no diagnostics.
+        """
 }

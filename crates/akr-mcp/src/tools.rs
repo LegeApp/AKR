@@ -79,8 +79,15 @@ pub fn call(root: &Path, name: &str, arguments: &Value) -> Result<ToolResult, To
         "knowledge.explain" => explain(root, arguments),
         "knowledge.get" => get(root, arguments),
         "knowledge.context" => context(root, arguments),
+        "knowledge.source_list" => source_list(root, arguments),
+        "knowledge.source_add" => source_add(root, arguments),
         "knowledge.source_search" => source_search(root, arguments),
         "knowledge.source_get" => source_get(root, arguments),
+        "knowledge.source_verify" => source_verify(root, arguments),
+        "knowledge.source_supersede" => source_supersede(root, arguments),
+        "knowledge.source_status" => source_status(root, arguments),
+        "knowledge.source_dependents" => source_dependents(root, arguments),
+        "knowledge.source_finalize" => source_finalize(root, arguments),
         "knowledge.impact" => impact(root, arguments),
         "knowledge.validate" => validate(root, arguments),
         "knowledge.propose" => propose(root, arguments),
@@ -99,6 +106,29 @@ pub fn call(root: &Path, name: &str, arguments: &Value) -> Result<ToolResult, To
 // -------------------------------------------------------------------------------------
 // read tools
 // -------------------------------------------------------------------------------------
+
+fn source_list(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
+    run_read(
+        root,
+        Command::SourceList {
+            all: flag(arguments, "all_versions"),
+        },
+    )
+}
+
+fn source_add(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
+    run_write(
+        root,
+        Command::SourceAdd {
+            path: PathBuf::from(required_str(arguments, "path")?),
+            id: optional_str(arguments, "id"),
+            title: optional_str(arguments, "title"),
+            origin: optional_str(arguments, "origin"),
+            observed_at: optional_str(arguments, "observed_at"),
+            scope: optional_str(arguments, "scope"),
+        },
+    )
+}
 
 fn search(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let query = required_str(arguments, "query")?;
@@ -145,27 +175,14 @@ fn start(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
         .get("budget_tokens")
         .and_then(Value::as_integer)
         .and_then(|value| usize::try_from(value).ok());
-    let command = Command::Search {
-        query: task.to_owned(),
-        raw_fts: false,
-        kinds: vec!["milestone".into(), "work".into(), "track".into()],
-        states: Vec::new(),
-        limit: None,
-    };
-    let mut session = open(root, false)?;
-    let output = commands::run(&mut session, &command).map_err(environment)?;
-    let mut structured = finish(&session, output)?;
-    let candidates = search_planning_candidates(&session, &structured, &paths);
-    let recommended_context = search_recommended_context(&structured, &paths, budget);
-    if let Value::Object(fields) = &mut structured {
-        if !candidates.is_empty() {
-            fields.push(("planning_candidates".to_owned(), Value::array(candidates)));
-        }
-        if let Some(recommended_context) = recommended_context {
-            fields.push(("recommended_context".to_owned(), recommended_context));
-        }
-    }
-    Ok(ToolResult::Structured(structured))
+    run_read(
+        root,
+        Command::Start {
+            task: task.to_owned(),
+            paths,
+            budget,
+        },
+    )
 }
 
 fn explain(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
@@ -378,6 +395,66 @@ fn source_get(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
         }
     };
     run_read(root, command)
+}
+
+fn source_verify(root: &Path, _arguments: &Value) -> Result<ToolResult, ToolError> {
+    run_read(root, Command::SourceVerify)
+}
+
+fn source_supersede(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
+    run_write(
+        root,
+        Command::SourceSupersede {
+            old_id: required_str(arguments, "old_id")?.to_owned(),
+            new_path: PathBuf::from(required_str(arguments, "new_path")?),
+            new_id: optional_str(arguments, "new_id"),
+        },
+    )
+}
+
+fn source_status(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
+    run_read(
+        root,
+        Command::SourceStatus {
+            id: required_str(arguments, "id")?.to_owned(),
+        },
+    )
+}
+
+fn source_dependents(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
+    run_read(
+        root,
+        Command::SourceDependents {
+            id: required_str(arguments, "id")?.to_owned(),
+        },
+    )
+}
+
+fn source_finalize(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
+    let retain = arguments
+        .get("retain")
+        .and_then(Value::as_str)
+        .unwrap_or("cited");
+    let context = arguments
+        .get("context")
+        .and_then(Value::as_str)
+        .unwrap_or("block");
+    if !matches!(retain, "cited" | "metadata") || !matches!(context, "exact" | "block") {
+        return Err(ToolError::new(
+            "AKR-C004",
+            "source finalization retention is cited|metadata and context is exact|block",
+        ));
+    }
+    run_write(
+        root,
+        Command::SourceFinalize {
+            id: required_str(arguments, "id")?.to_owned(),
+            retain: retain.to_owned(),
+            context: context.to_owned(),
+            remove_file: flag(arguments, "remove_file"),
+            dry_run: flag(arguments, "dry_run"),
+        },
+    )
 }
 
 fn impact(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
@@ -728,6 +805,12 @@ fn run_read(root: &Path, command: Command) -> Result<ToolResult, ToolError> {
     let text = output.text.clone();
     let structured = finish(&session, output)?;
     Ok(ToolResult::Read { text, structured })
+}
+
+fn run_write(root: &Path, command: Command) -> Result<ToolResult, ToolError> {
+    let mut session = open(root, true)?;
+    let output = commands::run(&mut session, &command).map_err(environment)?;
+    Ok(ToolResult::Structured(finish(&session, output)?))
 }
 
 #[derive(Debug)]
@@ -1356,6 +1439,13 @@ fn required_str<'a>(arguments: &'a Value, name: &str) -> Result<&'a str, ToolErr
         .get(name)
         .and_then(Value::as_str)
         .ok_or_else(|| ToolError::new("AKR-C003", format!("`{name}` is required")))
+}
+
+fn optional_str(arguments: &Value, name: &str) -> Option<String> {
+    arguments
+        .get(name)
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
 }
 
 fn flag(arguments: &Value, name: &str) -> bool {

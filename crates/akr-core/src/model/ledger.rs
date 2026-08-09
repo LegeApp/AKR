@@ -4,6 +4,7 @@ use super::ident::{Commit, LogicalKey, Segment};
 use super::record::Record;
 use super::refs::{Reference, RevisionId};
 use super::relation::Relation;
+use super::state::State;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
@@ -77,6 +78,8 @@ impl fmt::Display for ContentHash {
 pub struct SealFact {
     /// The hash in `akr.lock`, if the lock has an entry.
     pub recorded: Option<ContentHash>,
+    /// The lifecycle state recorded beside the hash in `akr.lock`.
+    pub recorded_state: Option<State>,
     /// The hash the build computed, if it computed one.
     pub computed: Option<ContentHash>,
 }

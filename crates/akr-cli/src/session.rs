@@ -210,7 +210,24 @@ impl Session {
         inputs.tool = format!("akr {TOOL_VERSION}");
         inputs.grammar = GRAMMAR_VERSION.to_owned();
         inputs.vocabulary = VOCABULARY_VERSION.to_owned();
-        inputs.commit = commit.clone();
+        // HEAD identifies these bytes only when none of the loaded AKR sources differ
+        // from HEAD. A mid-flight build is still useful (lock, views and an exact
+        // source-graph keyed cache), but stamping that derived state with the pre-change
+        // commit would be false provenance. The source graph remains the durable exact
+        // identity; the commit is deliberately absent until the ledger bytes are clean.
+        let source_graph_dirty = repository.as_ref().is_some_and(|repository| {
+            repository.working_tree_changes().is_ok_and(|changes| {
+                inputs
+                    .sources
+                    .iter()
+                    .any(|source| changes.contains(&source.path))
+            })
+        });
+        inputs.commit = if source_graph_dirty {
+            None
+        } else {
+            commit.clone()
+        };
 
         Ok(Self {
             root,

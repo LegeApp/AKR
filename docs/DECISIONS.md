@@ -981,3 +981,283 @@ the dedup check a plain ledger read and the master record a first-class citizen.
 **Honored by.** `spec/tables/vocabulary.json` (the `collated` slot, vocabulary 0.2),
 `crates/akr-core/src/papercut/collate.rs`, `crates/akr-cli/src/write.rs`,
 `crates/akr-cli/src/args.rs`, `docs/07-cli.md` §6.
+
+## D-031 — External sources are an immutable library, indexed separately, cited by byte range
+
+*Amendment, 2026-08-07.*
+
+**Question.** An outside advisor report arrives as Markdown. The first attempt fragmented it
+into one proposed record per heading, kept only the first paragraph of each, and let the
+original be deleted — after which the detail was gone, the fragments had never been
+reviewed, the graph did not connect them, and `ACTIVE-WORK.md` was full of unadopted
+headings. Markdown is plainly the better format for the *first* reading of a rich technical
+audit. What should AKR hold instead, and how should a record point at the part of a report
+it was written about?
+
+**Resolution.** Three layers, with one responsibility each.
+
+1. **The immutable source library**, `sources/`, holds exact outside bytes. Registration
+   (`akr source add`) content-hashes a document, copies it under `sources/external/` and
+   adds a catalog entry. It creates **no records**. Editing a registered file is `AKR-S021`
+   from `akr source verify` and from `akr check`; the only correction is registering a
+   superseding version, and the older one stays retrievable.
+2. **The derived source index**, `.akr/cache/sources.sqlite`, holds semantic chunks:
+   heading paths, byte and line ranges, normalised search text and expanded technical
+   symbols, ranked by BM25 over `source_chunks_fts`. It is rebuildable and
+   non-authoritative. Chunk boundaries are a pure function of (bytes, parser version), and
+   a chunk id is derived from both — so a scanner improvement changes chunk ids and
+   nothing else.
+3. **The ledger** holds the project's interpretation: what was adopted, rejected, deferred,
+   verified. Records reach the library through a `source` block naming `document` plus
+   `start_byte`, `end_byte`, `start_line` and `end_line` — all-or-nothing — with an
+   optional `excerpt_hash`. `akr check` resolves those citations against the registered
+   bytes and reports `AKR-S022` when one misses.
+
+A citation names a **document and a byte range, never a chunk id**. Chunk boundaries belong
+to a rebuildable index and are allowed to move; provenance is not.
+
+The index lives in its own SQLite file rather than in `index.sqlite`. The record cache is
+dropped and rebuilt wholesale whenever the ledger's source-graph hash moves — that is
+every write — so sharing the file would rechunk the corpus on every record write and
+re-resolve the ledger on every registration. Two files give the two generations the design
+wants (`source_corpus_hash` here, `source_graph_hash` there) without threading a partial
+rebuild through the record cache's drop-everything invalidation. It remains one storage
+engine, one query language, one ranker: what was refused is a second *kind* of index, not
+a second file.
+
+Search over the library escapes punctuation by default. `akr search` takes raw FTS5, which
+is a trap for an agent — `DecodeRequest::default()` is a parse error, not a query — so
+`akr source search` quotes each term, `--literal` verifies an exact substring against the
+stored bytes, and `--fts` is there for anyone who wants the operators.
+
+**Rationale.** The alternative that was tried and superseded is line-by-line or
+paragraph-by-paragraph record ingest: it turned every sentence of an unreviewed report into
+project state, which is precisely what the acceptance and completion rules exist to keep
+scarce. The original segmentation idea survives, in the one place where imperfect
+segmentation is harmless — the derived index, where a badly placed boundary costs recall
+and can never change what the project believes.
+
+Sparse adoption is therefore the default. A record exists because the project *did*
+something with the material: adopted it, rejected it, deferred it, or decided to track it.
+Everything else stays readable in the report.
+
+**Honored by.** `spec/schema/sources.sql`, `crates/akr-core/src/source/chunk.rs`,
+`crates/akr-core/src/store/sources.rs`, `crates/akr-cli/src/source.rs`,
+`crates/akr-mcp/src/schema.rs` (`knowledge.source_search`, `knowledge.source_get`),
+`spec/tables/vocabulary.json` (the `source` block's citation slots),
+`spec/diagnostics/codes-runtime.md` (`AKR-S022`),
+`crates/akr-cli/tests/source_library.rs`.
+
+## D-032 — AKR leads intent, git seals the snapshot, and the bridge is a change transaction
+
+*Amendment, 2026-08-07.*
+
+**Question.** An agent finished and verified a substantial change while every corresponding
+work record still said `proposed`. A later check caught the divergence — real value, and
+exactly what a Markdown roadmap would have missed — but only because someone ran the check.
+Tooling should make the synchronised path easier than the unsynchronised one. Does that
+need a `commit` record kind?
+
+**Resolution.** No new record kind. A new **change transaction**, which is not part of the
+knowledge graph at all.
+
+A durable `commit` kind would be a second, worse copy of git's history: one work record
+takes many commits, one commit advances several work records, rebasing and cherry-picking
+change every object id, a commit hash cannot be written into a file contained in that same
+commit without an amendment loop, and hundreds of commit records would drown out the
+decisions and evidence the ledger exists to hold.
+
+So the bridge is:
+
+```text
+AKR work record → local change transaction → staged git tree → generated commit → trailers
+```
+
+* The transaction lives at `$(git rev-parse --git-path akr/current-change.akr)`: local to
+  this worktree, safe to discard, absent from search and context, never committed.
+* **The staged tree is the synchronisation boundary**, not the working tree. The earlier
+  "if the code is dirty the ledger must be dirty in the same direction" rule was both too
+  strict — active work spans several commits without a new revision — and too loose, since
+  it said nothing about *which* dirty files belong together. The git index already answers
+  that.
+* `akr diff --staged` computes a **semantic** delta by parsing the `HEAD` ledger and the
+  index ledger and comparing them. It never reads `git diff` text: a reformat, a
+  reordering or a moved record is not a semantic change and a textual diff cannot tell.
+* `akr change prepare --staged` refuses a material code change that names neither a work
+  record nor an explicit `--untracked-reason`, refuses when several work records moved and
+  none was named primary, and records the staged tree id — so a tree that moves afterwards
+  invalidates the preparation rather than producing a message about a different commit.
+* `akr git commit` generates the message and hands the index to git. Git makes the commit;
+  AKR does not implement an object store.
+* The durable link is **commit trailers** — `AKR-Change`, `AKR-Work`, `AKR-Evidence`,
+  `AKR-Decision`, `AKR-Graph`, `AKR-Tree`. They point from the commit to the records, which
+  is the direction that has no hash cycle; they survive rebases and cherry-picks; and every
+  AKR-to-git link can be rebuilt by walking history.
+
+Evidence names the code it verified through an **implementation digest**: a hash of the
+sorted `(path, mode, blob)` triples of the staged tree, excluding `.akr/**` and
+`docs/generated/**`. Excluding AKR's own files is what breaks the cycle — writing the digest
+into the ledger cannot change the digest — and it also makes the digest mean the right
+thing: the implementation that was tested, not the tree including the note about testing it.
+
+A commit still never completes work. Git can show that code exists, that tests ran and that
+a commit landed; it cannot decide whether acceptance criteria were met. The transaction
+*consumes* AKR state transitions and never invents them.
+
+**Rationale.** Hooks were considered as the primary mechanism and rejected as the primary
+mechanism: they are bypassable, and a hook carrying the checks would be a second
+implementation nobody keeps in step. `akr git install-hooks` therefore writes two-line
+wrappers around `akr git-hook`, which runs the same verification an author can run by hand,
+and CI remains the final authority.
+
+**Honored by.** `crates/akr-core/src/change/`, `crates/akr-core/src/git/mod.rs`
+(`staged_entries`, `write_tree`, `git_path`, `log_grep`), `crates/akr-cli/src/change.rs`,
+`docs/16-change-protocol.md`, `crates/akr-cli/tests/change_protocol.rs`.
+
+## D-033 — A papercut says what it was about, and a collation carries the statements
+
+*Amendment, 2026-08-08.*
+
+**Question.** D-027 gave frictions a home and D-030 gathered the sisters' into one master
+record. Two things then went wrong in use. First, `docs/findings/papercut-siloing-2026-08-07.md`
+found the structural gap: a papercut is the one record kind whose subject is sometimes the
+*tool* rather than the project being worked on, and nothing distinguished the two — a
+friction with AKR, hit while working in `jpegxl-rs`, landed in `jpegxl-rs`'s ledger and was
+invisible to anyone maintaining AKR. Second, the first real collation absorbed eighteen
+papercuts and stored their keys and truncated titles, ending "see the owning project's
+ledger for the full statement": eight checkouts to read eighteen findings, and none of them
+were acted on for a week.
+
+**Resolution.** Two changes, one to the record and one to the collation.
+
+A papercut gains an optional `about` slot naming what the friction was *with*, when that is
+not this project — `akr papercut -m claude --about akr "…"`. Absent means this project's own
+code or setup, which is the common case and stays zero-ceremony. `akr papercut collate
+--about <subject>` gathers only the sisters' papercuts aimed at one subject, and whatever
+the filter leaves behind is *counted in the output* rather than silently dropped: a
+collation that looked complete while ignoring two thirds of what it read would be worse
+than none. `PAPERCUTS.md` renders subject-bearing papercuts under their own heading, so a
+friction with somebody else's tool is not read as this project's backlog.
+
+A collation now carries each source papercut's **full statement**, not a truncated title.
+The master record is the only copy of those findings in the owning repository; a summary
+that ends "go and look somewhere else" is a list of homework. The view keeps the record
+compact — a collation renders as one line naming the counts — because the record being long
+is right and the bullet list being long is not.
+
+**Rationale.** The findings document listed four options: convention, a recognised tag,
+routine discovery, and citing precedent. This is the second, made cheap by the third
+already existing. Convention alone was rejected for the reason the document gives — it
+relies on an agent knowing where a sibling checkout lives, which it usually does not — and
+a cross-repository ledger was rejected as out of scope for 0.1 (`docs/01-architecture.md`),
+which it remains. `about` is deliberately free text rather than an enum: the set of things
+that can get in an agent's way is not closed, and a validated vocabulary of tool names
+would need a decision every time somebody hit a new one.
+
+**Honored by.** `spec/tables/vocabulary.json` (the papercut `about` slot),
+`crates/akr-core/src/model/kind.rs`, `crates/akr-core/src/papercut/`,
+`crates/akr-core/src/render/papercuts.rs`, `crates/akr-cli/src/write.rs`,
+`crates/akr-mcp/src/schema.rs`, `crates/akr-cli/tests/writes.rs`.
+
+## D-034 — The MCP surface is budgeted, instrumented, and says when it is stale
+
+*Amendment, 2026-08-08.*
+
+**Question.** `sources/context-reduction.md` reports AKR associated with 45% of a usage
+window, and identifies the mechanism rather than the cause: an MCP tool result stays in the
+conversation, so a four-thousand-token result read twenty times later costs eighty thousand
+token-turns. Separately, AKR's own ledger carries a friction logged twice — once on
+2026-08-05 and again on 2026-08-08 — in which an installed `akr-mcp` older than the
+workspace rejects every write with a type error about a slot the agent never wrote, and
+both times it was first diagnosed as a ledger bug.
+
+**Resolution.** Four changes, all in `akr-mcp`, none in the ledger.
+
+1. **Detail levels.** `knowledge.get` takes `summary | body | canonical`, defaulting to
+   `body`. Canonical AKR syntax is the largest part of the payload and the least often
+   wanted, so it is an explicit request: a tool whose cheapest call returns the most bytes
+   will be called that way every time.
+2. **Per-tool output budgets.** Every result is measured — *both* halves, because a client
+   that renders `content` and one that parses `structuredContent` each pay for their own —
+   and one over its hard limit is **withheld**, not shortened. The reply names the size, the
+   limit, the top-level counts, and a ready-made narrower call. Truncation that does not
+   say so is the failure the context budget already made once, and an agent that cannot
+   trust a truncation marker asks for everything.
+3. **A read-only surface.** `akr-mcp --surface read` serves the tools that answer questions
+   and omits the ones that change the ledger. Tool schemas are a fixed cost in every session
+   that loads them.
+4. **Accounting and skew.** `--accounting <path>` appends one JSON line per call — sizes,
+   estimated tokens, duration, whether the budget withheld it — so the next architectural
+   judgement is measured rather than inferred. And the server publishes its vocabulary
+   version in `serverInfo` and, on any failing call, compares it against the workspace's
+   lock: a disagreement is reported as a named skew with the remedy, including the half
+   everybody forgets, which is that reinstalling does not restart a running process.
+
+**Rationale.** The alternative for (2) was to trim results to fit. Rejected: a partial list
+that does not announce itself is worse than a refusal, because the caller acts on it. The
+alternative for (4) was to make the install script louder. Also rejected, and it is the
+same mistake in a different place — the friction recurred *after* the script already said
+what to do, because the failure surfaces hours later inside a running session, which is
+where the explanation has to be.
+
+The budgets are engineering targets, not protocol requirements, and are expected to move
+once the accounting says which tool actually dominates.
+
+**Honored by.** `crates/akr-mcp/src/budget.rs`, `crates/akr-mcp/src/skew.rs`,
+`crates/akr-mcp/src/protocol.rs`, `crates/akr-mcp/src/main.rs`,
+`crates/akr-cli/src/args.rs` (`Detail`), `crates/akr-cli/src/commands.rs`,
+`scripts/setup-akr-mcp.sh`.
+
+## D-035 — A query is words; a dirty tree is a fact; ancestry is one walk
+
+*Amendment, 2026-08-08.*
+
+**Question.** Three frictions collated from sister projects have the same shape: a
+defensible design decision that turns out, in use, to cost more than it buys.
+
+1. `akr search` handed its query straight to FTS5. An agent asked for `HDR slice 6
+   non-default feature` and got `no such column: default`; asked something containing a
+   comma and got `fts5: syntax error near ","`. It gave up and grepped `.akr/records`,
+   which is the one thing the search surface exists to make unnecessary.
+2. `akr check --strict` exits 1 on `AKR-G004` alone — uncommitted edits in watched paths.
+   An agent mid-task always has those, so "check is clean" was unreachable until commit.
+3. `akr check`, `akr build` and `akr lock --update` each took over two minutes on a
+   360-record, 330-commit ledger, dominated by one `git merge-base --is-ancestor` process
+   per evidence citation.
+
+**Resolution.**
+
+**Queries are words.** `akr search` escapes its query into quoted phrase terms by default,
+so punctuation is a token boundary rather than an operator. Raw FTS5 moves behind `--fts`,
+and a malformed expression there says `drop --fts to search for the words themselves`. Over
+MCP the escaped form is the *only* form: an agent composing a query has no way to know a
+comma is an operator, and no reason to want one. This matches what `akr source search`
+already did (D-031); the record search was simply the older of the two.
+
+**`AKR-G004` is exempt from the strict promotion.** It is a fact about the working tree,
+not about the ledger — it says the reader should not be misled, not that anything is wrong
+— and it is exempt for the same reason staleness never changes an exit code (D-024). Left
+promotable it offered two bad ways out: commit prematurely to satisfy a check, or run
+`--lenient` and lose every other strict signal along with this one.
+
+**Ancestry is one history walk.** `ancestry_over` asked git to compare pairs from inside a
+comparison sort — O(n log n) process spawns to answer a question `git rev-list --topo-order`
+answers once — and filtered its input with one `rev-parse` per commit. It now uses one
+`cat-file --batch-check` for presence and one `rev-list --topo-order` for the order: two
+processes rather than hundreds, with the same total order, because topological order is
+exactly the guarantee the ancestry table needs.
+
+**Rationale.** The first two are the same mistake in different places: a tool that is
+correct about its own internals and wrong about the caller. Exposing FTS5 syntax is only
+defensible if the caller knows they are writing FTS5, and neither an agent nor a hurried
+human does. Promoting a working-tree observation to an error is only defensible if a clean
+working tree is a reasonable precondition, and mid-task it is not.
+
+The third was a straightforward algorithmic error hiding behind a correct answer. It is
+worth naming because the shape recurs: a comparator that shells out is a comparator that
+turns a sort into a fork bomb.
+
+**Honored by.** `crates/akr-core/src/store/search.rs` (`escape_query`),
+`crates/akr-core/src/git/mod.rs` (`contains_all`, `topological_order`, `ancestry_over`),
+`crates/akr-cli/src/session.rs` (`is_fatal`), `crates/akr-cli/src/args.rs` (`--fts`),
+`crates/akr-cli/tests/search.rs`.

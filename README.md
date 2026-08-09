@@ -16,7 +16,7 @@ specifications in `docs/` and `spec/` remain normative; the code implements them
 cargo build --release            # builds akr (CLI) and akr-mcp (MCP server)
 cargo test                       # the conformance corpus is the spec, executable
 akr init                         # scaffold .akr/ in a project, append AGENTS.md protocol
-scripts/setup-akr-mcp.sh         # register the MCP server with Claude/Codex/OpenCode (Linux/macOS)
+scripts/setup-akr-mcp.sh         # install matched akr + akr-mcp releases and register MCP (Linux/macOS)
 scripts/setup-akr-mcp.ps1        # the same, on Windows
 scripts/verify-distribution.sh   # verify tracked files, tests, design checks, and build parity
 ```

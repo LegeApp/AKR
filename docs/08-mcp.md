@@ -1,6 +1,6 @@
 # 08 — The MCP Tool Surface
 
-How an agent reaches the ledger: eleven tools, their input and output schemas, how
+How an agent reaches the ledger: the tool catalogue, its input and output schemas, how
 diagnostics become tool errors, why reads and writes are separated, what idempotency
 means here, and the `AGENTS.md` text that makes agents use any of it.
 
@@ -161,6 +161,12 @@ the ledger's own syntax reads that, not a file.
 }
 ```
 
+`budget_tokens` controls context assembly and disables the MCP adapter’s separate fixed
+ceiling for this call. The server does not assemble an 8,000-token bundle and then
+discard it behind a smaller transport limit. When the argument is omitted, the normal
+4,000-token context ceiling applies. The value remains approximate because MCP carries
+both readable text and structured metadata.
+
 Sections appear in the fixed order above, always, whether or not they are empty. The
 membership of each is computed by the algorithm of `09-context-assembly.md` §4 — a pure
 function of (ledger, commit, request).
@@ -221,6 +227,12 @@ completely rather than partially. A rejected write leaves the working tree byte-
 { "key": "…", "rev": 1, "state": "verified", "path": ".akr/records/sim/observations.akr",
   "written": true, "lock_stale": true, "content_hash": "sha256:…" }
 ```
+
+For registered outside material, `sources` also accepts the exact locator returned by
+`knowledge.source_search`: `document`, `start_byte`, `end_byte`, `start_line`, and
+`end_line`, plus optional `role`, `excerpt_hash`, and `use`. This is the reliable adoption
+path: retrieval remains non-authoritative, while `knowledge.propose` or
+`knowledge.revise` records the project’s explicit interpretation and stable provenance.
 
 Creates revision 1 of a **new** key, in its class's initial state. An existing key is an
 error — the tool will not silently turn a proposal into a revision.
@@ -369,7 +381,7 @@ than the first. Every `AKR-I` diagnostic in
 because the cache is allowed to fail loudly and be rebuilt; none of that is true of an
 interface someone depends on.
 
-The practical consequence for tool design: whenever an agent wants something the nine
+The practical consequence for tool design: whenever an agent wants something the
 tools cannot express, the answer is a new tool with a defined contract, never a query
 hole. `knowledge.search` is the deliberate, narrow escape valve, and it returns records,
 not rows.

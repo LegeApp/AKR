@@ -116,6 +116,7 @@ Reserved groups: `X001`–`X009` the bundle anchor; `X011`–`X019` path filters
 | `AKR-X032` | search backend unavailable | error | — | `search backend {name} is unavailable: {reason}` | A configured ranker could not be reached. |
 | `AKR-X033` | ranking fell back to lexical | warning | — | `ranking model {name} unavailable; ranked lexically` | Ranking is advisory (D-020), so a fallback changes the order of results and nothing else. Reported so the order is explicable. |
 | `AKR-X041` | unknown bundle format | error | — | `unknown bundle format {name}; known formats are text, json` | `akr context --format` given something outside the two documented forms. |
+| `AKR-X042` | server and workspace disagree on vocabulary | warning | — | `this akr-mcp was built against vocabulary {server} and the workspace was last built with vocabulary {workspace}` | Attached by `akr-mcp` to a failing call when its own vocabulary version differs from the one in `.akr/akr.lock`. An installed server older than the workspace rejects records it has never heard the slots of, which reads as a ledger fault; this names it and says to reinstall *and reconnect*, since a running process keeps the binary it started with (D-034). |
 | `AKR-X051` | contradiction not surfaced | error | V-121 | `bundle omits contradiction between {key_a} and {key_b}` | Internal invariant: a declared contradiction touching a bundled record must always appear in the contradictions section, including when one side is superseded (D-023). |
 | `AKR-X052` | excluded record present in a bundle | error | V-122 | `bundle includes {key}/{revision}, which is {reason}` | Internal invariant: superseded, terminal and archived records never enter an ordinary bundle (`docs/09-context-assembly.md` §5). |
 
@@ -214,6 +215,7 @@ Reserved groups: `S021`–`S029` catalog and immutable-source checks.
 | Code | Title | Severity | Rule | Message template | Cause |
 | --- | --- | --- | --- | --- | --- |
 | `AKR-S021` | immutable source manifest invalid | error | — | `{path}: source manifest error: {detail}` | Source verification failed while loading `source` stage metadata; this blocks any further build work until corrected. |
+| `AKR-S022` | record source citation does not resolve | error | — | `{key}/{rev}: {detail}` | A record's `source` block names a registered document that is absent, a byte range outside it, a range that is not on a character boundary, an `excerpt_hash` that disagrees with those bytes, or a line range describing a different passage than the byte range. Raised by `akr check`, not by a V-rule, because it is the one provenance question that needs the registered bytes as well as the ledger (D-031). |
 
 ---
 

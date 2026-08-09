@@ -43,6 +43,8 @@ its own development and two more real projects (§8).
 | **P7** | Full-text search, then embeddings | `09-context-assembly.md` §10, `spec/schema/index.sql` |
 | **P8** | Migration tooling | `12-migration.md` |
 | **P9** | Human review interface | `10-freshness-and-git.md`, `11-projections.md` |
+| **P10** | Immutable source library, chunk index, citations | `15-external-sources.md`, D-031 |
+| **P11** | The AKR ↔ git change protocol | `16-change-protocol.md`, D-032 |
 
 The order is a dependency order, not a priority order. P4 sits where it does because a
 rendered roadmap is the first artefact a person can *judge*, and judging it early is
@@ -322,6 +324,68 @@ Graph visualisation is deliberately last. It is the most demonstrable feature an
 least useful one: a picture of the relation graph is impressive in a screenshot and
 almost never what someone needs to answer a question. `akr why-current` answers more
 questions per minute.
+
+---
+
+### P10 — Immutable source library, chunk index, citations
+
+**Goal.** Hold outside advice as exact bytes, make it findable, and let a record cite a
+passage of it — without turning somebody else's report into project state (D-031).
+
+**Deliverables.**
+
+- `sources/catalog.json`, `akr source add|list|get|verify|supersede`, `AKR-S021`.
+- A deterministic Markdown chunker: heading paths, byte and line ranges, packed to
+  450–700 estimated tokens, code and tables never split, fences recognised before
+  headings.
+- `.akr/cache/sources.sqlite` — `source_documents`, `source_chunks`, `source_chunks_fts` —
+  on its own generation, so a record write does not rechunk and a registration does not
+  re-resolve.
+- `akr source search` with escaped-by-default queries, `--literal` and `--fts`;
+  `akr source get --chunk --neighbors`.
+- `knowledge.source_search` and `knowledge.source_get`.
+- `source { document … start_byte … }` citations, checked by `akr check` (`AKR-S022`).
+
+**Exit criteria.**
+
+1. Registering a source creates no records, and an unreviewed report never reaches
+   `ACTIVE-WORK.md`.
+2. Editing a registered file fails `akr source verify` with a non-zero status.
+3. Every chunk's byte range reproduces the registered bytes exactly.
+4. Re-wrapping a paragraph does not change its search text.
+5. A record write leaves every chunk id untouched; a registration leaves the record tables
+   untouched.
+6. Every source result carries the words `non-authoritative`.
+
+**Testing.** `crates/akr-cli/tests/source_library.rs` for the workflow;
+`source::chunk` and `store::sources` unit tests for the rules.
+
+---
+
+### P11 — The AKR ↔ git change protocol
+
+**Goal.** Make the synchronised path easier than the unsynchronised one, without giving
+git history a record kind (D-032).
+
+**Deliverables.**
+
+- `akr diff --staged`: a semantic delta computed by parsing two ledgers.
+- `akr change begin|show|prepare|verify|abort`, stored per worktree under the git dir.
+- `akr git message|commit|log|install-hooks`, and `akr git-hook`.
+- The implementation digest, excluding `.akr/**` and `docs/generated/**`.
+- The `AKR-*` commit trailers.
+
+**Exit criteria.**
+
+1. A whitespace-only ledger edit produces no semantic change.
+2. A staged code change with neither a work reference nor an explicit exemption is refused.
+3. A staged tree that moves after preparation invalidates it.
+4. The same transaction and staged tree produce a byte-identical message.
+5. A commit made through the bridge is findable from the record it advanced.
+6. Installed hooks are wrappers; the checks live in the binary.
+
+**Testing.** `crates/akr-cli/tests/change_protocol.rs`, whose assertions are mostly about
+what the bridge *refuses* — which is the part worth having.
 
 ---
 

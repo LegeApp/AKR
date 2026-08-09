@@ -134,6 +134,76 @@ fn knowledge_context_and_akr_context_produce_the_same_bundle() {
 }
 
 #[test]
+fn knowledge_start_names_a_ledger_coverage_miss_and_the_recovery_path() {
+    let example = Example::materialise("differential-start-coverage");
+    example.write_file(
+        "Sources/intake.md",
+        "The moonstone blueprint cadence governs the opening.",
+    );
+    let tool = call(
+        &example,
+        "knowledge.start",
+        r#"{"task":"moonstone blueprint cadence"}"#,
+    );
+    assert_eq!(
+        tool.get("coverage")
+            .and_then(|coverage| coverage.get("status"))
+            .and_then(Value::as_str),
+        Some("no_planning_match"),
+        "{}",
+        tool.to_pretty()
+    );
+    assert!(
+        tool.get("coverage")
+            .and_then(|coverage| coverage.get("next_steps"))
+            .and_then(Value::as_array)
+            .is_some_and(|steps| steps.len() >= 4),
+        "{}",
+        tool.to_pretty()
+    );
+    assert_eq!(
+        tool.get("workspace_fallback")
+            .and_then(|fallback| fallback.get("provenance"))
+            .and_then(Value::as_str),
+        Some("workspace text scan; non-authoritative and not AKR knowledge")
+    );
+    assert!(
+        tool.get("workspace_fallback")
+            .and_then(|fallback| fallback.get("hits"))
+            .and_then(Value::as_array)
+            .is_some_and(|hits| hits
+                .iter()
+                .any(|hit| hit.get("path").and_then(Value::as_str) == Some("Sources/intake.md"))),
+        "{}",
+        tool.to_pretty()
+    );
+}
+
+#[test]
+fn knowledge_start_can_locate_a_user_supplied_plan_by_its_path() {
+    let example = Example::materialise("differential-start-plan-path");
+    example.write_file(
+        "Sources/current-plan-80626.md",
+        "# Delivery notes\n\nThe first action is intentionally described with unrelated vocabulary.\n",
+    );
+    let tool = call(
+        &example,
+        "knowledge.start",
+        r#"{"task":"follow Sources/current-plan-80626.md"}"#,
+    );
+    assert!(
+        tool.get("workspace_fallback")
+            .and_then(|fallback| fallback.get("hits"))
+            .and_then(Value::as_array)
+            .is_some_and(|hits| hits.iter().any(|hit| {
+                hit.get("path").and_then(Value::as_str) == Some("Sources/current-plan-80626.md")
+            })),
+        "{}",
+        tool.to_pretty()
+    );
+}
+
+#[test]
 fn a_budget_reaches_the_same_assembly_through_both_surfaces() {
     let example = Example::materialise("differential-budget");
     let tool = call(

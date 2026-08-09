@@ -146,6 +146,18 @@ pub fn to_source(
             }
             out.push_str("    source {\n");
             out.push_str(&format!("        kind {kind}\n"));
+            if let Some(role) = source_str(fields, "role") {
+                if !matches!(
+                    role,
+                    "origin" | "rationale" | "evidence" | "constraint" | "example"
+                ) {
+                    return Err(ToolError::new(
+                        "AKR-C004",
+                        format!("unknown source role {role:?}"),
+                    ));
+                }
+                out.push_str(&format!("        role {role}\n"));
+            }
             if let Some(path) = fields
                 .iter()
                 .find_map(|(name, value)| (name == "path").then_some(value))
@@ -167,6 +179,20 @@ pub fn to_source(
             {
                 out.push_str(&format!("        excerpt {}\n", prose(excerpt, 8)));
             }
+            if let Some(document) = source_str(fields, "document") {
+                out.push_str(&format!("        document {}\n", quote(document)));
+            }
+            for name in ["start_byte", "end_byte", "start_line", "end_line"] {
+                if let Some(value) = source_integer(fields, name)? {
+                    out.push_str(&format!("        {name} {value}\n"));
+                }
+            }
+            if let Some(hash) = source_str(fields, "excerpt_hash") {
+                out.push_str(&format!("        excerpt_hash {}\n", quote(hash)));
+            }
+            if let Some(use_note) = source_str(fields, "use") {
+                out.push_str(&format!("        use {}\n", prose(use_note, 8)));
+            }
             out.push_str("    }\n");
         }
     }
@@ -179,6 +205,32 @@ pub fn to_source(
     }
     out.push_str("}\n");
     Ok(out)
+}
+
+fn source_str<'a>(fields: &'a [(String, Value)], name: &str) -> Option<&'a str> {
+    fields
+        .iter()
+        .find_map(|(field, value)| (field == name).then_some(value))
+        .and_then(Value::as_str)
+}
+
+fn source_integer(fields: &[(String, Value)], name: &str) -> Result<Option<i64>, ToolError> {
+    let Some(value) = fields
+        .iter()
+        .find_map(|(field, value)| (field == name).then_some(value))
+    else {
+        return Ok(None);
+    };
+    let value = value
+        .as_integer()
+        .ok_or_else(|| ToolError::new("AKR-C004", format!("source.{name} must be an integer")))?;
+    if value < 0 {
+        return Err(ToolError::new(
+            "AKR-C004",
+            format!("source.{name} must not be negative"),
+        ));
+    }
+    Ok(Some(value))
 }
 
 /// Parses the emitted source back into a record.

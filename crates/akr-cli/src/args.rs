@@ -207,6 +207,15 @@ pub enum Command {
         /// Token ceiling.
         budget: Option<usize>,
     },
+    /// Orient an ambiguous task to planning records before assembling context.
+    Start {
+        /// Plain-language task description.
+        task: String,
+        /// Path filters expected to be touched.
+        paths: Vec<Glob>,
+        /// Token ceiling carried into the recommended context call.
+        budget: Option<usize>,
+    },
     /// `akr search <query> [--kind ...] [--state ...] [--limit n]`.
     Search {
         /// What to look for. Ordinary words unless [`Self::Search::raw_fts`] is set.
@@ -547,6 +556,7 @@ impl Command {
             Self::ReviewQueue { .. } => "review-queue".to_owned(),
             Self::Lock { .. } => "lock".to_owned(),
             Self::Context { .. } => "context".to_owned(),
+            Self::Start { .. } => "start".to_owned(),
             Self::Search { .. } => "search".to_owned(),
             Self::Import { .. } => "import".to_owned(),
             Self::IngestPreview { .. }
@@ -927,6 +937,26 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
                 paths: repeated(tail, "--paths")
                     .iter()
                     .map(|p| Glob::new(p))
+                    .collect(),
+                budget,
+            }
+        }
+        "start" => {
+            known_flags(&["--paths", "--budget"])?;
+            let budget = match option_value(tail, "--budget") {
+                Some(text) => Some(text.parse().map_err(|_| {
+                    UsageError::new(
+                        "AKR-C004",
+                        format!("--budget: {text:?} is not a positive integer"),
+                    )
+                })?),
+                None => None,
+            };
+            Command::Start {
+                task: need(0, "a task description")?,
+                paths: repeated(tail, "--paths")
+                    .iter()
+                    .map(|path| Glob::new(path))
                     .collect(),
                 budget,
             }
@@ -1756,6 +1786,16 @@ pub fn help_for(name: &str) -> Option<String> {
              \x20   --paths <glob>      path globs the work will touch; repeatable\n\
              \x20   --budget <tokens>   approximate token ceiling for the bundle\n"
         }
+        "start" => {
+            "akr start <task> [--paths <glob> ...] [--budget <tokens>]\n\
+             \n\
+             Searches live milestones, work and tracks for an ambiguous task, then returns\n\
+             planning candidates and a ready-made context request when one result is clear.\n\
+             \n\
+             FLAGS\n\
+             \x20   --paths <glob>      path globs the work will touch; repeatable\n\
+             \x20   --budget <tokens>   approximate token ceiling for context\n"
+        }
         "impact" => {
             "akr impact <ref> | --git-diff <A>..<B> [--depth <n>]\n\
              \n\
@@ -2062,6 +2102,7 @@ pub fn help() -> String {
         ("view", "render one view to stdout"),
         ("get", "retrieve one record"),
         ("search", "full-text search (P7)"),
+        ("start", "orient an ambiguous task to planning records"),
         ("context", "assemble a context bundle"),
         (
             "impact",

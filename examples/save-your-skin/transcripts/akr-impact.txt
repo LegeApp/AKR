@@ -27,7 +27,7 @@ $ akr impact --git-diff 5d9c2a70..e806b3f5 --format json
   "akr": "0.1",
   "tool_version": "0.1.0",
   "command": "impact",
-  "commit": "e806b3f54a2d7091c5e13b8a26f490dc7b135e64",
+  "commit": null,
   "source_graph_hash": "sha256:5159d2714f688627a85906b161def17b0358155fbfc2a3fc00b681d29a305f55",
   "ok": true,
   "exit_code": 0,
