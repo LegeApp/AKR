@@ -264,6 +264,18 @@ record akr.evidence.session-head-briefing-suite/1 : evidence {
         """
 }
 
+record akr.evidence.session-head-postcommit-validation/1 : evidence {
+    title "Post-implementation validation passed for commit 0202542, including the session-head and CLI/MCP parity tests."
+    state verified
+    result pass
+    method command
+    observed_at git:0202542b6e3fb872e67728538ce0f0abf3d3eb68
+    command "cargo test --workspace --all-targets && cargo fmt --all --check && cargo check --workspace --all-targets"
+    summary """
+        Post-implementation validation passed for commit 0202542, including the session-head and CLI/MCP parity tests.
+        """
+}
+
 record akr.evidence.sister-papercut-fixes/1 : evidence {
     title "Sister-papercut fixes verified"
     state verified

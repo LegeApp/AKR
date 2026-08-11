@@ -662,7 +662,10 @@ record akr.work.session-head-briefing/2 : work {
                 """
             method command
             command "cargo test --workspace --all-targets"
-            verified_by [ @akr.evidence.session-head-briefing-suite/1 ]
+            verified_by [
+                @akr.evidence.session-head-briefing-suite/1,
+                @akr.evidence.session-head-postcommit-validation/1
+            ]
         }
         check combined-start {
             statement """
@@ -671,7 +674,10 @@ record akr.work.session-head-briefing/2 : work {
                 """
             method command
             command "cargo test -p akr-mcp --test differential"
-            verified_by [ @akr.evidence.session-head-briefing-suite/1 ]
+            verified_by [
+                @akr.evidence.session-head-briefing-suite/1,
+                @akr.evidence.session-head-postcommit-validation/1
+            ]
         }
         check dirty-overlay {
             statement """
@@ -680,7 +686,10 @@ record akr.work.session-head-briefing/2 : work {
                 """
             method command
             command "cargo test -p akr-cli --test commands"
-            verified_by [ @akr.evidence.session-head-briefing-suite/1 ]
+            verified_by [
+                @akr.evidence.session-head-briefing-suite/1,
+                @akr.evidence.session-head-postcommit-validation/1
+            ]
         }
         check recent-focus {
             statement """
@@ -689,7 +698,10 @@ record akr.work.session-head-briefing/2 : work {
                 """
             method command
             command "cargo test -p akr-cli --test commands"
-            verified_by [ @akr.evidence.session-head-briefing-suite/1 ]
+            verified_by [
+                @akr.evidence.session-head-briefing-suite/1,
+                @akr.evidence.session-head-postcommit-validation/1
+            ]
         }
     }
     implements [ @akr.decision.start-collates-session-head ]

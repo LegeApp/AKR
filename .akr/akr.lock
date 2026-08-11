@@ -5,7 +5,7 @@ build {
     tool "akr 0.3.0"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:e560f8dae0bf4875e33afe8d88e5a14282420fcfcb09c9947008a82d6a6a3919"
+    source_graph "sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
 }
 
 source ".akr/project.akr" {
@@ -19,8 +19,8 @@ source ".akr/records/akr/decisions.akr" {
 }
 
 source ".akr/records/akr/evidence.akr" {
-    hash "sha256:3edc8a0188f107e8399bdcda7859655f2e4c695a8040fa04c04e0f8686f0ae7f"
-    records 26
+    hash "sha256:501baeb72fe22fff20a5311918b51ce43cc66b52c1c320b373f9a534020dfbe3"
+    records 27
 }
 
 source ".akr/records/akr/milestones.akr" {
@@ -29,12 +29,12 @@ source ".akr/records/akr/milestones.akr" {
 }
 
 source ".akr/records/akr/papercuts.akr" {
-    hash "sha256:ec9e7b8b8dc9528a3e1a4fd2ea299cf333da54a6892359d823957a45ac6499c2"
-    records 28
+    hash "sha256:e90572c69844e0f3e21aa8ca7e13a455921b058e1d8d358ac3da4c353fbde3a6"
+    records 29
 }
 
 source ".akr/records/akr/work.akr" {
-    hash "sha256:9b66d7830bac96429fb837ee1f3cedf8a79d4c5150030efc79b310c00c966837"
+    hash "sha256:04e8997106548835c54e51c900deca1efe0b02b565743f799d7d215f9102da5b"
     records 17
 }
 
@@ -326,6 +326,11 @@ seal @akr.evidence.session-head-briefing-suite/1 {
     hash "sha256:cab372437b838d4836d8afc26a6bda845526c7a451e91c5d42b593726cbf6a2b"
 }
 
+seal @akr.evidence.session-head-postcommit-validation/1 {
+    state verified
+    hash "sha256:c2b4d87913a3960ad4d8521e6a62265af9407dcc069df7798c38bb9de34f5b9e"
+}
+
 seal @akr.evidence.sister-papercut-fixes/1 {
     state verified
     hash "sha256:5759b4db139bb1216a32d630262c67b5910061d0dbd177510d973ce7e5cfe998"
@@ -486,6 +491,11 @@ seal @akr.papercut.the-repository-instructions-direct-agents-to/1 {
     hash "sha256:8dd858dedffa30da19310bbecac3e5f3187f04c8cd00a739afe4893fed7eb863"
 }
 
+seal @akr.papercut.while-beginning-a-change-transaction-the/1 {
+    state verified
+    hash "sha256:3ed54e5d26bfc290bf8f8a39c2b687d675751e7740ba386b3227c0ba4f393103"
+}
+
 seal @akr.papercut.writing-several-evidence-and-lifecycle-records/1 {
     state verified
     hash "sha256:20583780befd9f94a2b3b313ba2b1cba4d6f0adcc9f7ddf792218c26622f6d02"
@@ -563,7 +573,7 @@ seal @akr.work.session-head-briefing/1 {
 
 seal @akr.work.session-head-briefing/2 {
     state completed
-    hash "sha256:d6b4fd75838100cb11c8f5e2ccfa35919cb4c59b819848aabef71960383259da"
+    hash "sha256:9f20b06b941698fb63f478b4d96b6b4c690a4068765d16c30ea192f99ffe6e74"
 }
 
 seal @akr.work.sister-papercut-fixes/1 {
