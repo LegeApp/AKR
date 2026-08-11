@@ -39,6 +39,19 @@ record akr.evidence.fmt-clean/1 : evidence {
     author "GitHub Uploader"
 }
 
+record akr.evidence.gui-suite-after-help-and-version-fixes/1 : evidence {
+    title "8 tests passed across the crate's targets with no failures, run from Git Bash on Windows 11 so that sh was on PATH for the transcript harness."
+    state verified
+    result pass
+    method command
+    observed_at git:05fea30a52f59775917cf5a1d1ac1241c0392b44
+    command "cargo test -p akr-gui --all-targets"
+    summary """
+        8 tests passed across the crate's targets with no failures, run from Git Bash on Windows 11 so that sh was on PATH for the transcript harness.
+        """
+    author "GitHub Uploader"
+}
+
 record akr.evidence.human-review-gui-suite/1 : evidence {
     title "Eight GUI model, tree, filtering, multi-workspace, input-layout, and software-renderer tests passed."
     state verified
@@ -139,6 +152,19 @@ record akr.evidence.mcp-help-parity/1 : evidence {
     author "GitHub Uploader"
 }
 
+record akr.evidence.mcp-suite-after-explain-routing-fix/1 : evidence {
+    title "44 tests passed with no failures, including all 17 differential tests. Those 17 had never executed on Windows before: the harness resolved the sibling akr binary without EXE_SUFFIX, so every one of them asserted 'is not built' before running. They pass now, so the CLI-and-MCP agreement this suite exists to hold is checked on Windows for the first time. It also covers a new case, knowledge_explain_and_akr_explain_agree."
+    state verified
+    result pass
+    method command
+    observed_at git:05fea30a52f59775917cf5a1d1ac1241c0392b44
+    command "cargo test -p akr-mcp --tests"
+    summary """
+        44 tests passed with no failures, including all 17 differential tests. Those 17 had never executed on Windows before: the harness resolved the sibling akr binary without EXE_SUFFIX, so every one of them asserted 'is not built' before running. They pass now, so the CLI-and-MCP agreement this suite exists to hold is checked on Windows for the first time. It also covers a new case, knowledge_explain_and_akr_explain_agree.
+        """
+    author "GitHub Uploader"
+}
+
 record akr.evidence.p10-chunk-unit-suite/1 : evidence {
     title "All 14 chunker unit tests pass, including byte_ranges_slice_the_original_exactly and wrapping_prose_differently_does_not_change_the_search_text."
     state verified
@@ -226,6 +252,18 @@ record akr.evidence.search-stale-warning/1 : evidence {
     author "GitHub Uploader"
 }
 
+record akr.evidence.session-head-briefing-suite/1 : evidence {
+    title "The full workspace suite, targeted handoff and CLI/MCP parity tests, formatting, all-target checks, and generated-view validation passed for the session-head implementation."
+    state verified
+    result pass
+    method command
+    observed_at git:05fea30a52f59775917cf5a1d1ac1241c0392b44
+    command "cargo test --workspace --all-targets && cargo fmt --all --check && cargo check --workspace --all-targets && akr check --views-current"
+    summary """
+        The full workspace suite, targeted handoff and CLI/MCP parity tests, formatting, all-target checks, and generated-view validation passed for the session-head implementation.
+        """
+}
+
 record akr.evidence.sister-papercut-fixes/1 : evidence {
     title "Sister-papercut fixes verified"
     state verified
@@ -239,6 +277,31 @@ record akr.evidence.sister-papercut-fixes/1 : evidence {
         stale; and the full suite is green at 45 of 45 binaries after the ancestry batching
         and the AKR-G004 strict exemption.
         """
+}
+
+record akr.evidence.snapshot-suite-after-help-and-version-fixes/1 : evidence {
+    title "3 tests passed: hierarchy and inspector projection, freshness and git provenance ownership, and a missing workspace reported without a panic."
+    state verified
+    result pass
+    method command
+    observed_at git:05fea30a52f59775917cf5a1d1ac1241c0392b44
+    command "cargo test -p akr-cli review_snapshot"
+    summary """
+        3 tests passed: hierarchy and inspector projection, freshness and git provenance ownership, and a missing workspace reported without a panic.
+        """
+    author "GitHub Uploader"
+}
+
+record akr.evidence.warm-search-stays-git-free-after-changes/1 : evidence {
+    title "a_current_index_search_does_not_invoke_git passed in a 10-test run of the akr-cli search suite. It builds the index, then runs akr search with PATH pointed at an empty directory, so a git subprocess could not be found if one were attempted; the command exits 0 and returns results. The fast path is structurally git-free rather than merely quick, and this pass's akr-cli and akr-mcp changes did not disturb it."
+    state verified
+    result pass
+    method observation
+    observed_at git:05fea30a52f59775917cf5a1d1ac1241c0392b44
+    summary """
+        a_current_index_search_does_not_invoke_git passed in a 10-test run of the akr-cli search suite. It builds the index, then runs akr search with PATH pointed at an empty directory, so a git subprocess could not be found if one were attempted; the command exits 0 and returns results. The fast path is structurally git-free rather than merely quick, and this pass's akr-cli and akr-mcp changes did not disturb it.
+        """
+    author "GitHub Uploader"
 }
 
 record akr.evidence.workspace-green-2026-08-08/1 : evidence {

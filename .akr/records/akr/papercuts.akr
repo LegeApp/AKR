@@ -435,6 +435,18 @@ record akr.papercut.the-akr-mcp-knowledge-tools-failed-with-akr/2 : papercut {
     supersedes [ @akr.papercut.the-akr-mcp-knowledge-tools-failed-with-akr/1 ]
 }
 
+record akr.papercut.the-akr-mcp-transport-closed-on-explain-and/1 : papercut {
+    title "The AKR MCP transport closed on explain and propose calls, forcing a…"
+    state verified
+    statement """
+        The AKR MCP transport closed on explain and propose calls, forcing a CLI fallback. The CLI described --from as a record body but rejected plain prose because a required slot declaration was still needed; the help should name the accepted slot-list shape explicitly.
+        """
+    observed_at git:05fea30a52f59775917cf5a1d1ac1241c0392b44
+    about "akr"
+    author "codex"
+    created_at 2026-08-11
+}
+
 record akr.papercut.the-cli-help-advertises-edit-for-propose-and/1 : papercut {
     title "The CLI help advertises --edit for propose and revise, but this build…"
     state verified
@@ -456,6 +468,17 @@ record akr.papercut.the-repository-instructions-direct-agents-to/1 : papercut {
     about "akr"
     author "Codex"
     created_at 2026-08-09
+}
+
+record akr.papercut.while-beginning-a-change-transaction-the/1 : papercut {
+    title "While beginning a change transaction, the natural kind 'feature' was…"
+    state verified
+    statement """
+        While beginning a change transaction, the natural kind 'feature' was rejected because the accepted spelling is the undocumented Conventional Commit abbreviation 'feat'; the error recovers well, but help or aliasing would avoid the retry.
+        """
+    observed_at git:05fea30a52f59775917cf5a1d1ac1241c0392b44
+    author "codex"
+    created_at 2026-08-11
 }
 
 record akr.papercut.writing-several-evidence-and-lifecycle-records/1 : papercut {

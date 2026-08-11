@@ -204,6 +204,28 @@ fn knowledge_start_can_locate_a_user_supplied_plan_by_its_path() {
 }
 
 #[test]
+fn knowledge_start_and_akr_start_share_the_session_head() {
+    let example = Example::materialise("differential-session-head");
+    let tool = call(
+        &example,
+        "knowledge.start",
+        r#"{"task":"rewrite projection","budget_tokens":1400}"#,
+    );
+    let cli = cli_result(
+        &example,
+        &["start", "rewrite projection", "--budget", "1400"],
+    );
+    assert_eq!(tool.to_pretty(), cli.to_pretty());
+    assert_eq!(
+        tool.get("handoff")
+            .and_then(|handoff| handoff.get("snapshot"))
+            .and_then(|snapshot| snapshot.get("origin"))
+            .and_then(Value::as_str),
+        Some("working_tree")
+    );
+}
+
+#[test]
 fn a_budget_reaches_the_same_assembly_through_both_surfaces() {
     let example = Example::materialise("differential-budget");
     let tool = call(
@@ -243,6 +265,32 @@ fn knowledge_get_and_akr_get_agree() {
         );
         let cli = cli_result(&example, &["get", reference, "--relations"]);
         assert_eq!(tool.to_pretty(), cli.to_pretty(), "for {reference}");
+    }
+}
+
+/// `explain` is the documented way to find out what a kind requires, and it answers from
+/// the vocabulary tables rather than from the ledger. Routing it through the workspace
+/// dispatcher reached the `unreachable!` that `run_standalone` already owns, so the tool
+/// returned `AKR-X099` for every subject while the command line answered normally.
+#[test]
+fn knowledge_explain_and_akr_explain_agree() {
+    let example = Example::materialise("differential-explain");
+    for subject in ["decision", "constraint", "evidence", "AKR-C031"] {
+        let tool = call(
+            &example,
+            "knowledge.explain",
+            &format!("{{\"subject\":\"{subject}\"}}"),
+        );
+        assert!(
+            !is_error(
+                &example,
+                "knowledge.explain",
+                &format!("{{\"subject\":\"{subject}\"}}")
+            ),
+            "explaining {subject} must not fail"
+        );
+        let cli = cli_result(&example, &["explain", subject]);
+        assert_eq!(tool.to_pretty(), cli.to_pretty(), "for {subject}");
     }
 }
 

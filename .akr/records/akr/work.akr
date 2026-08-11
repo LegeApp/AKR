@@ -73,7 +73,10 @@ record akr.work.desktop-review-gui/1 : work {
                 """
             method command
             command "cargo test -p akr-gui --all-targets"
-            verified_by [ @akr.evidence.human-review-gui-suite/1 ]
+            verified_by [
+                @akr.evidence.gui-suite-after-help-and-version-fixes/1,
+                @akr.evidence.human-review-gui-suite/1
+            ]
         }
     }
     part_of [ @akr.milestone.human-record-review/1 ]
@@ -456,7 +459,10 @@ record akr.work.review-snapshot/1 : work {
                 """
             method command
             command "cargo test -p akr-cli review_snapshot"
-            verified_by [ @akr.evidence.human-review-snapshot-suite/1 ]
+            verified_by [
+                @akr.evidence.human-review-snapshot-suite/1,
+                @akr.evidence.snapshot-suite-after-help-and-version-fixes/1
+            ]
         }
     }
     part_of [ @akr.milestone.human-record-review/1 ]
@@ -479,7 +485,10 @@ record akr.work.runtime-hardening/1 : work {
                 A current-index warm knowledge.search performs no Git subprocesses.
                 """
             method observation
-            verified_by [ @akr.evidence.human-review-warm-search/1 ]
+            verified_by [
+                @akr.evidence.human-review-warm-search/1,
+                @akr.evidence.warm-search-stays-git-free-after-changes/1
+            ]
         }
         check tool-suite {
             statement """
@@ -487,7 +496,10 @@ record akr.work.runtime-hardening/1 : work {
                 """
             method command
             command "cargo test -p akr-mcp --tests"
-            verified_by [ @akr.evidence.human-review-mcp-suite/1 ]
+            verified_by [
+                @akr.evidence.human-review-mcp-suite/1,
+                @akr.evidence.mcp-suite-after-explain-routing-fix/1
+            ]
         }
     }
     part_of [ @akr.milestone.human-record-review/1 ]
@@ -571,6 +583,117 @@ record akr.work.search-auto-refreshes-stale-index/1 : work {
             verified_by [ @akr.evidence.search-auto-refresh-suite/1 ]
         }
     }
+}
+
+record akr.work.session-head-briefing/1 : work {
+    title "Collate a session-head briefing in start"
+    state superseded
+    scope [
+        path "crates/akr-cli/**",
+        path "crates/akr-core/**",
+        path "crates/akr-mcp/**",
+        path "docs/**"
+    ]
+    intent """
+        Make akr start and knowledge.start provide the next agent with a compact session-head
+        handoff before task-specific matches: briefly identify the latest Git commit, focus the
+        latest reachable AKR-linked work, collate all live planning branches and proposals,
+        surface blockers and review risks, and clearly overlay valid uncommitted AKR changes or
+        fall back to the validated committed snapshot.
+        """
+    acceptance {
+        check bounded-deterministic {
+            statement """
+                The combined start response is stable, bounded, and reports deterministic omission
+                counts when lower-priority detail does not fit.
+                """
+            method command
+            command "cargo test --workspace --all-targets"
+        }
+        check combined-start {
+            statement """
+                CLI and MCP start responses share one deterministic handoff model while preserving
+                the existing task-orientation fields.
+                """
+            method command
+            command "cargo test -p akr-mcp --test differential"
+        }
+        check dirty-overlay {
+            statement """
+                A valid dirty ledger is shown as a semantic overlay and an invalid one falls back
+                to a separately validated committed snapshot.
+                """
+            method command
+            command "cargo test -p akr-cli --test commands"
+        }
+        check recent-focus {
+            statement """
+                The briefing shows HEAD and expands the latest reachable AKR-Work-linked branch,
+                while collating every live planning branch and proposal.
+                """
+            method command
+            command "cargo test -p akr-cli --test commands"
+        }
+    }
+    implements [ @akr.decision.start-collates-session-head ]
+}
+
+record akr.work.session-head-briefing/2 : work {
+    title "Collate a session-head briefing in start"
+    state completed
+    scope [
+        path "crates/akr-cli/**",
+        path "crates/akr-core/**",
+        path "crates/akr-mcp/**",
+        path "docs/**"
+    ]
+    intent """
+        Make akr start and knowledge.start provide the next agent with a compact session-head
+        handoff before task-specific matches: briefly identify the latest Git commit, focus the
+        latest reachable AKR-linked work, collate all live planning branches and proposals,
+        surface blockers and review risks, and clearly overlay valid uncommitted AKR changes or
+        fall back to the validated committed snapshot.
+        """
+    acceptance {
+        check bounded-deterministic {
+            statement """
+                The combined start response is stable, bounded, and reports deterministic omission
+                counts when lower-priority detail does not fit.
+                """
+            method command
+            command "cargo test --workspace --all-targets"
+            verified_by [ @akr.evidence.session-head-briefing-suite/1 ]
+        }
+        check combined-start {
+            statement """
+                CLI and MCP start responses share one deterministic handoff model while preserving
+                the existing task-orientation fields.
+                """
+            method command
+            command "cargo test -p akr-mcp --test differential"
+            verified_by [ @akr.evidence.session-head-briefing-suite/1 ]
+        }
+        check dirty-overlay {
+            statement """
+                A valid dirty ledger is shown as a semantic overlay and an invalid one falls back
+                to a separately validated committed snapshot.
+                """
+            method command
+            command "cargo test -p akr-cli --test commands"
+            verified_by [ @akr.evidence.session-head-briefing-suite/1 ]
+        }
+        check recent-focus {
+            statement """
+                The briefing shows HEAD and expands the latest reachable AKR-Work-linked branch,
+                while collating every live planning branch and proposal.
+                """
+            method command
+            command "cargo test -p akr-cli --test commands"
+            verified_by [ @akr.evidence.session-head-briefing-suite/1 ]
+        }
+    }
+    implements [ @akr.decision.start-collates-session-head ]
+    supersedes [ @akr.work.session-head-briefing/1 ]
 }
 
 record akr.work.sister-papercut-fixes/1 : work {

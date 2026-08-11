@@ -1,119 +1,174 @@
 # AKR — Agent Knowledge Records
 
-A versioned project-knowledge ledger for AI-agent-driven software projects, with a
-human-readable text serialization, a deterministic compiler, and generated views.
+AKR is a typed, versioned knowledge ledger for software projects worked on by
+humans and AI agents. It gives project decisions, requirements, observations,
+evidence, questions, and work items stable identities, lifecycle states,
+scope, typed relations, freshness, and Git provenance.
 
-**Status: implemented through P8.** The Rust workspace under `crates/` delivers the
-semantic model and validator (P1), the lexer/parser/formatter (P2), the resolver (P3),
-the generated views (P4), git freshness and acceptance evidence (P5), the `akr` CLI and
-the MCP server (P6), full-text search over the index cache (P7), and migration tooling
-(`akr import`, P8). P9 — the human review interface — is not started. The
-specifications in `docs/` and `spec/` remain normative; the code implements them.
+The Rust workspace currently includes the compiler and validator, the `akr`
+CLI, the `knowledge.*` MCP server, full-text search and migration tooling, and
+a read-only native desktop review workbench. The project is under active
+development; the remaining platform and release acceptance checks are tracked
+in the AKR ledger rather than inferred from this README.
 
-## Quick start
+## What AKR does
 
-```
-cargo build --release            # builds akr (CLI) and akr-mcp (MCP server)
-cargo test                       # the conformance corpus is the spec, executable
-akr init                         # scaffold .akr/ in a project, append AGENTS.md protocol
-scripts/setup-akr-mcp.sh         # install matched akr + akr-mcp releases and register MCP (Linux/macOS)
-scripts/setup-akr-mcp.ps1        # the same, on Windows
-scripts/verify-distribution.sh   # verify tracked files, tests, design checks, and build parity
-```
+AKR treats project knowledge as a small build system:
 
-## The problem
+1. Parse canonical `.akr` source files.
+2. Type-check record kinds, slots, lifecycle states, relations, and scopes.
+3. Link references and resolve record heads and supersession chains.
+4. Compute freshness, impact, and Git facts.
+5. Build a disposable search index, generated Markdown views, and `akr.lock`.
 
-A project that is worked by agents accumulates Markdown. The pile grows, and nothing
-in it carries enforceable meaning about:
+The build is deterministic and does not use a language model. Agents can draft
+or rank material, but authority, resolution, validation, freshness, and
+acceptance remain compiler decisions.
 
-- **Authority** — is this a decision, a proposal, or somebody's note?
-- **Scope** — what does it govern, and where does it stop applying?
-- **Currency** — does it describe reality now, or reality as intended?
-- **Evidence** — what observation supports this, and when was that observed?
-- **Supersession** — what replaced it, and what happened to the unfinished parts?
-- **Invalidation** — what change to the code would make it wrong?
+The repository separates four layers:
 
-Markdown cannot answer those questions mechanically, so agents re-derive context from
-prose, trust stale statements, and re-litigate settled decisions. AKR replaces the pile
-with a typed, versioned ledger that a compiler can check.
-
-## The model
-
-Four layers, with different trust and mutability rules:
-
-| Layer | Contents | Canonical? | Written by |
+| Layer | Contents | Authority | Writer |
 | --- | --- | --- | --- |
-| **Scratch** | Disposable agent working notes (`.agent/scratch/`) | No | Agents, freely |
-| **Sources** | Registered external advice/reports (`sources/external/`, `sources/catalog.json`) | No — non-authoritative, content-hashed while registered | `akr source add`, `akr source finalize` |
-| **Ledger** | Typed records in `.akr` source files | **Yes** | Humans and agents, via validated operations |
-| **Views** | Generated Markdown/HTML (`docs/generated/`) | No | `akr build`, never by hand |
+| Scratch | `.agent/scratch/` working notes | Disposable | Agents |
+| Sources | Registered outside advice in `sources/` | Non-authoritative and content-hashed | `akr source` |
+| Ledger | Typed records in `.akr/` | Canonical | Validated CLI/MCP operations |
+| Views | `docs/generated/` projections | Derived | `akr build` only |
 
-The unit is a **record**, not a document. Records have stable semantic keys
-(`lege.viewer.renderer-boundary`), numbered revisions (`@key/2`), addressable claims
-(`@key/2#renderer-boundary`), lifecycle states, declared scope, and typed relations with
-mechanical consequences.
+## Current capabilities
 
-AKR is a compiler and build system for project knowledge, not a retrieval store. The
-build is deterministic and contains no language model: parse, type-check, link, resolve,
-index, emit. Language models may draft records, propose imports, and rank search
-results; they never determine authority, head resolution, cycles, or acceptance.
+### CLI and compiler
 
-## Document map
+The `akr` binary supports workspace initialization, canonical formatting,
+validation, builds, generated views, record lookup and search, deterministic
+context assembly, impact and freshness analysis, migration/import review,
+immutable source registration, evidence, papercuts, and validated record
+authoring. It also provides a staged change transaction that connects AKR work
+records to a Git commit without making Git history part of the ledger itself.
 
-Frozen spine (do not edit without a recorded decision):
+```text
+akr init
+akr check
+akr build
+akr context <planning-key>
+akr search "freshness"
+akr view active-work
+akr review-queue
+```
 
-| Path | Contents |
+Run `akr --help` for the complete command list. Global options include
+`--dir`, `--strict`/`--lenient`, `--format text|json`, `--at <commit>`, and
+`--today <date>`.
+
+### MCP server
+
+`akr-mcp` exposes the same implementation over JSON-RPC 2.0 on stdio. The
+`knowledge.*` tools cover context, search, get, impact, source inspection,
+evidence, validation, and validated writes. The read-only surface can be
+selected when a session should not receive authoring tools; optional accounting
+records call sizes, budgets, and durations.
+
+```text
+akr-mcp --surface read
+akr-mcp --surface full --accounting .akr/mcp-accounting.jsonl
+```
+
+The CLI and MCP server share `akr-core` and the CLI library, so they use the
+same parsing, resolution, validation, freshness, and context behavior.
+
+### Native review workbench
+
+`akr-gui` is a read-only native desktop application for reviewing one or more
+local AKR workspaces. It loads an immutable review snapshot and presents:
+
+- planning hierarchy and record navigation;
+- record bodies, typed relations, claims, acceptance checks, and provenance;
+- freshness, diagnostics, Git metadata, and review counts;
+- deterministic filtering and bounded relationship neighborhoods;
+- independent tabs for multiple workspace paths.
+
+Launch it with the current workspace, or pass several workspace paths as
+arguments:
+
+```text
+cargo run -p akr-gui -- .
+cargo run -p akr-gui -- path\to\project-a path\to\project-b
+```
+
+In the workbench, `/` edits the filter; `P` and `K` switch tree modes; `D`
+opens the dashboard; `I` shows record details; `L` shows relations; `G` shows
+Git metadata; `R` reloads; `Tab` changes workspace tabs; and the arrow keys
+navigate records. The presentation layer is deliberately small and native,
+with deterministic software rendering rather than a web UI.
+
+## Quick start for contributors
+
+Requirements are Rust `1.94` or newer and a Git checkout. From the repository
+root:
+
+```text
+cargo build --workspace
+cargo test --workspace --all-targets
+cargo fmt --all -- --check
+akr build --check
+```
+
+The native workbench and its focused tests can be checked independently:
+
+```text
+cargo check -p akr-gui --all-targets --locked
+cargo test -p akr-gui --all-targets --locked
+cargo test -p akr-cli review_snapshot
+```
+
+The GitHub Actions workflow in `.github/workflows/akr-gui.yml` runs the GUI
+check and test jobs on Ubuntu and Windows. Distribution helpers live in
+`scripts/`, including the Windows and Unix MCP setup scripts and the
+distribution verification script.
+
+For AKR-governed changes, consult the relevant context first, use a change
+transaction for the staged snapshot, and validate before handoff:
+
+```text
+akr change begin --kind <kind> --summary "<imperative>" --primary <work-key>
+git add <exact-paths>
+akr change prepare --staged
+akr git commit
+```
+
+Never edit `sources/` or `docs/generated/` by hand. Registered sources are
+immutable, and generated views are recreated by `akr build`.
+
+## Repository map
+
+| Path | Purpose |
 | --- | --- |
-| `docs/DECISIONS.md` | D-001..D-025 — every open question, resolved |
-| `spec/tables/vocabulary.json` | Machine-readable spine: kinds, slots, lifecycles, relations, rules |
-| `spec/exemplar.akr` | Frozen syntax specimen; the only source of quotable syntax forms |
-| `examples/save-your-skin/MANIFEST.md` | Frozen record inventory and synthetic git history for the worked example |
-| `spec/diagnostics/README.md` | Diagnostic code scheme and prefix ownership |
+| `crates/akr-core` | Data model, parser, formatter, validation, resolver, freshness, index, and views |
+| `crates/akr-cli` | `akr` binary, workspace session, operations, and review snapshots |
+| `crates/akr-mcp` | `knowledge.*` MCP server over stdio |
+| `crates/akr-gui` | Native read-only review workbench |
+| `.akr/` | Canonical project ledger, lock, and disposable caches |
+| `docs/` | Normative design documents and generated projections |
+| `spec/` | Grammar, schemas, vocabulary, and diagnostic registries |
+| `examples/` | Worked example and synthetic history |
+| `fixtures/` | Parser, formatter, and validator conformance corpus |
+| `prompts/` | Prompts for drafting importable material |
+| `scripts/` | Setup, test, and distribution helpers |
 
-Specifications:
+The design documentation is organized from overview and architecture through
+the data model, syntax, validation, compiler pipeline, CLI, MCP, context,
+freshness, projections, migration, roadmap, and glossary. Start at
+[`docs/00-overview.md`](docs/00-overview.md), then consult the specific
+contract that governs a change.
 
-| Path | Contents | Status |
-| --- | --- | --- |
-| `docs/00-overview.md` | Problem, model, anti-goals | complete |
-| `docs/01-architecture.md` | Layers, pipeline overview, trust and LLM boundary | complete |
-| `docs/02-data-model.md` | Record kinds, slots, lifecycles, relations, scope, claims, acceptance | complete |
-| `docs/03-syntax.md` | Lexical structure, grammar walkthrough, canonical formatting | complete |
-| `docs/04-references-and-versioning.md` | Keys, revisions, heads, ref modes, supersession, lock semantics | complete |
-| `docs/05-validation-rules.md` | Rule catalog V-001..V-024 with codes and examples | complete |
-| `docs/06-compiler-pipeline.md` | Stage contracts A–F, hashing, incrementality | complete |
-| `docs/07-cli.md` | Command reference, exit codes, JSON output | complete |
-| `docs/08-mcp.md` | Agent tool surface and `AGENTS.md` protocol | complete |
-| `docs/09-context-assembly.md` | Deterministic context assembly; search as ranking only | complete |
-| `docs/10-freshness-and-git.md` | `observed_at`, watches, staleness, impact propagation | complete |
-| `docs/11-projections.md` | Generated view catalog and rendering rules | complete |
-| `docs/12-migration.md` | Legacy Markdown import and disposition workflow | complete |
-| `docs/13-implementation-roadmap.md` | Phases P1–P9, crate layout, dogfood acceptance test | complete |
-| `docs/14-glossary.md` | Terminology anchor | complete |
-| `spec/grammar/akr.ebnf` | Formal grammar | complete |
-| `spec/schema/akr-lock.md` | `akr.lock` format specification | complete |
-| `spec/schema/index.sql` | SQLite index DDL sketch | complete |
-| `spec/diagnostics/codes-lang.md` | `AKR-P/F/T/L/R` registry | complete |
-| `spec/diagnostics/codes-runtime.md` | `AKR-I/E/X/G/C/M` registry | complete |
-| `examples/save-your-skin/` | Worked example: `.akr` sources, lock, generated views, transcripts | complete |
-| `fixtures/` | Parse, format, and validation conformance fixtures | complete |
-| `tools/check-design.py` | Design-set coherence checker | complete |
+## Non-goals
 
-Implementation:
+AKR is not a generic wiki, Markdown-plus-frontmatter convention, RDF authoring
+surface, retrieval database, or newest-wins conflict resolver. It does not
+silently delete knowledge, use line numbers as record identity, or claim that
+every agent output is durable. A model may help draft or search; it does not
+decide what the project believes.
 
-| Path | Contents |
-| --- | --- |
-| `crates/akr-core` | Model, syntax, validation, resolver, freshness, context assembly, index, views |
-| `crates/akr-cli` | The `akr` binary — and the library the MCP server reuses |
-| `crates/akr-mcp` | The `knowledge.*` MCP server over stdio |
-| `prompts/` | Prompts for drafting importable Markdown or raw `.akr` with an external LLM |
+## License
 
-## Anti-goals
-
-No Markdown-plus-frontmatter. No generic wiki. No RDF authoring surface. No
-newest-wins conflict resolution. No automatic deletion of knowledge. No line-number
-citations as identity. Not every agent output is durable. And no published standard
-before AKR has been dogfooded on two or three real projects.
-
-## Licence
-
-Not yet chosen.
+Not yet chosen. Workspace packages are currently marked `UNLICENSED` and are
+not published.

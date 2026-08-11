@@ -28,7 +28,7 @@ pub const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "knowledge.start",
-        description: "Orient a new task to nearby planning records before proposing context.",
+        description: "Read the validated project handoff, then orient a new task to nearby planning records.",
         writes: false,
     },
     Tool {

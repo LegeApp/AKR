@@ -426,9 +426,20 @@ remains untouched.
 akr start <task> [--paths <glob> ...] [--budget <tokens>]
 ```
 
-Use this when a task arrives without an exact planning key. It searches live milestones,
-work and tracks, then returns candidates and a ready-made `akr context` request when one
-match is unambiguous. It is the CLI counterpart of `knowledge.start`.
+Use this when a task arrives without an exact planning key. Before task matching, it emits
+one compact **session head**: the latest Git commit, the latest reachable commit carrying
+`AKR-Work`, the current heads named by that commit and their related records, every live
+planning branch, unsatisfied acceptance and review attention, and a semantic summary of
+valid uncommitted AKR changes. It then searches live milestones, work and tracks and
+returns candidates plus a ready-made `akr context` request when one match is unambiguous.
+It is the CLI counterpart of `knowledge.start`.
+
+The session head is a deterministic projection, not a record and not authority. When the
+working ledger validates, it is shown as a labelled overlay on HEAD. When it does not,
+start parses and validates the committed `.akr` tree separately, excludes the invalid
+overlay, and orients the task from that snapshot. If neither validates, start refuses to
+invent a briefing. `--budget` bounds the combined handoff and task orientation; omitted
+lower-priority entries are counted and point to focused follow-up calls.
 
 If no planning record matches, the result explicitly says that this is a ledger-coverage
 miss, not evidence that no plan exists. It also includes a bounded workspace text scan of

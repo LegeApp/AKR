@@ -306,3 +306,45 @@ fn the_tandem_example_checks_clean_and_has_the_queue_its_manifest_declares() {
         queue.stdout
     );
 }
+
+// -------------------------------------------------------------------------------------
+// Help coverage
+// -------------------------------------------------------------------------------------
+
+/// Every command answers its own `--help`, listed in the banner or not.
+///
+/// `akr <command> --help` routes through `help_for`, which returns `Option`: a command
+/// with no topic is reported as an *unknown command* rather than as an undocumented one.
+/// `git-hook` sat in that gap, so probing its help said it did not exist while the command
+/// ran perfectly well — which is a far more misleading answer than no help at all.
+#[test]
+fn every_command_answers_its_own_help() {
+    let example = Example::of(&SYS_TANDEM, "sys-tandem");
+    for command in akr_cli::args::COMMANDS {
+        let help = example.run(&[command, "--help"]);
+        assert_eq!(help.code, 0, "`akr {command} --help`: {}", help.output());
+        assert!(
+            !help.stdout.contains("unknown command"),
+            "`akr {command} --help` reports it as unknown: {}",
+            help.stdout
+        );
+    }
+
+    // The other direction: a command the banner advertises but `COMMANDS` omits is one
+    // `nearest` can never suggest after a typo.
+    let top = example.run(&["--help"]);
+    assert_eq!(top.code, 0, "{}", top.output());
+    for listed in top
+        .stdout
+        .lines()
+        .skip_while(|line| !line.starts_with("COMMANDS"))
+        .skip(1)
+        .take_while(|line| !line.trim().is_empty())
+        .filter_map(|line| line.split_whitespace().next())
+    {
+        assert!(
+            akr_cli::args::COMMANDS.contains(&listed),
+            "`{listed}` is advertised by --help but missing from COMMANDS"
+        );
+    }
+}

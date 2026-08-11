@@ -275,3 +275,32 @@ record akr.decision.search-refreshes-disposable-index/1 : decision {
         """
     supported_by [ @akr.evidence.search-stale-warning/1 ]
 }
+
+record akr.decision.start-collates-session-head/1 : decision {
+    title "Start collates a validated session head"
+    state active
+    scope [
+        path "crates/akr-cli/**",
+        path "crates/akr-core/**",
+        path "crates/akr-mcp/**",
+        path "docs/**"
+    ]
+    topic session-head-briefing
+    decision """
+        AKR start and knowledge.start automatically prepend a deterministic, bounded project
+        handoff assembled from the latest validated ledger snapshot, reachable AKR-linked Git
+        history, live planning heads, review state, and any valid working-tree ledger overlay.
+        Task-specific search remains in the same response, and canonical authority remains in
+        records and Git rather than the projection.
+        """
+    context """
+        Agents currently spend the beginning of sessions searching for whichever planning
+        record is newest. A collated session head should provide the recent work focus and all
+        outstanding branches before deeper task-specific retrieval.
+        """
+    consequences """
+        Start becomes Git-backed while search remains ledger-only. The handoff is an ephemeral
+        projection, not a new record kind or committed generated file.
+        """
+    supported_by [ @akr.evidence.session-head-briefing-suite/1 ]
+}

@@ -167,6 +167,17 @@ pub struct IndexEntry {
     pub blob: String,
 }
 
+/// One commit as the session-head briefing needs to present it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitBrief {
+    /// The commit object.
+    pub commit: Commit,
+    /// Its one-line subject.
+    pub subject: String,
+    /// `AKR-Work` trailer values, in authored order.
+    pub work: Vec<String>,
+}
+
 impl Repository {
     /// Opens the repository containing `path`.
     ///
@@ -212,6 +223,58 @@ impl Repository {
     /// [`GitError::UnknownRevision`] in a repository with no commits.
     pub fn head(&self) -> Result<Commit, GitError> {
         self.rev_parse("HEAD")
+    }
+
+    /// HEAD and the newest reachable commit carrying an `AKR-Work` trailer.
+    ///
+    /// These are deliberately separate answers: a maintenance commit remains the newest
+    /// Git fact while the handoff focus stays on the last commit that named project work.
+    /// Only history reachable from HEAD is considered; another branch must not become the
+    /// current session merely because it was authored later.
+    ///
+    /// # Errors
+    /// [`GitError::CommandFailed`] when Git cannot read the history.
+    pub fn session_head(&self) -> Result<(CommitBrief, Option<CommitBrief>), GitError> {
+        let latest = self.commit_brief(&["show", "-s", "--format=%H%x1f%s%x1f%B", "HEAD"])?;
+        let linked_text = self.run(&[
+            "log",
+            "HEAD",
+            "-1",
+            "--extended-regexp",
+            "--grep=^AKR-Work:",
+            "--format=%H%x1f%s%x1f%B",
+        ])?;
+        let linked = if linked_text.trim().is_empty() {
+            None
+        } else {
+            Some(self.parse_commit_brief(&linked_text)?)
+        };
+        Ok((latest, linked))
+    }
+
+    fn commit_brief(&self, args: &[&str]) -> Result<CommitBrief, GitError> {
+        let text = self.run(args)?;
+        self.parse_commit_brief(&text)
+    }
+
+    fn parse_commit_brief(&self, text: &str) -> Result<CommitBrief, GitError> {
+        let mut fields = text.splitn(3, '\u{1f}');
+        let oid = fields.next().unwrap_or_default().trim();
+        let subject = fields.next().unwrap_or_default().trim().to_owned();
+        let body = fields.next().unwrap_or_default();
+        let commit = Commit::new(oid).map_err(GitError::from)?;
+        let work = body
+            .lines()
+            .filter_map(|line| line.trim().strip_prefix("AKR-Work:"))
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+            .collect();
+        Ok(CommitBrief {
+            commit,
+            subject,
+            work,
+        })
     }
 
     /// Whether a commit exists in this repository.

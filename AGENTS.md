@@ -20,7 +20,9 @@ When you already know the exact planning key:
 When you do not — which is most of the time, because a task arrives as "continue the
 decoder optimisation" and not as an exact key:
 1. `knowledge.start` with the task in plain words and the paths you expect to touch. It
-   searches planning kinds only and returns candidates plus a ready-made context call.
+   first collates the validated session head (latest Git/AKR work, every outstanding
+   planning branch, review attention, and any valid dirty ledger overlay), then returns
+   task candidates plus a ready-made context call.
 2. Pick a live result, or an explicitly relevant proposed one, and call `knowledge.context`
    with its exact key.
 

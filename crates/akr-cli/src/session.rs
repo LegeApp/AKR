@@ -16,7 +16,13 @@ use akr_core::resolve::{BuildInputs, ResolvedModel, SpanIndex, Workspace, load_w
 use std::path::{Path, PathBuf};
 
 /// The tool version reported everywhere: the banner, the lock, the JSON envelope.
-pub const TOOL_VERSION: &str = "0.1.0";
+///
+/// Read from the crate rather than written out, because a hand-maintained copy drifts
+/// silently and this one had: the workspace reached 0.3.0 while every lock file and every
+/// generated view header went on attributing itself to "akr 0.1.0". The lock records the
+/// tool *that wrote it*, so a stale constant makes the provenance field say the wrong
+/// thing — in the one place a provenance tool cannot afford to.
+pub const TOOL_VERSION: &str = env!("CARGO_PKG_VERSION");
 /// The grammar version this build speaks.
 pub const GRAMMAR_VERSION: &str = "0.1";
 /// The vocabulary version this build was checked against.

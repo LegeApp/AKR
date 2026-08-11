@@ -19,6 +19,7 @@ pub mod args;
 pub mod change;
 pub mod commands;
 pub mod fmt;
+pub mod handoff;
 pub mod import;
 pub mod ingest;
 pub mod init;

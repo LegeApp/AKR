@@ -539,12 +539,11 @@ pub enum Command {
 impl Command {
     /// Whether the command needs Git history before dispatch.
     ///
-    /// Search and task orientation can use a current disposable index without Git.  If
-    /// they discover that the index needs rebuilding they upgrade the session at that
-    /// point.  Every other workspace command keeps the conservative full-session path.
+    /// Search can use a current disposable index without Git. Task orientation includes
+    /// the Git-backed session head, so only raw search keeps the ledger-only fast path.
     #[must_use]
     pub const fn needs_git_facts(&self) -> bool {
-        !matches!(self, Self::Search { .. } | Self::Start { .. })
+        !matches!(self, Self::Search { .. })
     }
 
     /// The name the JSON envelope reports.
@@ -641,7 +640,12 @@ impl UsageError {
     }
 }
 
-const COMMANDS: &[&str] = &[
+/// Every command name, in `--help` order, including the ones the banner does not list.
+///
+/// This is what `nearest` suggests from and what the help-coverage test walks, so a
+/// command missing here is a command no typo ever finds and whose `--help` nobody
+/// notices is absent — which is how `git-hook` came to answer "unknown command".
+pub const COMMANDS: &[&str] = &[
     "init",
     "fmt",
     "check",
@@ -649,12 +653,20 @@ const COMMANDS: &[&str] = &[
     "view",
     "get",
     "search",
+    "start",
     "context",
     "impact",
     "why-current",
     "explain",
+    "review-queue",
+    "import",
     "ingest",
+    "lock",
     "source",
+    "diff",
+    "change",
+    "git",
+    "git-hook",
     "propose",
     "revise",
     "supersede",
@@ -662,9 +674,6 @@ const COMMANDS: &[&str] = &[
     "abandon",
     "papercut",
     "evidence",
-    "review-queue",
-    "import",
-    "lock",
 ];
 
 /// Parses an argument list, excluding the program name.
@@ -1799,12 +1808,13 @@ pub fn help_for(name: &str) -> Option<String> {
         "start" => {
             "akr start <task> [--paths <glob> ...] [--budget <tokens>]\n\
              \n\
-             Searches live milestones, work and tracks for an ambiguous task, then returns\n\
-             planning candidates and a ready-made context request when one result is clear.\n\
+             Prints a validated project handoff (latest Git/AKR work, outstanding branches,\n\
+             review attention and any dirty ledger overlay), then searches live planning\n\
+             records and returns a ready-made context request when one result is clear.\n\
              \n\
              FLAGS\n\
              \x20   --paths <glob>      path globs the work will touch; repeatable\n\
-             \x20   --budget <tokens>   approximate token ceiling for context\n"
+             \x20   --budget <tokens>   approximate token ceiling for the combined response\n"
         }
         "impact" => {
             "akr impact <ref> | --git-diff <A>..<B> [--depth <n>]\n\
@@ -1942,7 +1952,20 @@ pub fn help_for(name: &str) -> Option<String> {
              cherry-picks and which `git log` finds.\n\
              \n\
              `install-hooks` writes two-line wrappers around `akr git-hook`, so the\n\
-             checks stay in the binary rather than becoming a second implementation.\n"
+             checks stay in the binary rather than becoming a second implementation.\n\
+             Hooks live in the git directory, which is never cloned: run it once per\n\
+             worktree, or the hooks are simply absent rather than failing.\n"
+        }
+        "git-hook" => {
+            "akr git-hook <pre-commit|commit-msg>\n\
+             \n\
+             What an installed hook calls; not normally run by hand. `pre-commit` runs\n\
+             the same verification as `akr change verify --staged` and refuses rather\n\
+             than repairing, so a commit with no prepared change transaction is\n\
+             rejected (AKR-C031). Hooks are a guardrail and are bypassable; CI remains\n\
+             the final authority.\n\
+             \n\
+             Install them with `akr git install-hooks`.\n"
         }
         "ingest" => {
             "akr ingest preview <path> [--source-kind internal|external] [--tables rows|support]\n\

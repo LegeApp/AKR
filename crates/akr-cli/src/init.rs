@@ -21,10 +21,13 @@ Durable project knowledge lives in `.akr/` as typed records, not in Markdown.
 `docs/generated/` is build output. Follow this protocol.
 
 **Before starting any task**
-1. `knowledge.context --goal <milestone|work|track>` for the thing you are working on.
-   Add `--paths` for the files you expect to touch.
-2. Read the bundle in full. Contradictions and staleness warnings are always included
-   and are never noise.
+1. If you know the exact planning key, call `knowledge.context` with that key and the
+   paths you expect to touch.
+2. Otherwise call `knowledge.start` with the task and paths. Read its session head, pick
+   a live candidate (or an explicitly relevant proposal), then call `knowledge.context`
+   with that exact key.
+3. Read context bundles in full. Contradictions and staleness warnings are always
+   included and are never noise.
 
 **While working**
 - Look things up with `knowledge.get`; find them with `knowledge.search`.

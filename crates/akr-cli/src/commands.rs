@@ -88,6 +88,13 @@ pub fn run_standalone(command: &Command) -> Option<Result<Output, EnvError>> {
 /// # Errors
 /// [`EnvError`] when the environment is unusable.
 pub fn run(session: &mut Session, command: &Command) -> Result<Output, EnvError> {
+    // A standalone command answers from the vocabulary tables and has no arm in
+    // `dispatch`, so a caller that holds a session and routes one here used to reach an
+    // `unreachable!` rather than the answer. Answering it is always correct: holding a
+    // session does not change what `explain` or `--version` says.
+    if let Some(answer) = run_standalone(command) {
+        return answer;
+    }
     if command.needs_git_facts() {
         session.ensure_git_facts()?;
     }
@@ -2250,14 +2257,19 @@ fn start(
     paths: &[akr_core::model::Glob],
     budget: Option<usize>,
 ) -> Result<Output, EnvError> {
-    let mut output = search(
-        session,
-        task,
-        false,
-        &["milestone".into(), "work".into(), "track".into()],
-        &[],
-        None,
-    )?;
+    let handoff = crate::handoff::assemble(session, budget)?;
+    let mut output = if let Some(ledger) = &handoff.fallback_ledger {
+        planning_search_fallback(ledger, task)
+    } else {
+        search(
+            session,
+            task,
+            false,
+            &["milestone".into(), "work".into(), "track".into()],
+            &[],
+            None,
+        )?
+    };
     let results = output
         .result
         .get("results")
@@ -2328,8 +2340,97 @@ fn start(
                 ]),
             ));
         }
+        fields.push(("handoff".into(), handoff.value));
     }
+    output.text = format!("{}{}", handoff.text, output.text);
     Ok(output)
+}
+
+/// A deterministic ledger-only orientation when the working ledger is invalid and the
+/// handoff has deliberately fallen back to the separately parsed HEAD snapshot. The
+/// normal path remains FTS5; this path exists so an invalid overlay cannot force start to
+/// query or rebuild an index from knowledge it has just declined to trust.
+fn planning_search_fallback(ledger: &akr_core::model::Ledger, task: &str) -> Output {
+    let terms: Vec<String> = task
+        .split(|character: char| !character.is_alphanumeric())
+        .map(|term| term.to_ascii_lowercase())
+        .filter(|term| term.len() >= 3)
+        .collect();
+    let mut hits: Vec<(usize, &akr_core::model::Record)> = ledger
+        .records()
+        .iter()
+        .filter(|record| {
+            matches!(
+                record.kind,
+                akr_core::model::Kind::Milestone
+                    | akr_core::model::Kind::Work
+                    | akr_core::model::Kind::Track
+            ) && record.is_live()
+                && ledger
+                    .head(&record.id.key)
+                    .is_ok_and(|head| head.id == record.id)
+        })
+        .filter_map(|record| {
+            let searchable = format!(
+                "{} {} {}",
+                record.id.key,
+                record.title,
+                record
+                    .get(akr_core::model::ContentSlot::Intent)
+                    .map_or("", |value| match value {
+                        akr_core::model::ContentValue::Text(text)
+                        | akr_core::model::ContentValue::Prose(text) => text,
+                        _ => "",
+                    })
+            )
+            .to_ascii_lowercase();
+            let score = terms
+                .iter()
+                .filter(|term| searchable.contains(term.as_str()))
+                .count();
+            (score > 0).then_some((score, record))
+        })
+        .collect();
+    hits.sort_by(|left, right| {
+        right
+            .0
+            .cmp(&left.0)
+            .then_with(|| left.1.id.cmp(&right.1.id))
+    });
+    hits.truncate(20);
+
+    let mut text = String::new();
+    let results: Vec<Value> = hits
+        .iter()
+        .map(|(score, record)| {
+            text.push_str(&format!(
+                "  {:.2}  {}/{}  {} {}  {}\n",
+                *score as f64,
+                record.id.key,
+                record.id.revision,
+                record.kind.name(),
+                record.state.name(),
+                record.title
+            ));
+            Value::object(vec![
+                ("key", Value::string(record.id.key.to_string())),
+                ("rev", Value::integer(i64::from(record.id.revision))),
+                ("kind", Value::string(record.kind.name())),
+                ("state", Value::string(record.state.name())),
+                ("title", Value::string(record.title.clone())),
+                ("score", Value::string(format!("{:.2}", *score as f64))),
+            ])
+        })
+        .collect();
+    text.push_str(&format!("{} results\n", results.len()));
+    Output::text(text).with_result(Value::object(vec![
+        ("query", Value::string(task)),
+        ("results", Value::array(results)),
+        ("count", Value::integer(hits.len() as i64)),
+        ("index_stale", Value::bool(false)),
+        ("cache_stale", Value::bool(false)),
+        ("backend", Value::string("validated_head_fallback")),
+    ]))
 }
 
 /// A bounded, non-authoritative fallback for a task that has no ledger planning match.
@@ -2474,14 +2575,15 @@ fn start(
     paths: &[akr_core::model::Glob],
     budget: Option<usize>,
 ) -> Result<Output, EnvError> {
-    search(
-        session,
-        task,
-        false,
-        &["milestone".into(), "work".into(), "track".into()],
-        &[],
-        None,
-    )
+    let _ = paths;
+    let handoff = crate::handoff::assemble(session, budget)?;
+    let ledger = handoff.fallback_ledger.as_ref().unwrap_or(&session.ledger);
+    let mut output = planning_search_fallback(ledger, task);
+    if let Value::Object(fields) = &mut output.result {
+        fields.push(("handoff".into(), handoff.value));
+    }
+    output.text = format!("{}{}", handoff.text, output.text);
+    Ok(output)
 }
 
 /// The same command in a binary built without FTS5.

@@ -76,7 +76,7 @@ pub fn call(root: &Path, name: &str, arguments: &Value) -> Result<ToolResult, To
     match name {
         "knowledge.search" => search(root, arguments),
         "knowledge.start" => start(root, arguments),
-        "knowledge.explain" => explain(root, arguments),
+        "knowledge.explain" => explain(arguments),
         "knowledge.get" => get(root, arguments),
         "knowledge.context" => context(root, arguments),
         "knowledge.source_list" => source_list(root, arguments),
@@ -149,7 +149,7 @@ fn search(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let mut session = open(root, false)?;
     let output = commands::run(&mut session, &command).map_err(environment)?;
     let text = output.text.clone();
-    let mut structured = finish(&session, output)?;
+    let mut structured = finish(&session.sources, output)?;
     let candidates = search_planning_candidates(&session, &structured, &[]);
     let recommended_context = search_recommended_context(&structured, &[], None);
     if let Value::Object(fields) = &mut structured {
@@ -186,12 +186,12 @@ fn start(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     )
 }
 
-fn explain(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
+fn explain(arguments: &Value) -> Result<ToolResult, ToolError> {
     let subject = required_str(arguments, "subject")?;
     let command = Command::Explain {
         subject: subject.to_owned(),
     };
-    run_read(root, command)
+    run_vocabulary(command)
 }
 
 /// A JSON array of strings, or nothing.
@@ -315,7 +315,7 @@ fn context(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
         Err(error) => return Err(environment(error)),
     };
     let text = output.text.clone();
-    let structured = finish(&session, output)?;
+    let structured = finish(&session.sources, output)?;
     Ok(ToolResult::Read { text, structured })
 }
 
@@ -916,14 +916,38 @@ fn run_read(root: &Path, command: Command) -> Result<ToolResult, ToolError> {
     let mut session = open(root, false)?;
     let output = commands::run(&mut session, &command).map_err(environment)?;
     let text = output.text.clone();
-    let structured = finish(&session, output)?;
+    let structured = finish(&session.sources, output)?;
     Ok(ToolResult::Read { text, structured })
 }
 
 fn run_write(root: &Path, command: Command) -> Result<ToolResult, ToolError> {
     let mut session = open(root, true)?;
     let output = commands::run(&mut session, &command).map_err(environment)?;
-    Ok(ToolResult::Structured(finish(&session, output)?))
+    Ok(ToolResult::Structured(finish(&session.sources, output)?))
+}
+
+/// Runs a command that answers from the vocabulary tables, with no ledger open.
+///
+/// `explain` reports what a kind requires, and the moment that is worth asking is the
+/// moment a record was written wrongly — so it must not need a ledger that parses. It also
+/// has no arm in `commands::dispatch`, which is why routing it through [`run_read`] reached
+/// an `unreachable!` and the server reported `AKR-X099` instead of the schema.
+fn run_vocabulary(command: Command) -> Result<ToolResult, ToolError> {
+    let Some(result) = commands::run_standalone(&command) else {
+        return Err(ToolError {
+            class: Class::Internal,
+            summary: format!(
+                "`{}` needs a ledger and cannot be answered from the vocabulary tables",
+                command.name()
+            ),
+            diagnostics: Vec::new(),
+            wrote: false,
+        });
+    };
+    let output = result.map_err(environment)?;
+    let text = output.text.clone();
+    let structured = finish(&akr_core::diagnostics::SourceMap::new(), output)?;
+    Ok(ToolResult::Read { text, structured })
 }
 
 #[derive(Debug)]
@@ -1155,11 +1179,11 @@ fn context_candidates_as_json(candidates: &[ContextCandidate]) -> Vec<Value> {
         .collect()
 }
 
-fn finish(session: &Session, output: Output) -> Result<Value, ToolError> {
+fn finish(sources: &akr_core::diagnostics::SourceMap, output: Output) -> Result<Value, ToolError> {
     if output.exit == Exit::Ok {
         return Ok(output.result);
     }
-    let diagnostics = commands::diagnostics_json(&output.diagnostics, &session.sources);
+    let diagnostics = commands::diagnostics_json(&output.diagnostics, sources);
     let code = first_error_code(&diagnostics)
         .unwrap_or("AKR-R001")
         .to_owned();

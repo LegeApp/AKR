@@ -550,7 +550,10 @@ pub fn one_line(json: &str) -> String {
 fn binary_beside(name: &str) -> PathBuf {
     let mcp = mcp_binary();
     let dir = mcp.parent().expect("a target directory");
-    let candidate = dir.join(name);
+    // `EXE_SUFFIX` is empty on unix and `.exe` on Windows. Without it every differential
+    // test asserted its way out on Windows before running, so the one guarantee this file
+    // exists to hold — that the two surfaces agree — was never checked there at all.
+    let candidate = dir.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
     assert!(
         candidate.exists(),
         "{} is not built; run `cargo build` first",
