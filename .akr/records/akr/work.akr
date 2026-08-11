@@ -1,6 +1,47 @@
 akr 0.1
 project akr
 
+record akr.work.authoring-contracts/1 : work {
+    title "Make AKR authoring contracts discoverable before writes"
+    state proposed
+    scope [
+        path "crates/akr-cli/src/args.rs",
+        path "crates/akr-cli/src/write.rs",
+        path "crates/akr-core/src/validate/**",
+        path "crates/akr-mcp/src/record.rs",
+        path "crates/akr-mcp/src/schema.rs",
+        path "docs/**",
+        path "spec/**"
+    ]
+    intent """
+        Make CLI help, MCP schemas, and write diagnostics expose the actual per-kind slot and
+        relation contract, typed commit fields, namespace requirements, accepted `--from`
+        shape, lock-refresh next step, and scope-glob mistakes before an agent has to learn
+        them through repeated rejected or silently ineffective writes.
+        """
+    acceptance {
+        check scope-sanity {
+            statement """
+                A malformed path-prefix scope or a scope glob matching no tracked path produces an actionable authoring diagnostic.
+                """
+            method command
+        }
+        check typed-kind-contract {
+            statement """
+                Explain, MCP schemas, and AKR-T002/V-005 diagnostics identify legal per-kind slots and relations and show commit-typed fields as full Git commits.
+                """
+            method command
+        }
+        check workflow-remedies {
+            statement """
+                Papercut namespace ambiguity, stale-lock responses, CLI/MCP search naming, and propose --from help each state the exact accepted form or next command.
+                """
+            method command
+        }
+    }
+    derived_from [ @akr.papercut.collated-18-papercuts-from-evidence-intake/1 ]
+}
+
 record akr.work.context-import-provenance-hardening/1 : work {
     title "Harden context budgets, plan import, and build provenance"
     state completed
@@ -166,6 +207,39 @@ record akr.work.mcp-help-and-format-cleanup/1 : work {
     intent """
         Preserve AKR's explicit initialization and read/write separation while making MCP environment errors actionable, then restore repository-wide rustfmt cleanliness without semantic changes.
         """
+}
+
+record akr.work.mcp-transport-reliability/1 : work {
+    title "Make MCP sessions survive sustained mixed AKR use"
+    state proposed
+    scope [ path "crates/akr-mcp/**", path "docs/08-mcp.md" ]
+    intent """
+        Reproduce and eliminate the recurrent sister-project `Transport closed` failures seen
+        after successful reads and writes. Cover the installed connector process, not only an
+        in-memory protocol loop, and preserve a useful structured failure if the server must
+        terminate.
+        """
+    acceptance {
+        check installed-session-stress {
+            statement """
+                An installed MCP subprocess survives a sustained mixed sequence of explain, context, revise, validate, and papercut calls including rejected requests.
+                """
+            method command
+        }
+        check sister-reproduction {
+            statement """
+                The reported multi-write failure pattern is either reproduced and fixed or ruled out with captured connector-level evidence.
+                """
+            method manual
+        }
+        check termination-diagnostic {
+            statement """
+                Any intentional MCP termination is reported with a durable diagnostic and reconnect remedy rather than an unexplained closed transport.
+                """
+            method command
+        }
+    }
+    derived_from [ @akr.papercut.collated-18-papercuts-from-evidence-intake/1 ]
 }
 
 record akr.work.p10-external-sources/1 : work {
@@ -429,6 +503,90 @@ record akr.work.papercut-collation-followthrough/1 : work {
     implements [ @akr.decision.papercut-subject-and-collation ]
 }
 
+record akr.work.papercut-reconciliation/1 : work {
+    title "Reconcile collated AKR papercuts with current behavior"
+    state superseded
+    scope [
+        path ".akr/records/akr/**",
+        path "crates/akr-cli/**",
+        path "crates/akr-core/**",
+        path "crates/akr-mcp/**",
+        path "docs/**",
+        path "spec/**"
+    ]
+    intent """
+        Classify the AKR-specific sister-project papercuts against the current implementation,
+        tests, decisions, and work history. Close the loop on behavior already fixed, preserve
+        unresolved reports as explicit tracked work, and restore any implemented decisions
+        whose lifecycle state no longer reflects their evidence.
+        """
+    acceptance {
+        check actionable-tracked {
+            statement """
+                Each unresolved actionable cluster is represented by a live planning record with bounded acceptance.
+                """
+            method manual
+        }
+        check classified {
+            statement """
+                Every AKR-specific report in the latest collation has an explicit current disposition and supporting basis.
+                """
+            method manual
+        }
+        check ledger-valid {
+            statement """
+                The reconciled ledger and generated projections validate cleanly.
+                """
+            method command
+            command "target/debug/akr check --views-current"
+        }
+    }
+}
+
+record akr.work.papercut-reconciliation/2 : work {
+    title "Reconcile collated AKR papercuts with current behavior"
+    state completed
+    scope [
+        path ".akr/records/akr/**",
+        path "crates/akr-cli/**",
+        path "crates/akr-core/**",
+        path "crates/akr-mcp/**",
+        path "docs/**",
+        path "spec/**"
+    ]
+    intent """
+        Classify the AKR-specific sister-project papercuts against the current implementation,
+        tests, decisions, and work history. Close the loop on behavior already fixed, preserve
+        unresolved reports as explicit tracked work, and restore any implemented decisions
+        whose lifecycle state no longer reflects their evidence.
+        """
+    acceptance {
+        check actionable-tracked {
+            statement """
+                Each unresolved actionable cluster is represented by a live planning record with bounded acceptance.
+                """
+            method manual
+            verified_by [ @akr.evidence.papercut-reconciliation-classification/1 ]
+        }
+        check classified {
+            statement """
+                Every AKR-specific report in the latest collation has an explicit current disposition and supporting basis.
+                """
+            method manual
+            verified_by [ @akr.evidence.papercut-reconciliation-classification/1 ]
+        }
+        check ledger-valid {
+            statement """
+                The reconciled ledger and generated projections validate cleanly.
+                """
+            method command
+            command "target/debug/akr check --views-current"
+            verified_by [ @akr.evidence.papercut-reconciliation-validation/1 ]
+        }
+    }
+    supersedes [ @akr.work.papercut-reconciliation/1 ]
+}
+
 record akr.work.post-commit-validation/1 : work {
     title "Make AKR commits validate after Git advances"
     state superseded
@@ -529,6 +687,48 @@ record akr.work.reduce-knowledge-write-latency/1 : work {
         """
 }
 
+record akr.work.reference-supersession-consistency/1 : work {
+    title "Align context and supersession reference contracts"
+    state proposed
+    scope [
+        path "crates/akr-cli/src/write.rs",
+        path "crates/akr-core/src/context/**",
+        path "crates/akr-core/src/ops/**",
+        path "crates/akr-mcp/src/schema.rs",
+        path "crates/akr-mcp/src/tools.rs",
+        path "docs/04-references-and-versioning.md",
+        path "docs/07-cli.md",
+        path "docs/08-mcp.md"
+    ]
+    intent """
+        Remove surface contradictions around canonical references and replacement: context
+        should either normalize or precisely reject pinned and terminal planning references,
+        and advertised different-key supersession must be implemented atomically or removed
+        from the public contract with a supported two-step replacement workflow.
+        """
+    acceptance {
+        check context-reference-contract {
+            statement """
+                knowledge.get and knowledge.context document and test their treatment of all four reference forms, including pinned and terminal planning records.
+                """
+            method command
+        }
+        check different-key-contract {
+            statement """
+                knowledge.supersede new_key and CLI --with either work atomically for a different key or no longer advertise unsupported behavior.
+                """
+            method command
+        }
+        check recovery-guidance {
+            statement """
+                Rejected references and replacements return a ready-made supported next call.
+                """
+            method command
+        }
+    }
+    derived_from [ @akr.papercut.collated-18-papercuts-from-evidence-intake/1 ]
+}
+
 record akr.work.resolve-collated-papercuts/1 : work {
     title "Resolve newly collated AKR papercuts"
     state completed
@@ -558,6 +758,46 @@ record akr.work.review-snapshot/1 : work {
         }
     }
     part_of [ @akr.milestone.human-record-review/1 ]
+}
+
+record akr.work.revise-lifecycle-semantics/1 : work {
+    title "Preserve requested lifecycle state across revisions"
+    state proposed
+    scope [
+        path "crates/akr-cli/src/write.rs",
+        path "crates/akr-core/src/ops/**",
+        path "crates/akr-mcp/src/tools.rs",
+        path "crates/akr-mcp/tests/writes.rs",
+        path "docs/07-cli.md",
+        path "docs/08-mcp.md"
+    ]
+    intent """
+        Make sealed-record revision behavior explicit and correct: a requested state must land
+        on the new revision, while a content-only revision must follow one documented state
+        policy consistently across CLI and MCP instead of accidentally returning accepted
+        records to `proposed`.
+        """
+    acceptance {
+        check content-state-policy {
+            statement """
+                Content-only revisions of sealed records preserve or deliberately reset lifecycle state according to one documented, tested policy.
+                """
+            method command
+        }
+        check ready-to-active {
+            statement """
+                knowledge.revise on a ready planning head with state active creates a new active head and retires the old revision atomically.
+                """
+            method command
+        }
+        check surfaces-agree {
+            statement """
+                CLI and MCP lifecycle revision tests agree on the new revision's state and returned revision identifier.
+                """
+            method command
+        }
+    }
+    derived_from [ @akr.papercut.collated-18-papercuts-from-evidence-intake/1 ]
 }
 
 record akr.work.runtime-hardening/1 : work {

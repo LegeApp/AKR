@@ -1,0 +1,129 @@
+akr 0.1
+project akr
+
+record akr.assessment.papercut-reconciliation-2026-08-11/1 : assessment {
+    title "Latest AKR papercuts separate into verified fixes and four live clusters"
+    state superseded
+    scope [
+        path "crates/akr-cli/**",
+        path "crates/akr-core/**",
+        path "crates/akr-mcp/**",
+        path "docs/**",
+        path "spec/**"
+    ]
+    statement """
+        Reconciliation of @akr.papercut.collated-18-papercuts-from-evidence-intake/1 at
+        ff0170d6ffe2f5b1d55eb63f6c8ae469bd36cff6 produced these dispositions.
+
+        RESOLVED AND EVIDENCED: the knowledge.explain crash is covered by CLI/MCP differential
+        tests; subject-scoped papercut collation, MCP budget handling and validation paging,
+        stale search-cache refresh, all generated view renderers, Git history batching, strict
+        AKR-G004 handling, and co-committed evidence/post-commit view convergence are covered by
+        their existing decisions and passing evidence. The decisions
+        @akr.decision.papercut-subject-and-collation/2 and
+        @akr.decision.mcp-budgeted-and-instrumented/2 were implemented but accidentally left
+        proposed and should be active. The two local post-commit papercuts are resolved by
+        ff0170d6.
+
+        PARTIALLY RESOLVED, RETAINED IN AUTHORING CONTRACTS: papercut namespace requirements
+        are now in CLI help and the MCP schema; CLI writes now name `akr build` when the lock
+        becomes stale; required slots are present in the kind schema. The remaining reports
+        are still valid because optional slot types, per-kind relations, AKR-T002 suggestions,
+        observation provenance, malformed/zero-match scope globs, MCP lock-remedy output,
+        `--from` shape, and CLI/MCP naming are not yet consistently discoverable.
+
+        LIVE CORRECTNESS/RELIABILITY: recurrent connector-level Transport closed reports are
+        not disproved by the in-memory thousand-frame protocol test; they require installed
+        subprocess stress. MCP revise currently constructs a replacement state but the core
+        sealed-revision path resets the new head to the class initial state unless Edits.state
+        is separately set, matching the ready-to-active and active-decision reports. Context
+        still rejects pinned goals while get accepts them, and different-key supersession is
+        still advertised by the MCP schema but rejected by the implementation.
+
+        TRACKED: the surviving work is now represented by
+        @akr.work.mcp-transport-reliability,
+        @akr.work.authoring-contracts,
+        @akr.work.revise-lifecycle-semantics, and
+        @akr.work.reference-supersession-consistency.
+        """
+    confidence high
+    as_of git:ff0170d6ffe2f5b1d55eb63f6c8ae469bd36cff6
+    derived_from [
+        @akr.papercut.collated-18-papercuts-from-evidence-intake/1,
+        @akr.papercut.collated-18-papercuts-from-kitchen-concept-lege/1
+    ]
+}
+
+record akr.assessment.papercut-reconciliation-2026-08-11/2 : assessment {
+    title "Latest AKR papercuts separate into verified fixes and four live clusters"
+    state verified
+    scope [
+        path "crates/akr-cli/**",
+        path "crates/akr-core/**",
+        path "crates/akr-mcp/**",
+        path "docs/**",
+        path "spec/**"
+    ]
+    statement """
+        Reconciliation of @akr.papercut.collated-18-papercuts-from-evidence-intake/1 at
+        ff0170d6ffe2f5b1d55eb63f6c8ae469bd36cff6 produced these dispositions.
+
+        RESOLVED AND EVIDENCED: the knowledge.explain crash is covered by CLI/MCP differential
+        tests; subject-scoped papercut collation, MCP budget handling and validation paging,
+        stale search-cache refresh, all generated view renderers, Git history batching, strict
+        AKR-G004 handling, and co-committed evidence/post-commit view convergence are covered by
+        their existing decisions and passing evidence. The decisions
+        @akr.decision.papercut-subject-and-collation/2 and
+        @akr.decision.mcp-budgeted-and-instrumented/2 were implemented but accidentally left
+        proposed and should be active. The two local post-commit papercuts are resolved by
+        ff0170d6.
+
+        PARTIALLY RESOLVED, RETAINED IN AUTHORING CONTRACTS: papercut namespace requirements
+        are now in CLI help and the MCP schema; CLI writes now name `akr build` when the lock
+        becomes stale; required slots are present in the kind schema. The remaining reports
+        are still valid because optional slot types, per-kind relations, AKR-T002 suggestions,
+        observation provenance, malformed/zero-match scope globs, MCP lock-remedy output,
+        `--from` shape, and CLI/MCP naming are not yet consistently discoverable.
+
+        LIVE CORRECTNESS/RELIABILITY: recurrent connector-level Transport closed reports are
+        not disproved by the in-memory thousand-frame protocol test; they require installed
+        subprocess stress. MCP revise currently constructs a replacement state but the core
+        sealed-revision path resets the new head to the class initial state unless Edits.state
+        is separately set, matching the ready-to-active and active-decision reports. Context
+        still rejects pinned goals while get accepts them, and different-key supersession is
+        still advertised by the MCP schema but rejected by the implementation.
+
+        TRACKED: the surviving work is now represented by
+        @akr.work.mcp-transport-reliability,
+        @akr.work.authoring-contracts,
+        @akr.work.revise-lifecycle-semantics, and
+        @akr.work.reference-supersession-consistency.
+
+        REPORT-BY-REPORT DISPOSITION (in collation order):
+        1 scope term containing a rendered `path` prefix — live, authoring-contracts;
+        2 explain AKR-X099 — crash resolved, valid-slot feedback remains authoring-contracts;
+        3 write leaves lock stale — CLI remedy resolved, MCP remedy remains authoring-contracts;
+        4 Lege transport closure plus explain identifier mismatch — transport-reliability and authoring-contracts;
+        5 papercut namespace retry — resolved by schema and CLI help;
+        6 ready-to-active revise created proposed head — live, revise-lifecycle-semantics;
+        7 per-kind slots/relations and commit type retries — live, authoring-contracts;
+        8 pinned context goal rejected — live, reference-supersession-consistency;
+        9 different-key supersession rejected — live, reference-supersession-consistency;
+        10 active decision content revision became proposed — live, revise-lifecycle-semantics;
+        11 SaveYourSkin repeated transport closure — live, transport-reliability;
+        12 observation observed_at type omitted — live, authoring-contracts;
+        13 verified observation provenance/command mismatch — live, authoring-contracts;
+        14 assessment as_of type omitted — live, authoring-contracts;
+        15 propose --from body shape misleading — live, authoring-contracts;
+        16 raw-autotune explain/papercut transport closure — live, transport-reliability;
+        17 CLI/MCP search argument mismatch — live low-severity, authoring-contracts;
+        18 raw-autotune context transport closure — live, transport-reliability.
+        """
+    confidence high
+    as_of git:ff0170d6ffe2f5b1d55eb63f6c8ae469bd36cff6
+    derived_from [
+        @akr.papercut.collated-18-papercuts-from-evidence-intake/1,
+        @akr.papercut.collated-18-papercuts-from-kitchen-concept-lege/1
+    ]
+    supersedes [ @akr.assessment.papercut-reconciliation-2026-08-11/1 ]
+}

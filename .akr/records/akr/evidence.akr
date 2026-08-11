@@ -216,6 +216,30 @@ record akr.evidence.p11-change-protocol-suite/1 : evidence {
         """
 }
 
+record akr.evidence.papercut-reconciliation-classification/1 : evidence {
+    title "All 18 reports were reviewed against current implementation, docs, tests, decisions, and work history; each is explicitly classified in assessment akr.assessment.papercut-reconciliation-2026-08-11/2 and every surviving cluster has a live work record."
+    state verified
+    result pass
+    method manual
+    observed_at git:ff0170d6ffe2f5b1d55eb63f6c8ae469bd36cff6
+    artifact ".akr/records/akr/assessments.akr"
+    summary """
+        All 18 reports were reviewed against current implementation, docs, tests, decisions, and work history; each is explicitly classified in assessment akr.assessment.papercut-reconciliation-2026-08-11/2 and every surviving cluster has a live work record.
+        """
+}
+
+record akr.evidence.papercut-reconciliation-validation/1 : evidence {
+    title "MCP, CLI, change-protocol, renderer, worked-example, and reconciled-ledger validation passed."
+    state verified
+    result pass
+    method command
+    observed_at git:ff0170d6ffe2f5b1d55eb63f6c8ae469bd36cff6
+    command "cargo test -p akr-mcp --all-targets && cargo test -p akr-cli --test commands --test search --test change_protocol && cargo test -p akr-core --test worked_example --test render_roadmap && target/debug/akr build && target/debug/akr check --views-current"
+    summary """
+        MCP, CLI, change-protocol, renderer, worked-example, and reconciled-ledger validation passed.
+        """
+}
+
 record akr.evidence.papercut-subject-suite/1 : evidence {
     title "papercut about-subject and collation suite"
     state verified
