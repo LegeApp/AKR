@@ -299,8 +299,15 @@ impl Session {
         let (Some(repository), Some(commit)) = (&self.repository, &self.commit) else {
             return ReviewQueue::default();
         };
-        akr_core::freshness::derive(&self.ledger, repository, commit, self.today)
-            .unwrap_or_default()
+        let mut queue = akr_core::freshness::derive(&self.ledger, repository, commit, self.today)
+            .unwrap_or_default();
+        if let Ok(mut diagnostics) =
+            akr_core::freshness::unmatched_watches(&self.ledger, repository, commit)
+        {
+            queue.diagnostics.append(&mut diagnostics);
+            queue.diagnostics.sort_by_key(Diagnostic::sort_key);
+        }
+        queue
     }
 
     /// The freshness a renderer needs.
@@ -416,7 +423,7 @@ pub fn is_fatal(diagnostic: &Diagnostic, profile: Profile) -> bool {
     // `--lenient` and lose every other strict signal along with this one — which is
     // exactly what was reported from a real session
     // (`jpegxl-rs.papercut.akr-check-strict-exits-1-on-akr-g004-alone-when`).
-    if diagnostic.code.as_str() == "AKR-G004" {
+    if matches!(diagnostic.code.as_str(), "AKR-G004" | "AKR-G023") {
         return false;
     }
     match profile {

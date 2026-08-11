@@ -460,7 +460,9 @@ akr context --goal <key> [--paths <glob> ...] [--budget <tokens>]
 Assembles the deterministic context bundle specified in
 [`09-context-assembly.md`](09-context-assembly.md). The `--goal` must be a live
 `milestone`, `work` or `track` record: unresolvable is `AKR-X001`, terminal is
-`AKR-X002`, wrong kind is `AKR-X003`. A malformed `--paths` glob is `AKR-X011`; one that
+`AKR-X002`, wrong kind is `AKR-X003`. A pin to the current head is normalized; an older
+pin is `AKR-X004`, and an anchored reference is `AKR-X005`, both with retrieval guidance.
+A malformed `--paths` glob is `AKR-X011`; one that
 matches nothing is `AKR-X012` (warning). A budget too small for the mandatory sections is
 `AKR-X021`; prose truncation is `AKR-X022` (warning).
 
@@ -624,7 +626,8 @@ Because every write changes a record's canonical text, it changes its content ha
 a *build* (D-014) and no write operation may invent one.
 
 `--state` moves the new revision along its class's lifecycle. An illegal transition is
-`AKR-T011` (V-007).
+`AKR-T011` (V-007). If `--state` is omitted while changing sealed content, the successor
+starts `proposed` so the changed knowledge must be accepted again.
 
 ---
 
@@ -634,8 +637,10 @@ a *build* (D-014) and no write operation may invent one.
 akr supersede <old-key> --with <new-key> [--disposition <child>=<outcome>[:<into>] ...]
 ```
 
-Creates or updates the superseding record with a `supersedes` edge, moves the old head
-to `superseded`, and — for planning records — requires a `disposition` block for every
+With a different key, the replacement must already exist as a `proposed` record of the
+same kind: propose its complete body first, then run this command. The second step adds
+the pinned `supersedes` edge and moves the old head to `superseded`; for planning records
+it also requires a `disposition` block for every
 unfinished `part_of` child of the old record (D-017).
 
 The command **lists the children it needs a disposition for and refuses to write until

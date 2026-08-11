@@ -77,6 +77,10 @@ history reads top to bottom in one diff.
 to `proposed`, adds `supersedes [ @key/N-1 ]`, **and moves revision N-1 to
 `superseded` in the same write**.
 
+An explicit `--state` is applied to the successor instead of that `proposed` default.
+Omitting it during a content revision is deliberate re-acceptance: changed settled
+knowledge is proposed again rather than silently remaining binding.
+
 Retiring the old revision is not optional and cannot be deferred. Leaving both live is two
 live heads, which V-012 rejects, and `docs/07` §4 refuses to write a ledger that does not
 validate — so a `revise` that left the old head live could never write at all. The two

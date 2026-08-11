@@ -88,8 +88,17 @@ pub fn run(session: &Session, command: &Command) -> Result<Output, EnvError> {
             {
                 edits.replace_with = Some(Box::new(record));
             }
-            let _ = dispositions;
-            render(session, akr_core::ops::revise(&context, &key, mode, &edits))
+            let dispositions = parse_dispositions(dispositions)?;
+            render(
+                session,
+                akr_core::ops::revise_with_dispositions(
+                    &context,
+                    &key,
+                    mode,
+                    &edits,
+                    &dispositions,
+                ),
+            )
         }
         Command::Supersede {
             key,
@@ -97,25 +106,15 @@ pub fn run(session: &Session, command: &Command) -> Result<Output, EnvError> {
             dispositions,
         } => {
             let key = parse_key(key)?;
-            // `--with` names the superseding key. When it is the same key — the common
-            // case, and the one §6's sample shows — it is redundant, and when it differs
-            // the operation is a proposal plus a supersession, which P6c does not fuse.
-            if let Some(with) = with
-                && parse_key(with)? != key
-            {
-                return Err(EnvError::new(
-                    "AKR-C004",
-                    format!(
-                        "--with {with}: superseding a key with a different key is not yet supported"
-                    ),
-                )
-                .help("propose the new key first, then `akr supersede` the old one"));
-            }
+            let replacement = with.as_deref().map(parse_key).transpose()?;
             let dispositions = parse_dispositions(dispositions)?;
-            render(
-                session,
-                akr_core::ops::supersede(&context, &key, &dispositions),
-            )
+            let result = match replacement {
+                Some(replacement) if replacement != key => {
+                    akr_core::ops::supersede_with(&context, &key, &replacement, &dispositions)
+                }
+                _ => akr_core::ops::supersede(&context, &key, &dispositions),
+            };
+            render(session, result)
         }
         Command::Complete { key, checks } => {
             let key = parse_key(key)?;

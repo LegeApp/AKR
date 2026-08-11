@@ -232,6 +232,33 @@ fn revise_creates_a_new_revision_from_a_sealed_head() {
 }
 
 #[test]
+fn revise_applies_an_explicit_state_to_the_new_revision_of_a_sealed_head() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir());
+    let target = key("sys.work.m3-audio-pass");
+
+    ops::revise(
+        &context,
+        &target,
+        ReviseMode::Auto,
+        &Edits {
+            state: Some(State::Active),
+            ..Edits::default()
+        },
+    )
+    .expect("the requested lifecycle state lands on the successor");
+
+    let after = sandbox.ledger();
+    let head = after.head(&target).expect("the successor head");
+    assert_eq!(head.id.revision, 2);
+    assert_eq!(head.state, State::Active);
+    let first = after
+        .get(&akr_core::model::RevisionId::new(target, 1))
+        .expect("the retired ready revision");
+    assert_eq!(first.state, State::Superseded);
+}
+
+#[test]
 fn revise_refuses_an_in_place_edit_of_a_sealed_head() {
     let sandbox = Sandbox::save_your_skin();
     let context = WriteContext::new(sandbox.akr_dir());
@@ -388,6 +415,56 @@ fn supersede_demands_nothing_when_no_child_pins_the_head() {
             .id
             .revision,
         3
+    );
+}
+
+#[test]
+fn supersede_with_links_an_already_proposed_replacement_key_atomically() {
+    let sandbox = Sandbox::save_your_skin();
+    let context = WriteContext::new(sandbox.akr_dir()).with_author("tester");
+    let old_key = key("sys.term.legacy-session");
+    let new_key = key("sys.term.playable-session");
+    ops::propose(
+        &context,
+        &old_key,
+        Kind::Term,
+        "Legacy session",
+        Some(term("sys.term.legacy-session", "Legacy session")),
+    )
+    .expect("the old term can be introduced without existing dependants");
+    ops::revise(
+        &context,
+        &old_key,
+        ReviseMode::InPlace,
+        &Edits {
+            state: Some(State::Active),
+            ..Edits::default()
+        },
+    )
+    .expect("the old term is accepted before replacement");
+    ops::propose(
+        &context,
+        &new_key,
+        Kind::Term,
+        "Playable session",
+        Some(term("sys.term.playable-session", "Playable session")),
+    )
+    .expect("the replacement is reviewed as a proposal first");
+
+    let applied = ops::supersede_with(&context, &old_key, &new_key, &[])
+        .expect("the graph transition is atomic");
+    assert_eq!(applied.changes.len(), 2);
+
+    let ledger = sandbox.ledger();
+    assert_eq!(
+        ledger.head(&old_key).expect("old head").state,
+        State::Superseded
+    );
+    let replacement = ledger.head(&new_key).expect("replacement head");
+    assert_eq!(replacement.state, State::Proposed);
+    assert_eq!(
+        replacement.targets(akr_core::model::Relation::Supersedes),
+        &[Reference::pinned(old_key, 1)]
     );
 }
 

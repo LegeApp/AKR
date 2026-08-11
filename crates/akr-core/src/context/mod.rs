@@ -53,6 +53,15 @@ pub enum ContextError {
         /// Its kind.
         kind: Kind,
     },
+    /// A pinned goal does not name the current head (`AKR-X004`).
+    GoalRevision {
+        /// The requested revision.
+        requested: RevisionId,
+        /// The current head.
+        head: RevisionId,
+    },
+    /// A context goal may not select a claim or check anchor (`AKR-X005`).
+    GoalAnchor(String),
     /// A `--paths` glob is not in the D-008 subset (`AKR-X011`).
     BadPath {
         /// The glob.
@@ -80,6 +89,14 @@ impl std::fmt::Display for ContextError {
                 f,
                 "--goal {} is a {kind}; a bundle anchors on a milestone, work or track record",
                 id.key
+            ),
+            Self::GoalRevision { requested, head } => write!(
+                f,
+                "--goal {requested} is not the current head, which is {head}"
+            ),
+            Self::GoalAnchor(goal) => write!(
+                f,
+                "--goal {goal} selects an anchor; a bundle anchors on a planning record"
             ),
             Self::BadPath { glob, reason } => write!(f, "--paths {glob}: {reason}"),
             Self::BudgetTooSmall { budget, required } => write!(
@@ -355,11 +372,22 @@ pub fn assemble(
     }
 
     // -- step 1: the goal ------------------------------------------------------------
-    let goal_key = crate::model::LogicalKey::parse(request.goal.trim_start_matches('@'))
+    let goal_ref = crate::model::Reference::parse(request.goal.trim_start_matches('@'))
         .map_err(|_| ContextError::GoalUnresolved(request.goal.clone()))?;
+    if goal_ref.anchor.is_some() {
+        return Err(ContextError::GoalAnchor(request.goal.clone()));
+    }
     let goal = ledger
-        .head(&goal_key)
+        .head(&goal_ref.key)
         .map_err(|_| ContextError::GoalUnresolved(request.goal.clone()))?;
+    if let Some(revision) = goal_ref.revision
+        && revision != goal.id.revision
+    {
+        return Err(ContextError::GoalRevision {
+            requested: RevisionId::new(goal_ref.key, revision),
+            head: goal.id.clone(),
+        });
+    }
     if !goal.is_live() {
         return Err(ContextError::GoalTerminal {
             id: goal.id.clone(),

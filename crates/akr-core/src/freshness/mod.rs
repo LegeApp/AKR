@@ -406,6 +406,32 @@ pub fn unmatched_watches(
                 );
             }
         }
+        for term in &record.scope {
+            let crate::model::ScopeTerm::Path(glob) = term else {
+                continue;
+            };
+            if validate_glob(glob).is_err() {
+                continue;
+            }
+            if repository.is_ignored(glob.as_str())? {
+                continue;
+            }
+            if !listing.iter().any(|path| glob_matches(glob, path)) {
+                out.push(
+                    Diagnostic::warning(
+                        codes::G023,
+                        crate::git::V102,
+                        Subject::Revision(record.id.clone()),
+                        format!(
+                            "{}: scope path {:?} matches no tracked path at {head}",
+                            record.id,
+                            glob.as_str()
+                        ),
+                    )
+                    .help("check for a copied `path ` prefix or a moved path; an unmatched scope cannot govern or become stale with its intended code"),
+                );
+            }
+        }
     }
     out.sort_by_key(Diagnostic::sort_key);
     Ok(out)

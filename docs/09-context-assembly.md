@@ -67,7 +67,7 @@ akr context --goal <key> [--paths <glob> ...] [--budget <tokens>] [--format text
 
 | Parameter | Required | Meaning |
 | --- | --- | --- |
-| `--goal` | yes | The anchor. Must resolve (`AKR-X001`), must be live (`AKR-X002`), must be a `milestone`, `work` or `track` record (`AKR-X003`). |
+| `--goal` | yes | The anchor. Bare keys, `@key`, and a pin to the current head are accepted. Historical pins (`AKR-X004`), anchors (`AKR-X005`), terminal records (`AKR-X002`), and non-planning kinds (`AKR-X003`) remain retrieval-only and return a ready-made next command. |
 | `--paths` | no | Repeatable. Repo-root-relative globs, D-008 subset. Malformed is `AKR-X011`; matching nothing at HEAD is `AKR-X012` (warning). These are the files the caller expects to touch. |
 | `--budget` | no | Approximate token budget. §6. Too small is `AKR-X021`. |
 | `--format` | no | `text` (default) or `json`. Anything else is `AKR-X041`. |

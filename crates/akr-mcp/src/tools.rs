@@ -620,17 +620,31 @@ fn revise(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
         &merged(arguments, head),
     )?;
     let replacement = record::parse(&source, &parsed)?;
+    let requested_state = arguments
+        .get("state")
+        .and_then(Value::as_str)
+        .map(|_| replacement.state);
 
     let edits = akr_core::ops::Edits {
         title: Some(title.to_owned()),
-        state: None,
+        // `ops::revise` deliberately resets a content-only revision of a sealed head to
+        // the class initial state. An explicit lifecycle request is different: carry it
+        // separately so the new revision lands in the state the caller asked for.
+        state: requested_state,
         replace_with: Some(Box::new(replacement)),
     };
+    let dispositions = dispositions(arguments)?;
     let context = write_context(&session);
     Ok(ToolResult::Structured(write_result(
         &session,
         &parsed,
-        akr_core::ops::revise(&context, &parsed, akr_core::ops::ReviseMode::Auto, &edits),
+        akr_core::ops::revise_with_dispositions(
+            &context,
+            &parsed,
+            akr_core::ops::ReviseMode::Auto,
+            &edits,
+            &dispositions,
+        ),
     )?))
 }
 
@@ -638,20 +652,37 @@ fn supersede(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let session = open(root, true)?;
     let key = required_str(arguments, "old_key")?;
     let parsed = key_of(key)?;
-    if let Some(new_key) = arguments.get("new_key").and_then(Value::as_str)
-        && key_of(new_key)? != parsed
-    {
+    let replacement = arguments
+        .get("new_key")
+        .and_then(Value::as_str)
+        .map(key_of)
+        .transpose()?
+        .unwrap_or_else(|| parsed.clone());
+    if replacement != parsed && session.ledger.head(&replacement).is_err() {
+        return Err(ToolError::new(
+            "AKR-L001",
+            format!(
+                "replacement {replacement} does not exist; create it with knowledge.propose, then retry knowledge.supersede"
+            ),
+        ));
+    }
+    if arguments.get("slots").is_some() {
         return Err(ToolError::new(
             "AKR-C004",
-            "superseding a key with a different key is not supported in 0.1",
+            "knowledge.supersede does not author content; use knowledge.revise for the same key or knowledge.propose for a different replacement, then omit `slots` here",
         ));
     }
     let dispositions = dispositions(arguments)?;
     let context = write_context(&session);
+    let result = if replacement == parsed {
+        akr_core::ops::supersede(&context, &parsed, &dispositions)
+    } else {
+        akr_core::ops::supersede_with(&context, &parsed, &replacement, &dispositions)
+    };
     Ok(ToolResult::Structured(write_result(
         &session,
-        &parsed,
-        akr_core::ops::supersede(&context, &parsed, &dispositions),
+        &replacement,
+        result,
     )?))
 }
 
@@ -1246,6 +1277,20 @@ fn write_result(
                 ("written", Value::bool(true)),
                 ("lock_stale", Value::bool(applied.lock_stale)),
             ];
+            if applied.lock_stale {
+                fields.push((
+                    "next",
+                    Value::object(vec![
+                        ("command", Value::string("akr build")),
+                        (
+                            "reason",
+                            Value::string(
+                                "refresh akr.lock and generated views before knowledge.validate",
+                            ),
+                        ),
+                    ]),
+                ));
+            }
             // §4's `state` and `content_hash` describe the revision that just landed, so
             // they have to come from a workspace read *after* the write. Reload only the
             // ledger bytes: `Session::open` also derives Git freshness facts and used to
@@ -1370,14 +1415,27 @@ fn write_many_result(
             Value::object(fields)
         })
         .collect();
-    Ok(Value::object(vec![
+    let mut fields = vec![
         ("evidence", Value::array(entries)),
         (
             "written",
             Value::integer(i64::try_from(applied.changes.len()).unwrap_or(i64::MAX)),
         ),
         ("lock_stale", Value::bool(applied.lock_stale)),
-    ]))
+    ];
+    if applied.lock_stale {
+        fields.push((
+            "next",
+            Value::object(vec![
+                ("command", Value::string("akr build")),
+                (
+                    "reason",
+                    Value::string("refresh akr.lock and generated views before knowledge.validate"),
+                ),
+            ]),
+        ));
+    }
+    Ok(Value::object(fields))
 }
 
 fn diagnostic_json(diagnostic: &akr_core::diagnostics::Diagnostic) -> Value {

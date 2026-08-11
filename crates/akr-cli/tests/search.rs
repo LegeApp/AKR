@@ -67,6 +67,19 @@ fn zero_results_is_an_answer_and_exits_zero() {
 }
 
 #[test]
+fn query_flag_is_an_alias_for_the_positional_query() {
+    let example = Example::materialise("search-query-alias");
+    let positional = example.run(&["search", "playable day"]);
+    let flagged = example.run(&["search", "--query", "playable day"]);
+    assert_eq!(flagged.code, 0, "{}", flagged.output());
+    assert_eq!(flagged.stdout, positional.stdout);
+
+    let both = example.run(&["search", "playable day", "--query", "other"]);
+    assert_eq!(both.code, 2, "{}", both.output());
+    assert!(both.output().contains("not both"));
+}
+
+#[test]
 fn filters_are_applied_before_ranking() {
     let example = Example::materialise("search-filters");
     assert_eq!(example.run(&["build"]).code, 0);

@@ -401,6 +401,20 @@ pub fn revise(
     mode: ReviseMode,
     edits: &Edits,
 ) -> WriteResult {
+    revise_with_dispositions(context, key, mode, edits, &[])
+}
+
+/// Revises a record while dispositioning unfinished children of a sealed planning head.
+///
+/// This is the write-surface form of [`revise`]; the simpler function remains for callers
+/// that know no pinned unfinished children exist.
+pub fn revise_with_dispositions(
+    context: &WriteContext,
+    key: &LogicalKey,
+    mode: ReviseMode,
+    edits: &Edits,
+    dispositions: &[DispositionRequest],
+) -> WriteResult {
     let mut staged = load(context, Operation::Revise)?;
     let head = head_of(&staged, key, Operation::Revise)?.clone();
     let file = file_of(&staged, &head.id, Operation::Revise)?;
@@ -435,7 +449,14 @@ pub fn revise(
         if let Some(state) = edits.state {
             record.state = state;
         }
-        return retire_and_replace(context, &mut staged, Operation::Revise, &head, record, &[]);
+        return retire_and_replace(
+            context,
+            &mut staged,
+            Operation::Revise,
+            &head,
+            record,
+            dispositions,
+        );
     }
 
     let mut record = edited(&head, edits);
@@ -571,6 +592,105 @@ pub fn supersede(
         &head,
         record,
         dispositions,
+    )
+}
+
+/// Retires one key in favour of an already-proposed head under another key.
+///
+/// The replacement is proposed separately so its complete body, title and scope can be
+/// reviewed before this atomic graph transition. This operation adds the pinned
+/// `supersedes` edge, retires the old head, and applies planning dispositions together.
+///
+/// # Errors
+/// Refuses unless both keys resolve, the replacement is a distinct proposed head of the
+/// same kind, every unfinished planning child is dispositioned, and the result validates.
+pub fn supersede_with(
+    context: &WriteContext,
+    old_key: &LogicalKey,
+    new_key: &LogicalKey,
+    dispositions: &[DispositionRequest],
+) -> WriteResult {
+    if old_key == new_key {
+        return supersede(context, old_key, dispositions);
+    }
+
+    let mut staged = load(context, Operation::Supersede)?;
+    let old = head_of(&staged, old_key, Operation::Supersede)?.clone();
+    let mut replacement = head_of(&staged, new_key, Operation::Supersede)?.clone();
+
+    if old.kind != replacement.kind {
+        return Err(Refused::new(
+            Operation::Supersede,
+            codes::L031,
+            format!(
+                "{} is a {}, but replacement {} is a {}; `supersedes` replaces like with like",
+                old.id, old.kind, replacement.id, replacement.kind
+            ),
+        ));
+    }
+    if replacement.state != State::Proposed {
+        return Err(Refused::new(
+            Operation::Supersede,
+            cli::C032,
+            format!(
+                "replacement {} is sealed ({}); propose a new replacement key first",
+                replacement.id, replacement.state
+            ),
+        ));
+    }
+
+    if old.kind.class() == Class::Planning {
+        let children = unfinished_children(&staged, &old.id);
+        let supplied: BTreeSet<&LogicalKey> = dispositions.iter().map(|d| &d.child).collect();
+        let missing: Vec<UnfinishedChild> = children
+            .into_iter()
+            .filter(|child| !supplied.contains(&child.key))
+            .collect();
+        if !missing.is_empty() {
+            let help = missing
+                .iter()
+                .map(|child| format!("  --disposition {}=carried_forward:<target>", child.key))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let mut refusal = Refused::new(
+                Operation::Supersede,
+                codes::R014,
+                format!("{} unfinished children of {}", missing.len(), old.id),
+            )
+            .with_help(format!("rerun with, for example,\n{help}"));
+            refusal.unfinished_children = missing;
+            return Err(refusal);
+        }
+    }
+
+    replacement.relations.insert(
+        Relation::Supersedes,
+        vec![Reference::pinned(old_key.clone(), old.id.revision)],
+    );
+    replacement.dispositions = dispositions.iter().map(build_disposition).collect();
+    replacement
+        .dispositions
+        .sort_by(|a, b| a.target.cmp(&b.target));
+
+    let mut retired = old.clone();
+    retired.state = State::Superseded;
+    let old_file = file_of(&staged, &old.id, Operation::Supersede)?;
+    let new_file = file_of(&staged, &replacement.id, Operation::Supersede)?;
+    apply_many(
+        context,
+        &mut staged,
+        Operation::Supersede,
+        &[
+            (
+                old_file,
+                retired,
+                ChangeKind::StateChanged {
+                    from: old.state,
+                    to: State::Superseded,
+                },
+            ),
+            (new_file, replacement, ChangeKind::Edited),
+        ],
     )
 }
 

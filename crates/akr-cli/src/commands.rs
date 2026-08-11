@@ -2629,10 +2629,24 @@ fn context(
     request.budget = budget;
 
     let bundle = assemble(&model, &freshness, &request).map_err(|error| {
-        let code = match error {
+        let code = match &error {
             akr_core::context::ContextError::GoalUnresolved(_) => "AKR-X001",
-            akr_core::context::ContextError::GoalTerminal { .. } => "AKR-X002",
-            akr_core::context::ContextError::GoalKind { .. } => "AKR-X003",
+            akr_core::context::ContextError::GoalTerminal { id, .. } => {
+                return EnvError::new("AKR-X002", error.to_string())
+                    .help(format!("retrieve it with `akr get {id}`; use `akr start <task>` to find live work"));
+            }
+            akr_core::context::ContextError::GoalKind { id, .. } => {
+                return EnvError::new("AKR-X003", error.to_string())
+                    .help(format!("retrieve it with `akr get {id}`; context requires a live milestone, work or track"));
+            }
+            akr_core::context::ContextError::GoalRevision { head, .. } => {
+                return EnvError::new("AKR-X004", error.to_string())
+                    .help(format!("use the current head with `akr context --goal {head}`; retrieve history with `akr get {} --history`", head.key));
+            }
+            akr_core::context::ContextError::GoalAnchor(goal) => {
+                return EnvError::new("AKR-X005", error.to_string())
+                    .help(format!("retrieve the anchor with `akr get {goal}`; remove the #anchor for context"));
+            }
             akr_core::context::ContextError::BadPath { .. } => "AKR-X011",
             akr_core::context::ContextError::BudgetTooSmall { .. } => "AKR-X021",
         };
@@ -2650,6 +2664,7 @@ fn context(
 
 const CODES_LANG: &str = include_str!("../../../spec/diagnostics/codes-lang.md");
 const CODES_RUNTIME: &str = include_str!("../../../spec/diagnostics/codes-runtime.md");
+const DECISIONS: &str = include_str!("../../../docs/DECISIONS.md");
 
 /// Prints a registry entry for a code, or a catalogue entry for a rule.
 ///
@@ -2702,6 +2717,21 @@ fn explain(subject: &str) -> Output {
         return explain_kind(kind);
     }
 
+    if wanted.starts_with("D-")
+        && let Some(heading) = DECISIONS
+            .lines()
+            .find(|line| line.starts_with("## ") && line.contains(&wanted))
+    {
+        let title = heading.trim_start_matches("## ");
+        return Output::text(format!(
+            "{title}\n  catalogue  docs/DECISIONS.md\n  help       decision identifiers document design history; use `akr get` for ledger records\n"
+        ))
+        .with_result(Value::object(vec![
+            ("decision", Value::string(wanted)),
+            ("catalogue", Value::string("docs/DECISIONS.md")),
+        ]));
+    }
+
     Output {
         text: format!(
             "error[AKR-C004]: {subject:?} is neither a registered diagnostic code, a known \
@@ -2743,7 +2773,7 @@ fn explain_kind(kind: akr_core::model::Kind) -> Output {
     let names = |specs: &[&akr_core::model::ContentSlotSpec]| {
         specs
             .iter()
-            .map(|spec| spec.slot.name().to_owned())
+            .map(|spec| format!("{}: {}", spec.slot.name(), spec.slot.value_type()))
             .collect::<Vec<_>>()
     };
     let required = names(&required);
@@ -2769,6 +2799,17 @@ fn explain_kind(kind: akr_core::model::Kind) -> Output {
     }
     if class.scope_required() {
         text.push_str("  scope      required; `topic` marks normative exclusivity (D-004b)\n");
+    }
+    let relations = akr_core::model::Relation::ALL
+        .iter()
+        .filter(|relation| relation.domain().accepts(kind))
+        .map(|relation| relation.name())
+        .collect::<Vec<_>>();
+    text.push_str(&format!("  relations  {}\n", relations.join(", ")));
+    if kind == akr_core::model::Kind::Observation {
+        text.push_str(
+            "  standing   verified requires provenance: `method`, a source block, or supporting evidence (V-022)\n",
+        );
     }
     text.push_str("  reference  docs/02-data-model.md; spec/tables/vocabulary.json\n");
 

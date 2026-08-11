@@ -3,7 +3,7 @@ project akr
 
 record akr.work.authoring-contracts/1 : work {
     title "Make AKR authoring contracts discoverable before writes"
-    state proposed
+    state completed
     scope [
         path "crates/akr-cli/src/args.rs",
         path "crates/akr-cli/src/write.rs",
@@ -25,18 +25,21 @@ record akr.work.authoring-contracts/1 : work {
                 A malformed path-prefix scope or a scope glob matching no tracked path produces an actionable authoring diagnostic.
                 """
             method command
+            verified_by [ @akr.evidence.papercut-reconciliation-suite/1 ]
         }
         check typed-kind-contract {
             statement """
                 Explain, MCP schemas, and AKR-T002/V-005 diagnostics identify legal per-kind slots and relations and show commit-typed fields as full Git commits.
                 """
             method command
+            verified_by [ @akr.evidence.papercut-reconciliation-suite/1 ]
         }
         check workflow-remedies {
             statement """
                 Papercut namespace ambiguity, stale-lock responses, CLI/MCP search naming, and propose --from help each state the exact accepted form or next command.
                 """
             method command
+            verified_by [ @akr.evidence.papercut-reconciliation-suite/1 ]
         }
     }
     derived_from [ @akr.papercut.collated-18-papercuts-from-evidence-intake/1 ]
@@ -211,7 +214,7 @@ record akr.work.mcp-help-and-format-cleanup/1 : work {
 
 record akr.work.mcp-transport-reliability/1 : work {
     title "Make MCP sessions survive sustained mixed AKR use"
-    state proposed
+    state completed
     scope [ path "crates/akr-mcp/**", path "docs/08-mcp.md" ]
     intent """
         Reproduce and eliminate the recurrent sister-project `Transport closed` failures seen
@@ -225,18 +228,21 @@ record akr.work.mcp-transport-reliability/1 : work {
                 An installed MCP subprocess survives a sustained mixed sequence of explain, context, revise, validate, and papercut calls including rejected requests.
                 """
             method command
+            verified_by [ @akr.evidence.papercut-reconciliation-suite/1 ]
         }
         check sister-reproduction {
             statement """
                 The reported multi-write failure pattern is either reproduced and fixed or ruled out with captured connector-level evidence.
                 """
             method manual
+            verified_by [ @akr.evidence.mcp-sister-transport-reproduction/1 ]
         }
         check termination-diagnostic {
             statement """
                 Any intentional MCP termination is reported with a durable diagnostic and reconnect remedy rather than an unexplained closed transport.
                 """
             method command
+            verified_by [ @akr.evidence.papercut-reconciliation-suite/1 ]
         }
     }
     derived_from [ @akr.papercut.collated-18-papercuts-from-evidence-intake/1 ]
@@ -689,7 +695,7 @@ record akr.work.reduce-knowledge-write-latency/1 : work {
 
 record akr.work.reference-supersession-consistency/1 : work {
     title "Align context and supersession reference contracts"
-    state proposed
+    state completed
     scope [
         path "crates/akr-cli/src/write.rs",
         path "crates/akr-core/src/context/**",
@@ -712,18 +718,21 @@ record akr.work.reference-supersession-consistency/1 : work {
                 knowledge.get and knowledge.context document and test their treatment of all four reference forms, including pinned and terminal planning records.
                 """
             method command
+            verified_by [ @akr.evidence.papercut-reconciliation-suite/1 ]
         }
         check different-key-contract {
             statement """
                 knowledge.supersede new_key and CLI --with either work atomically for a different key or no longer advertise unsupported behavior.
                 """
             method command
+            verified_by [ @akr.evidence.papercut-reconciliation-suite/1 ]
         }
         check recovery-guidance {
             statement """
                 Rejected references and replacements return a ready-made supported next call.
                 """
             method command
+            verified_by [ @akr.evidence.papercut-reconciliation-suite/1 ]
         }
     }
     derived_from [ @akr.papercut.collated-18-papercuts-from-evidence-intake/1 ]
@@ -762,7 +771,7 @@ record akr.work.review-snapshot/1 : work {
 
 record akr.work.revise-lifecycle-semantics/1 : work {
     title "Preserve requested lifecycle state across revisions"
-    state proposed
+    state completed
     scope [
         path "crates/akr-cli/src/write.rs",
         path "crates/akr-core/src/ops/**",
@@ -783,18 +792,21 @@ record akr.work.revise-lifecycle-semantics/1 : work {
                 Content-only revisions of sealed records preserve or deliberately reset lifecycle state according to one documented, tested policy.
                 """
             method command
+            verified_by [ @akr.evidence.papercut-reconciliation-suite/1 ]
         }
         check ready-to-active {
             statement """
                 knowledge.revise on a ready planning head with state active creates a new active head and retires the old revision atomically.
                 """
             method command
+            verified_by [ @akr.evidence.papercut-reconciliation-suite/1 ]
         }
         check surfaces-agree {
             statement """
                 CLI and MCP lifecycle revision tests agree on the new revision's state and returned revision identifier.
                 """
             method command
+            verified_by [ @akr.evidence.papercut-reconciliation-suite/1 ]
         }
     }
     derived_from [ @akr.papercut.collated-18-papercuts-from-evidence-intake/1 ]

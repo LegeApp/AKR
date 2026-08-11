@@ -54,6 +54,8 @@ pub mod codes {
     pub const G021: Code = Code::new("AKR-G021");
     /// A watch glob that matches nothing.
     pub const G022: Code = Code::new("AKR-G022");
+    /// A scope glob that matches nothing.
+    pub const G023: Code = Code::new("AKR-G023");
     /// `review_after` precedes `created_at`.
     pub const G031: Code = Code::new("AKR-G031");
     /// The review queue is not empty, under `--review-clean`.
@@ -61,7 +63,7 @@ pub mod codes {
 
     /// Every freshness code this crate can raise.
     pub const ALL: &[Code] = &[
-        G001, G002, G003, G004, G011, G012, G013, G021, G022, G031, G041,
+        G001, G002, G003, G004, G011, G012, G013, G021, G022, G023, G031, G041,
     ];
 }
 
@@ -487,6 +489,24 @@ impl Repository {
             .filter(|l| !l.is_empty())
             .map(ToOwned::to_owned)
             .collect())
+    }
+
+    /// Whether a repository-relative path or glob is intentionally ignored.
+    ///
+    /// `--no-index` also answers for paths that do not currently exist, which is needed
+    /// when a scope deliberately governs a disposable cache or generated target.
+    ///
+    /// # Errors
+    /// [`GitError::CommandFailed`] when git cannot execute the query.
+    pub fn is_ignored(&self, path: &str) -> Result<bool, GitError> {
+        match self.status(&["check-ignore", "--quiet", "--no-index", "--", path])? {
+            0 => Ok(true),
+            1 => Ok(false),
+            code => Err(GitError::CommandFailed {
+                subcommand: "check-ignore --quiet --no-index".to_owned(),
+                stderr: format!("exited with status {code}"),
+            }),
+        }
     }
 
     /// Every entry of the git index, in path order.

@@ -113,6 +113,10 @@ else
 fi
 log "Installed $AKR_BIN"
 log "Installed $AKR_MCP_BIN"
+if [[ "$DRY_RUN" -eq 0 ]]; then
+  INSTALLED_VERSION="$($AKR_MCP_BIN --version)"
+  log "Verified installed server: $INSTALLED_VERSION ($AKR_MCP_BIN)"
+fi
 log "NOTE: a server that is already running keeps the old binary until it restarts."
 log "      Reconnect the MCP server (or restart the session) before using knowledge.* tools."
 

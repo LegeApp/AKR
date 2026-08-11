@@ -121,13 +121,16 @@ pub const TOOLS: &[Tool] = &[
     Tool {
         name: "knowledge.revise",
         description: "Create the next revision of an existing key. `base_rev` must equal \
-                      the current head, or the call fails with a conflict.",
+                      the current head, or the call fails with a conflict. An explicit \
+                      state lands on the successor; changed sealed content without one \
+                      starts proposed for re-acceptance.",
         writes: true,
     },
     Tool {
         name: "knowledge.supersede",
-        description: "Replace a record, disposing of every unfinished part_of child. The \
-                      children are listed in the error payload when one is missing.",
+        description: "Replace a record, disposing of every unfinished part_of child. A \
+                      different new_key must already be a proposed same-kind record; \
+                      propose its body first. Missing children are listed in the error.",
         writes: true,
     },
     Tool {
@@ -225,7 +228,11 @@ pub fn input_schema(name: &str) -> Option<Value> {
             vec![
                 (
                     "goal",
-                    string("The milestone, work item or track to assemble around."),
+                    string(
+                        "A live milestone, work item or track. A bare key, @key, or a \
+                         pin to its current head is accepted; historical pins, anchors, \
+                         and terminal records are retrieval-only.",
+                    ),
                 ),
                 ("paths", string_array("Path globs the work will touch.")),
                 ("budget_tokens", integer("Approximate token budget.")),
@@ -408,6 +415,7 @@ pub fn input_schema(name: &str) -> Option<Value> {
                     string_array("Anchors this revision drops (D-011)."),
                 ),
                 ("relations", relations_schema()),
+                ("dispositions", dispositions_schema()),
                 (
                     "acceptance",
                     acceptance_schema(
@@ -430,9 +438,11 @@ pub fn input_schema(name: &str) -> Option<Value> {
                 ("old_key", string("The key whose head is retired.")),
                 (
                     "new_key",
-                    string("The superseding key. Defaults to old_key."),
+                    string(
+                        "The superseding key. Defaults to old_key. A different key must \
+                         already exist as a proposed record of the same kind.",
+                    ),
                 ),
-                ("slots", slots_schema()),
                 ("dispositions", dispositions_schema()),
             ],
             &["old_key"],
@@ -590,34 +600,47 @@ fn evidence_schema() -> Value {
     )
 }
 
-/// `kind`: the closed enumeration of D-001, with each kind's required content slots in
+/// `kind`: the closed enumeration of D-001, with each kind's typed contract in
 /// the description — generated from the same tables the type-checker reads, so an agent
 /// learns what a kind needs before the first `AKR-T001` rather than from it.
 fn kind_schema() -> Value {
-    let mut description = String::from("The record kind. Required slots per kind: ");
+    let mut description = String::from("The record kind. Contracts per kind: ");
     for (index, kind) in akr_core::model::Kind::ALL.iter().enumerate() {
         if index > 0 {
             description.push_str("; ");
         }
-        let required: Vec<&str> = kind
+        let slots: Vec<String> = kind
             .content_slots()
             .iter()
-            .filter(|spec| spec.required)
-            .map(|spec| spec.slot.name())
+            .map(|spec| {
+                format!(
+                    "{}: {} {}",
+                    spec.slot.name(),
+                    spec.slot.value_type(),
+                    if spec.required {
+                        "required"
+                    } else {
+                        "optional"
+                    }
+                )
+            })
             .collect();
         description.push_str(kind.name());
-        description.push_str(": ");
-        if required.is_empty() && !kind.requires_acceptance() {
-            description.push_str("(none)");
-        } else {
-            description.push_str(&required.join(", "));
-            if kind.requires_acceptance() {
-                if !required.is_empty() {
-                    description.push_str(", ");
-                }
-                description.push_str("acceptance (V-008)");
-            }
+        description.push_str(" slots [");
+        description.push_str(&slots.join(", "));
+        if kind.requires_acceptance() {
+            description.push_str(", acceptance required");
         }
+        description.push_str("]; relations [");
+        description.push_str(
+            &akr_core::model::Relation::ALL
+                .iter()
+                .filter(|relation| relation.domain().accepts(*kind))
+                .map(|relation| relation.name())
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
+        description.push(']');
     }
     description.push('.');
     Value::object(vec![

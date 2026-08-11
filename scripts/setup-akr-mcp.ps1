@@ -156,6 +156,15 @@ Invoke-Step "mkdir -p $AkrBinDir; copy $SourceAkr -> $AkrExeDest; copy $SourceAk
 }
 Log "Installed $AkrExeDest"
 Log "Installed $AkrMcpExeDest"
+if (-not $DryRun) {
+    $InstalledVersion = & $AkrMcpExeDest --version
+    if ($LASTEXITCODE -ne 0) {
+        throw "Installed akr-mcp failed its version check: $AkrMcpExeDest"
+    }
+    Log "Verified installed server: $InstalledVersion ($AkrMcpExeDest)"
+}
+Log "NOTE: a server that is already running keeps the old binary until it restarts."
+Log "      Reconnect the MCP server (or restart the session) before using knowledge.* tools."
 
 # Install/refresh a section in ~\.codex\config.toml
 if (-not $NoCodex) {

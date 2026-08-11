@@ -380,6 +380,20 @@ impl ContentSlot {
     pub fn from_name(name: &str) -> Option<Self> {
         Self::ALL.iter().copied().find(|s| s.name() == name)
     }
+
+    /// The author-facing value type used by explain output and tool schemas.
+    #[must_use]
+    pub const fn value_type(self) -> &'static str {
+        match self {
+            Self::ObservedAt | Self::AsOf => "commit (git:<40-hex>)",
+            Self::ReviewAfter | Self::Target => "date (YYYY-MM-DD)",
+            Self::Watches => "glob[]",
+            Self::Exceptions => "reference[]",
+            Self::Aliases | Self::Collated => "string[]",
+            Self::Method | Self::Result | Self::Confidence => "enum",
+            _ => "text",
+        }
+    }
 }
 
 impl fmt::Display for ContentSlot {

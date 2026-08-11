@@ -352,6 +352,48 @@ fn a_watch_glob_matching_nothing_is_g022() {
 }
 
 #[test]
+fn a_scope_glob_matching_nothing_is_g023() {
+    let mut repo = TempRepo::new("g023");
+    let head = repo.commit_file("src/lib.rs", "1\n", "base");
+    let git = Repository::open(repo.root()).expect("opens");
+    let mut ledger = Ledger::new(Project::new("p", &["fx"]));
+    ledger.insert(
+        RecordBuilder::new("fx.policy.mis-scoped", 1, Kind::Policy)
+            .filled()
+            .state(State::Active)
+            .path_scope("path src/**")
+            .build(),
+    );
+    let diagnostics = unmatched_watches(&ledger, &git, &commit(&head)).expect("lists");
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(diagnostics[0].code, codes::G023);
+    assert!(
+        diagnostics[0]
+            .help
+            .as_deref()
+            .is_some_and(|help| help.contains("copied `path ` prefix"))
+    );
+}
+
+#[test]
+fn an_intentionally_ignored_scope_is_not_g023() {
+    let mut repo = TempRepo::new("g023-ignored");
+    repo.write(".gitignore", ".cache/\n");
+    let head = repo.commit_file("src/lib.rs", "1\n", "base");
+    let git = Repository::open(repo.root()).expect("opens");
+    let mut ledger = Ledger::new(Project::new("p", &["fx"]));
+    ledger.insert(
+        RecordBuilder::new("fx.decision.cache", 1, Kind::Decision)
+            .filled()
+            .state(State::Active)
+            .path_scope(".cache/index.sqlite")
+            .build(),
+    );
+    let diagnostics = unmatched_watches(&ledger, &git, &commit(&head)).expect("lists");
+    assert!(!diagnostics.iter().any(|d| d.code == codes::G023));
+}
+
+#[test]
 fn a_review_date_before_the_authoring_date_is_g031() {
     let mut repo = TempRepo::new("g031");
     let head = repo.commit_file("a.txt", "1\n", "base");

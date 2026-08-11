@@ -110,6 +110,52 @@ fn supersede_lists_the_children_it_needs_a_disposition_for() {
 }
 
 #[test]
+fn supersede_with_an_already_proposed_key_is_atomic() {
+    let example = Example::materialise("write-supersede-with");
+    for (key, title) in [
+        ("sys.term.legacy-session", "Legacy session"),
+        ("sys.term.playable-session", "Playable session"),
+    ] {
+        let body = example.root().join(format!("{key}.akr"));
+        std::fs::write(
+            &body,
+            format!("scope [ all ]\ndefinition \"A definition for {title}.\"\n"),
+        )
+        .expect("write proposal fragment");
+        let proposed = example.run(&[
+            "propose",
+            key,
+            "--kind",
+            "term",
+            "--title",
+            title,
+            "--from",
+            body.to_str().expect("utf-8"),
+        ]);
+        assert_eq!(proposed.code, 0, "{}", proposed.output());
+    }
+    let accepted = example.run(&[
+        "revise",
+        "sys.term.legacy-session",
+        "--in-place",
+        "--state",
+        "active",
+    ]);
+    assert_eq!(accepted.code, 0, "{}", accepted.output());
+
+    let replaced = example.run(&[
+        "supersede",
+        "sys.term.legacy-session",
+        "--with",
+        "sys.term.playable-session",
+    ]);
+    assert_eq!(replaced.code, 0, "{}", replaced.output());
+    let source = example.read_file(".akr/records/sys/terms.akr");
+    assert!(source.contains("supersedes [ @sys.term.legacy-session/1 ]"));
+    assert!(source.contains("record sys.term.playable-session/1 : term"));
+}
+
+#[test]
 fn complete_names_the_unsatisfied_check_and_writes_nothing() {
     let example = Example::materialise("write-complete");
     let text = refuses(&example, &["complete", "sys.milestone.m3-playable-day"]);

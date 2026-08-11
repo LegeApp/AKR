@@ -76,7 +76,9 @@ fn main() -> std::process::ExitCode {
     match serve(&server, BufReader::new(stdin()), stdout()) {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("error[AKR-C042]: {error}");
+            eprintln!(
+                "error[AKR-C042]: MCP stdio failed: {error}\nhelp: reinstall the current akr-mcp binary, then reconnect or restart the MCP client; a running server keeps the executable it started with"
+            );
             std::process::ExitCode::from(3)
         }
     }

@@ -981,7 +981,7 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
             }
         }
         "search" => {
-            known_flags(&["--kind", "--state", "--limit", "--fts"])?;
+            known_flags(&["--query", "--kind", "--state", "--limit", "--fts"])?;
             let limit = match option_value(tail, "--limit") {
                 Some(text) => Some(text.parse().map_err(|_| {
                     UsageError::new(
@@ -991,8 +991,36 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
                 })?),
                 None => None,
             };
+            let mut search_positionals = Vec::new();
+            let mut index = 0;
+            while index < tail.len() {
+                let argument = &tail[index];
+                if matches!(
+                    argument.as_str(),
+                    "--query" | "--kind" | "--state" | "--limit"
+                ) {
+                    index += 2;
+                    continue;
+                }
+                if argument == "--fts" || argument.starts_with("--") {
+                    index += 1;
+                    continue;
+                }
+                search_positionals.push(argument.clone());
+                index += 1;
+            }
+            let positional_query = search_positionals.first().cloned();
+            let flagged_query = option_value(tail, "--query");
+            if positional_query.is_some() && flagged_query.is_some() {
+                return Err(UsageError::new(
+                    "AKR-C005",
+                    "search takes either positional <query> or --query <query>, not both",
+                ));
+            }
             Command::Search {
-                query: need(0, "a query")?,
+                query: flagged_query
+                    .or(positional_query)
+                    .ok_or_else(|| UsageError::new("AKR-C003", "search requires a query"))?,
                 kinds: repeated(tail, "--kind"),
                 states: repeated(tail, "--state"),
                 limit,
@@ -1785,12 +1813,13 @@ pub fn help_for(name: &str) -> Option<String> {
              \x20   --relations    include inbound edges, invisible in the source text\n"
         }
         "search" => {
-            "akr search <query> [--kind <kind> ...] [--state <state> ...] [--limit <n>]\n\
+            "akr search <query> [--query <query>] [--kind <kind> ...] [--state <state> ...] [--limit <n>]\n\
              \n\
              Full-text search over live revisions, BM25-ranked. Filters apply before\n\
              ranking. Search ranks; it never authorises.\n\
              \n\
              FLAGS\n\
+             \x20   --query <query>    MCP-compatible alias for positional <query>\n\
              \x20   --kind <kind>      restrict to a kind; repeatable\n\
              \x20   --state <state>    restrict to a state; repeatable\n\
              \x20   --limit <n>        maximum results\n"
@@ -1994,15 +2023,15 @@ pub fn help_for(name: &str) -> Option<String> {
              <key> is dot-delimited: namespace.topic.slug — the first segment must be a\n\
              namespace declared in .akr/project.akr.\n\
              \n\
-             A body source is mandatory in this build: every kind requires its prose slot\n\
-             (definition, statement, intent, rule ...), so a propose without --from is\n\
-             refused before anything reaches the disk. Run\n\
+             --from accepts an AKR slot-list fragment, not plain Markdown or an\n\
+             unlabelled prose paragraph. Every kind requires its prose slot, so a\n\
+             propose without --from is refused. Run\n\
              `akr explain <kind>` for the kind's required slots.\n\
              \n\
              FLAGS\n\
              \x20   --kind <kind>     required; one of the twelve kinds\n\
              \x20   --title <text>    the one-line label\n\
-             \x20   --from <file>     a file holding the record body\n"
+             \x20   --from <file>     a file holding an AKR slot-list fragment\n"
         }
         "revise" => {
             "akr revise <key> [--from <file>] [--state <state>] [--title <text>]\n\

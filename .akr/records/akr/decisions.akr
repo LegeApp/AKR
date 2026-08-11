@@ -80,6 +80,42 @@ record akr.decision.dirty-source-graph-has-no-commit-provenance/1 : decision {
         """
 }
 
+record akr.decision.executable-authoring-contracts/1 : decision {
+    title "Authoring and transport contracts are executable"
+    state active
+    scope [
+        path "crates/akr-cli/**",
+        path "crates/akr-core/src/freshness/**",
+        path "crates/akr-core/src/validate/**",
+        path "crates/akr-mcp/**",
+        path "docs/**",
+        path "scripts/setup-akr-mcp.*",
+        path "spec/**"
+    ]
+    decision """
+        AKR authoring surfaces must expose typed per-kind slots, legal relations, canonical
+        reference forms, and an executable recovery step before or with a rejected write.
+        Scope globs matching no tracked path are non-fatal authoring warnings. Successful MCP
+        writes name the required build step. MCP reliability is verified through a long-lived
+        installed subprocess running mixed successful and rejected calls, while setup verifies
+        the installed binary and tells clients to reconnect after replacement.
+        """
+    context """
+        Repeated papercuts were caused less by missing capability than by contracts that became
+        visible only after a failed call, plus transport reports not covered by in-memory tests.
+        """
+    consequences """
+        Help, schemas, diagnostics, and write responses duplicate a small amount of generated
+        vocabulary for discoverability. Transport coverage costs additional test time but
+        exercises the connector boundary users actually run.
+        """
+    derived_from [ @akr.papercut.collated-18-papercuts-from-evidence-intake/1 ]
+    supported_by [
+        @akr.evidence.mcp-sister-transport-reproduction/1,
+        @akr.evidence.papercut-reconciliation-suite/1
+    ]
+}
+
 record akr.decision.external-sources-immutable-library/1 : decision {
     title "External sources are an immutable library, indexed separately, cited by byte range"
     state superseded
@@ -292,6 +328,40 @@ record akr.decision.query-words-dirty-tree-ancestry/1 : decision {
         D-035.
         """
     supported_by [ @akr.evidence.sister-papercut-fixes ]
+}
+
+record akr.decision.revision-and-replacement-contract/1 : decision {
+    title "Revision and replacement contracts are explicit"
+    state active
+    scope [
+        path "crates/akr-cli/src/write.rs",
+        path "crates/akr-core/src/context/**",
+        path "crates/akr-core/src/ops/**",
+        path "crates/akr-mcp/src/tools.rs",
+        path "docs/04-references-and-versioning.md",
+        path "docs/07-cli.md",
+        path "docs/08-mcp.md",
+        path "docs/09-context-assembly.md"
+    ]
+    decision """
+        An explicit lifecycle state on a revision is authoritative and lands on the successor.
+        A content-only revision of sealed knowledge starts proposed so changed content is
+        accepted deliberately. Context accepts bare keys, @keys, and a pin to the current head;
+        it rejects historical pins and anchors with retrieval guidance. Replacing a different
+        key is a two-step contract: first propose the complete same-kind replacement, then
+        atomically attach its pinned supersedes edge and retire the old head.
+        """
+    context """
+        Reconciled papercuts showed that CLI and MCP advertised overlapping reference and
+        replacement forms but applied different lifecycle defaults and recovery paths.
+        """
+    consequences """
+        Callers can predict successor state and reference handling. Different-key replacement
+        requires one extra authoring call, but the final graph transition remains atomic and
+        never constructs an incomplete replacement implicitly.
+        """
+    derived_from [ @akr.papercut.collated-18-papercuts-from-evidence-intake/1 ]
+    supported_by [ @akr.evidence.papercut-reconciliation-suite/1 ]
 }
 
 record akr.decision.search-refreshes-disposable-index/1 : decision {

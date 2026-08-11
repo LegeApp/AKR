@@ -30,7 +30,7 @@ The `V-101`–`V-149` range belongs to the freshness, emission and context docum
 
 | Rules | Catalogue | Codes raised |
 | --- | --- | --- |
-| `V-101`–`V-104` | [`../../docs/10-freshness-and-git.md`](../../docs/10-freshness-and-git.md) §9 | `AKR-G011`, `G012`, `G021`, `G022`, `G031`, `G041` |
+| `V-101`–`V-104` | [`../../docs/10-freshness-and-git.md`](../../docs/10-freshness-and-git.md) §9 | `AKR-G011`, `G012`, `G021`, `G022`, `G023`, `G031`, `G041` |
 | `V-111`–`V-115` | [`../../docs/11-projections.md`](../../docs/11-projections.md) §11 | `AKR-E011`, `E012`, `E013`, `E014`, `E021`, `E022` |
 | `V-121`–`V-123` | [`../../docs/09-context-assembly.md`](../../docs/09-context-assembly.md) §9 | `AKR-X021`, `X022`, `X051`, `X052` |
 
@@ -108,6 +108,8 @@ Reserved groups: `X001`–`X009` the bundle anchor; `X011`–`X019` path filters
 | `AKR-X001` | goal does not resolve | error | — | `--goal {ref} does not resolve to a record` | A misspelled key, or a key whose namespace is not declared. When the ledger has no records, the message instead says so and directs the caller to create its first planning record. |
 | `AKR-X002` | goal is terminal | error | — | `--goal {key}/{revision} is in terminal state {state}` | Assembling a bundle around finished work is almost always a mistake; `akr get` still retrieves the record. |
 | `AKR-X003` | goal kind cannot anchor a bundle | error | — | `--goal {key} is a {kind}; a bundle anchors on a milestone, work or track record` | The assembly algorithm's step 1 requires a planning record. |
+| `AKR-X004` | pinned goal is not the head | error | — | `--goal {requested} is not the current head, which is {head}` | Context describes current work. A pin to the current head is normalized; an older revision remains available through `akr get --history`. |
+| `AKR-X005` | goal selects an anchor | error | — | `--goal {ref} selects an anchor; a bundle anchors on a planning record` | Claim and check anchors are retrieval targets, not bundle roots. |
 | `AKR-X011` | path filter is malformed | error | — | `--paths {glob}: {reason}` | A glob outside the D-008 subset — brace expansion, `!` negation, a backslash separator. |
 | `AKR-X012` | path filter matches nothing | warning | — | `--paths {glob} matches no path at {commit}` | Usually a typo. The bundle is still assembled without a path-derived section. |
 | `AKR-X021` | context budget too small | error | V-123 | `budget of {budget} tokens cannot hold the mandatory sections ({required} tokens)` | Relations, contradictions and staleness warnings never truncate, so a budget below their size is unsatisfiable. |
@@ -141,6 +143,7 @@ Reserved groups: `G001`–`G009` repository access; `G011`–`G019` commit refer
 | `AKR-G013` | unknown revision argument | error | — | `{argument}: {revision} is not a commit in this repository` | `--at`, or either end of `--git-diff A..B`. |
 | `AKR-G021` | malformed watch glob | error | V-102 | `{key}/{revision}: watches {glob}: {reason}` | Same glob subset as `AKR-X011`, checked at the record rather than the flag. |
 | `AKR-G022` | watch glob matches nothing | warning | V-102 | `{key}/{revision}: watches {glob} matches no path at {head}` | The watched code moved or was deleted; the record can no longer become stale by that glob, which is silent rot. |
+| `AKR-G023` | scope glob matches nothing | warning | V-102 | `{key}/{revision}: scope path {glob} matches no tracked path at {head}` | Usually a copied rendered `path ` prefix, typo, or moved path. Intentionally gitignored targets are exempt. It is visible but does not make an in-progress strict check fail. |
 | `AKR-G031` | `review_after` precedes `created_at` | warning | V-103 | `{key}/{revision}: review_after {date} precedes created_at {date}` | Almost always a typo; the record is stale from the moment it is written. |
 | `AKR-G041` | review queue is not empty | error | V-104 | `review queue holds {stale} stale and {at_risk} at-risk records` | Raised **only** under `akr check --review-clean`. Staleness itself is a build fact and never a diagnostic (D-024); this code reports an unmet request made on the command line. |
 

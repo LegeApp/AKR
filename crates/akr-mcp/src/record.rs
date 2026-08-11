@@ -62,7 +62,19 @@ pub fn to_source(
             {
                 return Err(ToolError::new(
                     "AKR-T002",
-                    format!("`{name}` is not a slot of kind `{}`", kind.name()),
+                    format!(
+                        "`{name}` is not a slot of kind `{}`; valid slots: {}",
+                        kind.name(),
+                        kind.content_slots()
+                            .iter()
+                            .map(|spec| format!(
+                                "{} ({})",
+                                spec.slot.name(),
+                                spec.slot.value_type()
+                            ))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
                 ));
             }
         }
@@ -397,6 +409,14 @@ fn scope_terms(value: &Value) -> Result<String, ToolError> {
         let term = match item {
             Value::String(text) if text == "all" => "all".to_owned(),
             Value::String(text) if text.starts_with('@') => format!("ref {text}"),
+            Value::String(text) if text.starts_with("path ") || text.starts_with("ref ") => {
+                return Err(ToolError::new(
+                    "AKR-C004",
+                    format!(
+                        "scope value {text:?} uses rendered AKR syntax; pass a bare glob such as \"src/**\" or a reference such as \"@key\""
+                    ),
+                ));
+            }
             Value::String(text) => format!("path {}", quote(text)),
             Value::Object(_) => match item.get("form").and_then(Value::as_str) {
                 Some("all") => "all".to_owned(),

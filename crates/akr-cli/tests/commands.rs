@@ -280,6 +280,45 @@ fn explain_covers_both_diagnostic_registries() {
     }
     let unknown = example.run(&["explain", "AKR-Z999"]);
     assert_eq!(unknown.code, 2, "{}", unknown.output());
+
+    let observation = example.run(&["explain", "observation"]);
+    assert_eq!(observation.code, 0, "{}", observation.output());
+    assert!(
+        observation
+            .stdout
+            .contains("observed_at: commit (git:<40-hex>)")
+    );
+    assert!(observation.stdout.contains("relations"));
+    assert!(observation.stdout.contains("verified requires provenance"));
+
+    let decision = example.run(&["explain", "D-011"]);
+    assert_eq!(decision.code, 0, "{}", decision.output());
+    assert!(decision.stdout.contains("docs/DECISIONS.md"));
+}
+
+#[test]
+fn context_normalizes_a_current_pin_and_guides_other_reference_forms() {
+    let example = Example::materialise("context-reference-contract");
+    let current = example.run(&["context", "--goal", "@sys.milestone.m3-playable-day/1"]);
+    assert_eq!(current.code, 0, "{}", current.output());
+
+    let historical = example.run(&["context", "--goal", "@sys.work.m3-plan/1"]);
+    assert_eq!(historical.code, 3, "{}", historical.output());
+    assert!(historical.output().contains("AKR-X004"));
+    assert!(
+        historical
+            .output()
+            .contains("akr get sys.work.m3-plan --history")
+    );
+
+    let anchored = example.run(&[
+        "context",
+        "--goal",
+        "@sys.milestone.m3-playable-day#no-placeholder-assets",
+    ]);
+    assert_eq!(anchored.code, 3, "{}", anchored.output());
+    assert!(anchored.output().contains("AKR-X005"));
+    assert!(anchored.output().contains("akr get"));
 }
 
 // -------------------------------------------------------------------------------------

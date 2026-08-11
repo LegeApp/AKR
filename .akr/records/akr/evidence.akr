@@ -152,6 +152,17 @@ record akr.evidence.mcp-help-parity/1 : evidence {
     author "GitHub Uploader"
 }
 
+record akr.evidence.mcp-sister-transport-reproduction/1 : evidence {
+    title "A connector-level akr-mcp subprocess completed 25 mixed rounds of explain, current-pin context, get, validate, rejected unknown-tool calls, and papercut writes without closing transport or emitting stderr. This rules out the server request loop under the reported multi-write pattern; setup now verifies the installed binary and instructs clients to reconnect after replacement."
+    state verified
+    result pass
+    method manual
+    observed_at git:66ee2825f3f85ded0d268460773708bf9f50a25e
+    summary """
+        A connector-level akr-mcp subprocess completed 25 mixed rounds of explain, current-pin context, get, validate, rejected unknown-tool calls, and papercut writes without closing transport or emitting stderr. This rules out the server request loop under the reported multi-write pattern; setup now verifies the installed binary and instructs clients to reconnect after replacement.
+        """
+}
+
 record akr.evidence.mcp-suite-after-explain-routing-fix/1 : evidence {
     title "44 tests passed with no failures, including all 17 differential tests. Those 17 had never executed on Windows before: the harness resolved the sibling akr binary without EXE_SUFFIX, so every one of them asserted 'is not built' before running. They pass now, so the CLI-and-MCP agreement this suite exists to hold is checked on Windows for the first time. It also covers a new case, knowledge_explain_and_akr_explain_agree."
     state verified
@@ -225,6 +236,18 @@ record akr.evidence.papercut-reconciliation-classification/1 : evidence {
     artifact ".akr/records/akr/assessments.akr"
     summary """
         All 18 reports were reviewed against current implementation, docs, tests, decisions, and work history; each is explicitly classified in assessment akr.assessment.papercut-reconciliation-2026-08-11/2 and every surviving cluster has a live work record.
+        """
+}
+
+record akr.evidence.papercut-reconciliation-suite/1 : evidence {
+    title "All workspace targets passed, including lifecycle, current-pin context, CLI and MCP different-key supersession, typed authoring diagnostics, unmatched scope warning, and the long-lived MCP subprocess stress test; no-default-features and shell installer checks also passed."
+    state verified
+    result pass
+    method command
+    observed_at git:66ee2825f3f85ded0d268460773708bf9f50a25e
+    command "cargo fmt --all --check && cargo test --workspace --all-targets && cargo check -p akr-cli --no-default-features && bash -n scripts/setup-akr-mcp.sh"
+    summary """
+        All workspace targets passed, including lifecycle, current-pin context, CLI and MCP different-key supersession, typed authoring diagnostics, unmatched scope warning, and the long-lived MCP subprocess stress test; no-default-features and shell installer checks also passed.
         """
 }
 

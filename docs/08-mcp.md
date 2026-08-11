@@ -279,6 +279,9 @@ than the request:
 - `lock_stale` is `true` after every write, because no write operation may invent a build
   (D-014). Saying so here is the difference between an expected `AKR-R052` on the next
   `knowledge.validate` and a confusing one.
+- `next` names `akr build` and explains that it refreshes `akr.lock` and generated views
+  before validation. This makes the required post-write maintenance executable rather
+  than leaving the agent to infer it from `lock_stale`.
 
 ### `knowledge.revise`
 
@@ -294,18 +297,24 @@ than the request:
 since the agent read it, the tool fails with a conflict rather than clobbering
 (`AKR-C033`). This is the only concurrency control the surface has, and it is enough
 because the underlying store is a git working tree that a human is also watching.
+An explicit `state` lands on the successor even when the old head is sealed. Without an
+explicit state, a content revision of settled knowledge starts `proposed` for review.
 
 ### `knowledge.supersede`
 
 ```jsonc
-{ "old_key": "sys.work.m3-plan", "new_key": "sys.work.m3-plan",
-  "slots": { "intent": "…" },
+// First propose the complete replacement under its accurate key, then:
+{ "old_key": "sys.work.m3-plan", "new_key": "sys.work.day-loop-plan",
   "dispositions": [
     { "child": "@sys.work.m3-lighting-pass", "outcome": "carried_forward",
       "into": "@sys.track.lighting", "note": "Lighting is standing work." },
     { "child": "@sys.work.m3-audio-pass", "outcome": "intentionally_dropped" }
   ] }
 ```
+
+For different keys, `new_key` must resolve to a proposed record of the same kind and
+`slots` is omitted: its content belongs in the preceding `knowledge.propose`. The
+supersession call atomically adds the pinned edge and retires the old head.
 
 If any unfinished `part_of` child lacks a disposition, the tool fails with `AKR-R014` and
 **lists the children in the error payload**, so the agent's next message can name them.

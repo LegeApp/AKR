@@ -322,12 +322,21 @@ pub fn v005_targets_kind_correct(ledger: &Ledger) -> Vec<Diagnostic> {
     for record in ordered(ledger) {
         for (relation, targets) in &record.relations {
             if !relation.domain().accepts(record.kind) {
-                out.push(Diagnostic::error(
-                    c::L032,
-                    RULE,
-                    slot_subject(record, SlotRef::Relation(*relation)),
-                    format!("a {} may not declare `{relation}`", record.kind),
-                ));
+                let legal = Relation::ALL
+                    .iter()
+                    .filter(|candidate| candidate.domain().accepts(record.kind))
+                    .map(|candidate| candidate.name())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                out.push(
+                    Diagnostic::error(
+                        c::L032,
+                        RULE,
+                        slot_subject(record, SlotRef::Relation(*relation)),
+                        format!("a {} may not declare `{relation}`", record.kind),
+                    )
+                    .help(format!("valid {} relations: {legal}", record.kind)),
+                );
             }
             for reference in targets {
                 let Some(target) = target_of(ledger, reference) else {
@@ -554,12 +563,22 @@ pub fn v008_slots_present(ledger: &Ledger) -> Vec<Diagnostic> {
         }
         for slot in record.content.keys() {
             if !allowed.contains(slot) {
-                out.push(Diagnostic::error(
-                    c::T002,
-                    RULE,
-                    slot_subject(record, SlotRef::Content(*slot)),
-                    format!("{} has no slot `{slot}`", record.kind),
-                ));
+                let legal = record
+                    .kind
+                    .content_slots()
+                    .iter()
+                    .map(|spec| format!("{} ({})", spec.slot, spec.slot.value_type()))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                out.push(
+                    Diagnostic::error(
+                        c::T002,
+                        RULE,
+                        slot_subject(record, SlotRef::Content(*slot)),
+                        format!("{} has no slot `{slot}`", record.kind),
+                    )
+                    .help(format!("valid {} slots: {legal}", record.kind)),
+                );
             }
         }
         if record.title.is_empty() {

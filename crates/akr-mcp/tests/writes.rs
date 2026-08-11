@@ -91,6 +91,13 @@ fn propose_creates_a_record_and_refuses_the_same_key_twice() {
         payload.get("lock_stale").and_then(Value::as_bool),
         Some(true)
     );
+    assert_eq!(
+        payload
+            .get("next")
+            .and_then(|next| next.get("command"))
+            .and_then(Value::as_str),
+        Some("akr build")
+    );
     // §4's remaining two fields describe the revision as it landed, not as it was planned,
     // so they are worth asserting: an agent that read a stale `state` back would think its
     // lifecycle move had not taken.
@@ -131,6 +138,20 @@ fn propose_creates_a_record_and_refuses_the_same_key_twice() {
         example.sources(),
         "a refused write left something behind"
     );
+}
+
+#[test]
+fn propose_rejects_rendered_scope_syntax_with_the_bare_form_remedy() {
+    let example = Example::materialise("mcp-scope-contract");
+    let (payload, is_error) = call(
+        &example,
+        "knowledge.propose",
+        r#"{"key":"sys.term.bad-scope","kind":"term","title":"Bad scope","scope":["path src/**"],"slots":{"definition":"A term."}}"#,
+    );
+    assert!(is_error);
+    let text = error_text(&payload);
+    assert!(text.contains("rendered AKR syntax"), "{text}");
+    assert!(text.contains("src/**"), "{text}");
 }
 
 #[test]
@@ -310,6 +331,23 @@ fn revise_keeps_the_slots_the_payload_does_not_mention() {
 }
 
 #[test]
+fn revise_honours_an_explicit_state_on_a_sealed_head() {
+    let example = Example::materialise("mcp-revise-state");
+    let (payload, is_error) = call(
+        &example,
+        "knowledge.revise",
+        r#"{"key":"sys.work.m3-audio-pass","base_rev":1,"state":"active"}"#,
+    );
+    assert!(!is_error, "{}", error_text(&payload));
+    assert_eq!(payload.get("rev").and_then(Value::as_integer), Some(2));
+    assert_eq!(payload.get("state").and_then(Value::as_str), Some("active"));
+
+    let source = example.read_file(".akr/records/sys/work.akr");
+    assert!(source.contains("record sys.work.m3-audio-pass/2 : work"));
+    assert!(source.contains("state active"));
+}
+
+#[test]
 fn supersede_lists_the_unfinished_children_in_the_error_payload() {
     let example = Example::materialise("mcp-supersede");
     let path = ".akr/records/sim/work.akr";
@@ -378,6 +416,42 @@ fn supersede_lists_the_unfinished_children_in_the_error_payload() {
     );
     assert!(!is_error, "{}", error_text(&payload));
     assert_eq!(payload.get("rev").and_then(Value::as_integer), Some(2));
+}
+
+#[test]
+fn supersede_accepts_an_already_proposed_different_key() {
+    let example = Example::materialise("mcp-supersede-key");
+    let (old, is_error) = call(
+        &example,
+        "knowledge.propose",
+        r#"{"key":"sys.term.legacy-session","kind":"term","title":"Legacy session","scope":["all"],"slots":{"definition":"The term being replaced."}}"#,
+    );
+    assert!(!is_error, "{}", error_text(&old));
+    let (accepted, is_error) = call(
+        &example,
+        "knowledge.revise",
+        r#"{"key":"sys.term.legacy-session","base_rev":1,"slots":{"definition":"The accepted term being replaced."},"state":"active"}"#,
+    );
+    assert!(!is_error, "{}", error_text(&accepted));
+    let (proposed, is_error) = call(
+        &example,
+        "knowledge.propose",
+        r#"{"key":"sys.term.playable-session","kind":"term","title":"Playable session","scope":["all"],"slots":{"definition":"A bounded session of play."}}"#,
+    );
+    assert!(!is_error, "{}", error_text(&proposed));
+
+    let (payload, is_error) = call(
+        &example,
+        "knowledge.supersede",
+        r#"{"old_key":"sys.term.legacy-session","new_key":"sys.term.playable-session"}"#,
+    );
+    assert!(!is_error, "{}", error_text(&payload));
+    assert_eq!(
+        payload.get("key").and_then(Value::as_str),
+        Some("sys.term.playable-session")
+    );
+    let source = example.read_file(".akr/records/sys/terms.akr");
+    assert!(source.contains("supersedes [ @sys.term.legacy-session/1 ]"));
 }
 
 #[test]
