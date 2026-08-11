@@ -323,7 +323,14 @@ pub fn acceptance_verdicts(ledger: &Ledger) -> Vec<CheckVerdict> {
                         verdict = Verdict::Satisfied {
                             by: evidence.id.clone(),
                             observed_at,
-                            last_change,
+                            // A co-commit is the prepared-change case, not an ancestry
+                            // statement worth rendering. Keeping it absent also makes a
+                            // projection built before the commit byte-stable afterwards.
+                            last_change: if facts.co_committed {
+                                None
+                            } else {
+                                last_change
+                            },
                         };
                         break;
                     }
@@ -367,6 +374,8 @@ pub struct CitationFacts {
     /// True when either is unknown, which is what V-020 does: absent git facts, evidence
     /// is taken at its word rather than accused of being stale.
     pub descends: bool,
+    /// Whether evidence and verified content have the same last-change commit.
+    pub co_committed: bool,
 }
 
 /// Evaluates one citation of one check (D-016, D-028).
@@ -388,7 +397,15 @@ pub fn citation_facts(ledger: &Ledger, owner: &RevisionId, evidence: &Record) ->
     let is_legacy = ledger
         .get(owner)
         .is_some_and(|record| record.sources.iter().any(|s| s.kind == SourceKind::Legacy));
-    let descends = if is_legacy {
+    let co_committed = last_change.as_ref().is_some_and(|owner_change| {
+        ledger.facts.last_change.get(&evidence.id) == Some(owner_change)
+    });
+    let descends = if co_committed {
+        // The record and its evidence landing together is the change-transaction shape:
+        // the evidence necessarily names the prepared parent because this commit did not
+        // exist yet. Equal last-change commits distinguish it from genuinely old evidence.
+        true
+    } else if is_legacy {
         match &observed_at {
             Some(commit) if ledger.facts.ancestry.has_facts() => {
                 ledger.facts.ancestry.knows(commit)
@@ -410,6 +427,7 @@ pub fn citation_facts(ledger: &Ledger, owner: &RevisionId, evidence: &Record) ->
         observed_at,
         last_change,
         descends,
+        co_committed,
     }
 }
 

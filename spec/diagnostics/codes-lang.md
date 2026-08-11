@@ -183,7 +183,7 @@ property of the ledger as a system rather than of any one record.
 | Code | Title | Sev | Rule | Message | Cause and fix |
 | --- | --- | --- | --- | --- | --- |
 | `AKR-R021` | Live record relies on an invalid terminal record | error | V-019 | `{key} is {state} but `{slot}` resolves to {target}, which is {target_state}` | The resolved counterpart of L021: repoint or revise when a floating head becomes invalid. A completed planning prerequisite remains valid. |
-| `AKR-R022` | Completion with unsatisfied acceptance | error | V-020 | `{key} is `completed` but check `{check}` is not satisfied` | Names why: no evidence, evidence not `pass`, or evidence predates the record's last content change (D-016) — the last of which is waived for a `legacy`-sourced record (D-028). |
+| `AKR-R022` | Completion with unsatisfied acceptance | error | V-020 | `{key} is `completed` but check `{check}` is not satisfied` | Names why: no evidence, evidence not `pass`, or evidence predates the record's last content change (D-016). Evidence co-committed with that change is current; the age gate is waived for a `legacy`-sourced record (D-028). |
 | `AKR-R023` | Blocked without a blocker | warning | V-020 | `{key} is `blocked` but no live record `blocks` it` | A blocked item with no blocker is a stalled item nobody has named. |
 
 ### R031–R049 — Justification and contradiction

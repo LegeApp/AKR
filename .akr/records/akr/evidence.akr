@@ -227,6 +227,18 @@ record akr.evidence.papercut-subject-suite/1 : evidence {
         """
 }
 
+record akr.evidence.post-commit-validation-suite/1 : evidence {
+    title "The full workspace suite, no-default-features build, projection regeneration, and current-view validation passed with post-commit convergence regressions included."
+    state verified
+    result pass
+    method command
+    observed_at git:03e4af3c2e62cb07ab00436e512bedc41cd88436
+    command "cargo fmt --all --check && cargo test --workspace --all-targets && cargo check -p akr-cli --no-default-features && target/debug/akr build && target/debug/akr check --views-current"
+    summary """
+        The full workspace suite, no-default-features build, projection regeneration, and current-view validation passed with post-commit convergence regressions included.
+        """
+}
+
 record akr.evidence.search-auto-refresh-suite/1 : evidence {
     title "Search auto-refresh and no-rebuild behavior verified"
     state verified

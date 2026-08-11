@@ -379,6 +379,105 @@ fn committing_through_the_bridge_leaves_the_trailers_in_history() {
             .contains("no change transaction"),
         "a committed transaction should be cleared"
     );
+    let check = example.run(&["check", "--views-current"]);
+    assert_eq!(
+        check.code,
+        0,
+        "a clean commit must not invalidate generated views:\n{}",
+        check.output()
+    );
+}
+
+#[test]
+fn evidence_and_completed_work_can_land_in_the_same_commit() {
+    let example = Example::materialise("change-co-committed-evidence");
+    baseline(&example);
+    example.write_file(
+        "work.txt",
+        r#"title "Verify the prepared change"
+scope [ path "src/**" ]
+intent "Prove evidence authored for a prepared tree remains current after Git advances."
+acceptance {
+    check prepared-tree {
+        statement "The prepared implementation passed its command check."
+        method command
+        command "true"
+    }
+}
+"#,
+    );
+    let proposed = example.run(&[
+        "propose",
+        "sys.work.prepared-tree",
+        "--kind",
+        "work",
+        "--from",
+        "work.txt",
+    ]);
+    assert_eq!(proposed.code, 0, "{}", proposed.output());
+    let evidence = example.run(&[
+        "evidence",
+        "add",
+        "sys.evidence.prepared-tree",
+        "--result",
+        "pass",
+        "--method",
+        "command",
+        "--command",
+        "true",
+        "--summary",
+        "The prepared tree passed.",
+    ]);
+    assert_eq!(evidence.code, 0, "{}", evidence.output());
+    assert_eq!(
+        example
+            .run(&[
+                "revise",
+                "sys.work.prepared-tree",
+                "--state",
+                "ready",
+                "--in-place",
+            ])
+            .code,
+        0
+    );
+    assert_eq!(
+        example
+            .run(&["revise", "sys.work.prepared-tree", "--state", "active"])
+            .code,
+        0
+    );
+    let completed = example.run(&[
+        "complete",
+        "sys.work.prepared-tree",
+        "--check",
+        "prepared-tree=@sys.evidence.prepared-tree/1",
+    ]);
+    assert_eq!(completed.code, 0, "{}", completed.output());
+    assert_eq!(example.run(&["build"]).code, 0);
+
+    example.git(&["add", "-A"]);
+    assert_eq!(
+        example
+            .run(&[
+                "change",
+                "begin",
+                "--kind",
+                "test",
+                "--summary",
+                "verify co-committed evidence",
+                "--primary",
+                "@sys.work.prepared-tree/2",
+            ])
+            .code,
+        0
+    );
+    assert_eq!(example.run(&["change", "prepare", "--staged"]).code, 0);
+    let commit = example.run(&["git", "commit"]);
+    assert_eq!(commit.code, 0, "{}", commit.output());
+
+    let check = example.run(&["check", "--views-current"]);
+    assert_eq!(check.code, 0, "{}", check.output());
 }
 
 #[test]

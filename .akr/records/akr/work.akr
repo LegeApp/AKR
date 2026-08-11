@@ -429,6 +429,98 @@ record akr.work.papercut-collation-followthrough/1 : work {
     implements [ @akr.decision.papercut-subject-and-collation ]
 }
 
+record akr.work.post-commit-validation/1 : work {
+    title "Make AKR commits validate after Git advances"
+    state superseded
+    scope [
+        path "crates/akr-cli/src/change.rs",
+        path "crates/akr-cli/src/commands.rs",
+        path "crates/akr-cli/tests/**",
+        path "crates/akr-core/src/render/**",
+        path "crates/akr-core/src/resolve/**",
+        path "crates/akr-core/tests/**",
+        path "docs/**"
+    ]
+    intent """
+        Make the documented akr change prepare / akr git commit path converge: the clean
+        committed workspace must pass generated-view validation, and evidence recorded for
+        the prepared implementation must continue satisfying acceptance after Git creates the
+        commit that could not have been named in advance.
+        """
+    acceptance {
+        check post-commit-views {
+            statement """
+                A repository committed through akr git commit immediately passes akr check --views-current without a follow-up hash-chasing commit.
+                """
+            method command
+            command "cargo test -p akr-cli --test change_protocol"
+        }
+        check prepared-evidence {
+            statement """
+                Passing evidence for the prepared implementation does not become older than the completed work solely because akr git commit advances HEAD.
+                """
+            method command
+            command "cargo test -p akr-cli --test change_protocol"
+        }
+        check protocol-documented {
+            statement """
+                CLI help and protocol documentation explain the convergent post-commit behavior and its authority boundary.
+                """
+            method command
+            command "cargo test -p akr-cli --all-targets"
+        }
+    }
+    implements [ @akr.decision.post-commit-validation ]
+}
+
+record akr.work.post-commit-validation/2 : work {
+    title "Make AKR commits validate after Git advances"
+    state completed
+    scope [
+        path "crates/akr-cli/src/change.rs",
+        path "crates/akr-cli/src/commands.rs",
+        path "crates/akr-cli/tests/**",
+        path "crates/akr-core/src/render/**",
+        path "crates/akr-core/src/resolve/**",
+        path "crates/akr-core/tests/**",
+        path "docs/**"
+    ]
+    intent """
+        Make the documented akr change prepare / akr git commit path converge: the clean
+        committed workspace must pass generated-view validation, and evidence recorded for
+        the prepared implementation must continue satisfying acceptance after Git creates the
+        commit that could not have been named in advance.
+        """
+    acceptance {
+        check post-commit-views {
+            statement """
+                A repository committed through akr git commit immediately passes akr check --views-current without a follow-up hash-chasing commit.
+                """
+            method command
+            command "cargo test -p akr-cli --test change_protocol"
+            verified_by [ @akr.evidence.post-commit-validation-suite/1 ]
+        }
+        check prepared-evidence {
+            statement """
+                Passing evidence for the prepared implementation does not become older than the completed work solely because akr git commit advances HEAD.
+                """
+            method command
+            command "cargo test -p akr-cli --test change_protocol"
+            verified_by [ @akr.evidence.post-commit-validation-suite/1 ]
+        }
+        check protocol-documented {
+            statement """
+                CLI help and protocol documentation explain the convergent post-commit behavior and its authority boundary.
+                """
+            method command
+            command "cargo test -p akr-cli --all-targets"
+            verified_by [ @akr.evidence.post-commit-validation-suite/1 ]
+        }
+    }
+    implements [ @akr.decision.post-commit-validation ]
+    supersedes [ @akr.work.post-commit-validation/1 ]
+}
+
 record akr.work.reduce-knowledge-write-latency/1 : work {
     title "Reduce repeated knowledge-write latency"
     state completed

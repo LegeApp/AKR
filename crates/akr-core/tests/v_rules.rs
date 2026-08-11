@@ -870,6 +870,26 @@ fn v020_applies_the_descendant_rule_once_git_facts_are_present() {
     assert_raises(&validate::v020_acceptance_satisfied(&l), c::R022);
 }
 
+#[test]
+fn v020_accepts_evidence_co_committed_with_the_verified_record() {
+    use akr_core::model::{Ancestry, Commit};
+    let observed = Commit::new("3f0a1c9d5b7e2648a0d4f1b8c36e9752ad014b6f").expect("commit");
+    let landed = Commit::new("7c41d0ba92e6f37518a3cd406b5e2f91d8074a63").expect("commit");
+
+    let mut ledger = completed_milestone(&["@fx.evidence.green"]);
+    ledger.facts.last_change.insert(
+        RevisionId::new(key("fx.milestone.claimed"), 1),
+        landed.clone(),
+    );
+    ledger
+        .facts
+        .last_change
+        .insert(RevisionId::new(key("fx.evidence.green"), 1), landed.clone());
+    ledger.facts.ancestry = Ancestry::from_pairs([(landed, observed)]);
+
+    assert_clean(&validate::v020_acceptance_satisfied(&ledger));
+}
+
 // ---------------------------------------------------------------------------------
 // D-028: legacy-sourced completion is exempt from the descendant-commit gate
 // ---------------------------------------------------------------------------------

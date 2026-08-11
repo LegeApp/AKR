@@ -1199,6 +1199,11 @@ fn descends(ledger: &Ledger, record: &Record, evidence: &Record) -> bool {
     let Some(last_change) = ledger.facts.last_change.get(&record.id) else {
         return true;
     };
+    if ledger.facts.last_change.get(&evidence.id) == Some(last_change) {
+        // Evidence and the verified record were authored in the same prepared change.
+        // Their commit could not be named by `observed_at` before Git created it.
+        return true;
+    }
     let Some(observed) = observed else {
         return true;
     };

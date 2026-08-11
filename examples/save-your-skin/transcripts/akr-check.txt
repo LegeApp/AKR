@@ -135,7 +135,7 @@ $ echo $?
 
 # --- What a hand edit looks like ------------------------------------------
 
-$ sed -i '48s/`active`/`nearly done`/' docs/generated/ROADMAP.md
+$ sed -i 's/^`active` · `@sys.milestone.m3-playable-day\/1`/`nearly done` · `@sys.milestone.m3-playable-day\/1`/' docs/generated/ROADMAP.md
 $ akr check --views-current
 
 akr check — save-your-skin
@@ -153,8 +153,8 @@ akr check — save-your-skin
     PAPERCUTS.md             current
 
 error[AKR-E011]: docs/generated/ROADMAP.md differs from the view this build would emit (1 differing line)
-note: line 48 committed: "`nearly done` · `@sys.milestone.m3-playable-day/1` · target 2026-09-30 · after `@sys.milestone.m2-deterministic-sim/1`"
-note: line 48 emitted:   "`active` · `@sys.milestone.m3-playable-day/1` · target 2026-09-30 · after `@sys.milestone.m2-deterministic-sim/1`"
+note: line 47 committed: "`nearly done` · `@sys.milestone.m3-playable-day/1` · target 2026-09-30 · after `@sys.milestone.m2-deterministic-sim/1`"
+note: line 47 emitted:   "`active` · `@sys.milestone.m3-playable-day/1` · target 2026-09-30 · after `@sys.milestone.m2-deterministic-sim/1`"
 help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
 
 1 error

@@ -243,6 +243,39 @@ record akr.decision.papercut-subject-and-collation/2 : decision {
     supported_by [ @akr.evidence.collated-papercut-fixes ]
 }
 
+record akr.decision.post-commit-validation/1 : decision {
+    title "Post-commit identity is graph-based and co-committed evidence is current"
+    state active
+    scope [
+        path "crates/akr-core/src/render/**",
+        path "crates/akr-core/src/resolve/**",
+        path "crates/akr-core/src/validate/**",
+        path "docs/16-change-protocol.md"
+    ]
+    topic post-commit-validation
+    decision """
+        Generated views embed the source-graph hash but no Git commit hash. A commit hash
+        cannot be embedded in bytes that participate in that same commit; Git maps the stable
+        graph to snapshots through AKR-Graph trailers and knowledge.start reports HEAD.
+
+        Passing evidence is current when it descends from the verified record's last content
+        change, or when the evidence record and verified record were introduced or changed in
+        the same commit. Co-commit identity proves the evidence was authored for the prepared
+        snapshot without weakening rejection of genuinely older evidence.
+        """
+    context """
+        The previous banner made every clean post-commit build differ only by the unknowable
+        future commit hash. Evidence observed against the prepared parent similarly became
+        stale when the implementation and its completion landed together.
+        """
+    consequences """
+        Generated projections are stable across the commit boundary and remain traceable by
+        source graph. Acceptance freshness preserves D-016 while explicitly supporting the
+        staged-tree workflow documented by the change protocol.
+        """
+    supported_by [ @akr.evidence.post-commit-validation-suite/1 ]
+}
+
 record akr.decision.query-words-dirty-tree-ancestry/1 : decision {
     title "A query is words; a dirty tree is a fact"
     state active

@@ -1949,7 +1949,10 @@ pub fn help_for(name: &str) -> Option<String> {
              the staged semantic delta; `commit` generates it and hands the index to\n\
              git. The durable AKR-to-git link is the commit trailers -- AKR-Change,\n\
              AKR-Work, AKR-Evidence, AKR-Graph, AKR-Tree -- which survive rebases and\n\
-             cherry-picks and which `git log` finds.\n\
+             cherry-picks and which `git log` finds. Generated views embed AKR-Graph\n\
+             rather than an unknowable future commit hash. Evidence and verified work\n\
+             that land in the same prepared commit are current together; genuinely\n\
+             older evidence remains too old.\n\
              \n\
              `install-hooks` writes two-line wrappers around `akr git-hook`, so the\n\
              checks stay in the binary rather than becoming a second implementation.\n\

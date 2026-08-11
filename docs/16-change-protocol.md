@@ -163,8 +163,14 @@ The digest is over the **implementation portion** of the staged tree: sorted
 
 Excluding AKR's own files breaks the cycle, and it also makes the digest mean the right
 thing — the implementation that was tested, not the tree including the note about having
-tested it. `akr change prepare` compares the evidence's digest against the staged one, so
-evidence that predates a source change is caught rather than believed.
+tested it. Acceptance freshness uses Git ancestry normally. When evidence and the verified
+record have the same last-change commit, it recognizes the prepared-tree case: the test
+ran against the parent plus staged implementation, and the future commit did not yet exist
+to be named. Evidence from any older commit remains too old.
+
+Generated views use the same direction of indirection. Their banner embeds the stable
+`source-graph`, never the future commit hash; `AKR-Graph` trailers map commits back to that
+graph after Git advances.
 
 ## 9. Hooks are guardrails
 

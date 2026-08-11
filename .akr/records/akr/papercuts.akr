@@ -1,6 +1,73 @@
 akr 0.1
 project akr
 
+record akr.papercut.after-an-immediate-akr-check-akr-77-records-88/1 : papercut {
+    title "After , an immediate akr check — akr"
+    state verified
+    statement """
+        After , an immediate akr check — akr
+          77 records, 88 revisions, 6 files
+          commit (none), grammar 0.1, vocabulary 0.2, today 2026-08-11
+
+          stages A-D                                 ok
+          stage F  emit (in memory)   7 views        FAILED
+            ROADMAP.md               DIFFERS
+            CURRENT-STATE.md         DIFFERS
+            ACTIVE-WORK.md           DIFFERS
+            REVIEW-REQUIRED.md       DIFFERS
+            OPEN-QUESTIONS.md        DIFFERS
+            DECISION-HISTORY.md      DIFFERS
+            PAPERCUTS.md             DIFFERS
+
+        error[AKR-E011]: docs/generated/ACTIVE-WORK.md differs from the view this build would emit (2 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-E011]: docs/generated/CURRENT-STATE.md differs from the view this build would emit (2 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-E011]: docs/generated/DECISION-HISTORY.md differs from the view this build would emit (2 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-E011]: docs/generated/OPEN-QUESTIONS.md differs from the view this build would emit (2 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-E011]: docs/generated/PAPERCUTS.md differs from the view this build would emit (7 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-E011]: docs/generated/REVIEW-REQUIRED.md differs from the view this build would emit (2 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-E011]: docs/generated/ROADMAP.md differs from the view this build would emit (2 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-R052]: akr.lock has no hash for akr.papercut.collated-18-papercuts-from-evidence-intake/1
+          --> .akr/records/akr/papercuts.akr:180:1
+            |
+        180 | record akr.papercut.collated-18-papercuts-from-evidence-intake/1 : papercut {
+            | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            |
+
+        8 errors rejected all generated views because they embedded commit '(none)' while the clean workspace now resolves the new commit hash. Committing the regenerated headers would create another hash, so the documented atomic path needs commit-stable view metadata or a post-commit strategy that converges.
+        """
+    observed_at git:03e4af3c2e62cb07ab00436e512bedc41cd88436
+    author "codex"
+    created_at 2026-08-11
+}
+
 record akr.papercut.bug-needs-a-decision-d-028-is-incomplete/1 : papercut {
     title "BUG (needs a decision, D-028 is incomplete): completing a COMMITTED…"
     state superseded
@@ -177,6 +244,91 @@ record akr.papercut.collated-10-papercuts-from-evidence-intake/2 : papercut {
     created_at 2026-08-09
 }
 
+record akr.papercut.collated-18-papercuts-from-evidence-intake/1 : papercut {
+    title "Collated 18 papercuts from Evidence-intake-project, Lege-ecosystem, SaveYourSkin, jpegXL-rs and 1 more"
+    state verified
+    statement """
+        Collated 18 papercuts from /mnt/Samsung980_1TB/Rust-projects on 2026-08-11 (D-030). Each source key is also in the collated slot, which is the dedup set for the next run; the sisters were read and never written.
+
+        ## Evidence-intake-project @evidence-intake-project.papercut.i-passed-scope-terms-as-path-src-gui-winsafe-rs [about akr]
+        I passed scope terms as "path src/gui/winsafe.rs" to knowledge.propose, copying the `path "..."` form the generated views render, and it was accepted silently — producing scope `path "path src/gui/winsafe.rs"`, a glob that can never match a file, so the records would never have gone stale when winsafe.rs changed. Nothing validates that a scope glob is well-formed or warns that it currently matches zero paths. A warning when a path term matches nothing in the worktree would have caught this at propose time instead of three records later.
+
+        ## Evidence-intake-project @evidence-intake-project.papercut.knowledge-explain-crashed-with-akr-x099 [about akr]
+        knowledge.explain crashed with AKR-X099 (internal) for both `decision` and `constraint` after knowledge.propose rejected my slots with AKR-T002. The propose error names the bad slot but not the valid ones, and explain -- the documented way to find them -- is exactly what fails, so I had to read .akr/records/*.akr by hand to learn that a decision uses `decision` plus `claim` blocks and has no `rationale` or `note` slot. Suggest AKR-T002 list the kind's valid slots inline.
+
+        ## Evidence-intake-project @evidence-intake-project.papercut.knowledge-propose-returns-lock-stale-true-on [about akr]
+        knowledge.propose returns lock_stale:true on every write but does not refresh akr.lock, so a later knowledge.validate fails with AKR-R052 ("akr.lock has no hash for <the record I just wrote>"). The fix is `akr lock --update`, but nothing in the propose result or the diagnostic says so, and AGENTS.md's "never hand-edit .akr/" made me hesitant to touch the lock at all. Suggest either refreshing the lock as part of propose, or having AKR-R052 name `akr lock --update` as the remedy.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.after-several-successful-akr-writes-the-mcp [about akr]
+        After several successful AKR writes, the MCP transport closed persistently: knowledge.explain and knowledge.revise both failed immediately, and error[AKR-C004]: "D-011" is neither a registered diagnostic code, a known rule, nor a record kind also rejected a decision identifier even though tool guidance names it. The local  fallback completed the handoff update.
+
+        ## Lege-ecosystem @lege-ecosystem-perf.papercut.knowledge-papercut-rejected-its-first-call [about akr]
+        `knowledge.papercut` rejected its first call because this multi-namespace project requires an explicit namespace, although the task protocol's example does not mention that requirement. Retrying with `namespace: lege-ecosystem-perf` succeeded.
+
+        ## SaveYourSkin @saveyourskin.papercut.after-knowledge-revise-changed-an-existing [about akr]
+        After knowledge.revise changed an existing milestone revision from proposed to ready in place, a second revise with the same base revision and state active created a new revision in proposed state instead of activating it. This repeated on revisions 3 and 4; completing directly from ready worked.
+
+        ## SaveYourSkin @saveyourskin.papercut.authoring-a-new-track-s-records-cost-three [about akr]
+        Authoring a new track's records cost three failed writes to discover relation/slot rules that aren't visible from the propose schema: a `constraint` rejects the `note` slot (planning kinds only, D-026), an `observation` may not declare `supported_by`, and a `milestone` may not declare `implements` (both V-005). The tool description lists relation names generically, so the per-kind restrictions only surface as errors after a full record body is composed. Either the propose schema's relations field could name the allowed relations per kind, or the V-005 error could suggest the nearest legal relation (`derived_from` in both of my cases). Separately, an `observation`'s `observed_at` requires a 40-hex commit while the kind's description just says "observed_at", so an ISO date is a natural first guess and fails with a parse cascade of three diagnostics.
+
+        ## SaveYourSkin @saveyourskin.papercut.knowledge-context-rejected-a-valid-key-revision [about akr]
+        knowledge.context rejected a valid @key/revision reference even though knowledge.get accepts that canonical reference form; it required the bare logical key, making goal resumption take two retries. The context tool/docs could state or normalize this syntax.
+
+        ## SaveYourSkin @saveyourskin.papercut.knowledge-supersede-documents-a-new-key-option [about akr]
+        knowledge.supersede documents a new_key option, but AKR 0.1 rejects every different-key supersession with AKR-C004. I had to supersede the existing key in place, which prevents giving a materially changed design ruling a more accurate key.
+
+        ## SaveYourSkin @saveyourskin.papercut.revising-an-active-decision-s-content [about akr]
+        Revising an active decision's content implicitly returned its lifecycle state to proposed, requiring a second state-only revise. Preserving the head state by default, or explicitly warning that omitted state resets it, would avoid an easy accidental deactivation.
+
+        ## SaveYourSkin @saveyourskin.papercut.while-removing-37-acknowledged-missing-source [about akr]
+        While removing 37 acknowledged missing-source citations, knowledge.get, knowledge.revise, knowledge.explain, and knowledge.validate repeatedly returned Transport closed; the local akr CLI remained healthy and provided the necessary fallback.
+
+        ## jpegXL-rs @jpegxl-rs.papercut.knowledge-propose-documents-observation [about akr]
+        knowledge.propose documents observation observed_at as required but does not say it must be a git:<40-hex> locator; passing the natural ISO date 2026-08-11 produced parser errors about a 4-digit commit hash.
+
+        ## jpegXL-rs @jpegxl-rs.papercut.knowledge-propose-says-observation-requires [about akr]
+        knowledge.propose says observation requires statement and observed_at, but a verified observation also requires method/source/evidence (V-022); after adding method, the natural accompanying command slot is rejected because observation does not permit command.
+
+        ## raw-autotune @raw-autotune.papercut.akr-explain-assessment-lists-optional-as-of-but [about akr]
+        akr explain assessment lists optional as_of but not that it requires a git commit; using an ISO date caused a safe parse failure. Showing slot types in explain would avoid this retry.
+
+        ## raw-autotune @raw-autotune.papercut.akr-propose-from-rejected-a-prose-body-as-does [about akr]
+        akr propose --from rejected a prose body as 'does not parse as a record'; the CLI help calls it a body source but this build requires a complete canonical record.
+
+        ## raw-autotune @raw-autotune.papercut.knowledge-explain-observation-and-knowledge [about akr]
+        knowledge.explain observation and knowledge.papercut both failed with Transport closed while recording the sky-stage diagnosis; the local akr CLI worked as a fallback.
+
+        ## raw-autotune @raw-autotune.papercut.the-akr-cli-search-syntax-differs-from-the-mcp [about akr]
+        The AKR CLI search syntax differs from the MCP shape: --query is rejected and the help must be consulted separately.
+
+        ## raw-autotune @raw-autotune.papercut.the-knowledge-context-mcp-connector-returned [about akr]
+        The knowledge.context MCP connector returned 'Transport closed' at the start of implementation; using the equivalent akr CLI workflow.
+        """
+    observed_at git:03e4af3c2e62cb07ab00436e512bedc41cd88436
+    about "akr"
+    collated [
+        "evidence-intake-project.papercut.i-passed-scope-terms-as-path-src-gui-winsafe-rs",
+        "evidence-intake-project.papercut.knowledge-explain-crashed-with-akr-x099",
+        "evidence-intake-project.papercut.knowledge-propose-returns-lock-stale-true-on",
+        "lege-ecosystem-perf.papercut.after-several-successful-akr-writes-the-mcp",
+        "lege-ecosystem-perf.papercut.knowledge-papercut-rejected-its-first-call",
+        "saveyourskin.papercut.after-knowledge-revise-changed-an-existing",
+        "saveyourskin.papercut.authoring-a-new-track-s-records-cost-three",
+        "saveyourskin.papercut.knowledge-context-rejected-a-valid-key-revision",
+        "saveyourskin.papercut.knowledge-supersede-documents-a-new-key-option",
+        "saveyourskin.papercut.revising-an-active-decision-s-content",
+        "saveyourskin.papercut.while-removing-37-acknowledged-missing-source",
+        "jpegxl-rs.papercut.knowledge-propose-documents-observation",
+        "jpegxl-rs.papercut.knowledge-propose-says-observation-requires",
+        "raw-autotune.papercut.akr-explain-assessment-lists-optional-as-of-but",
+        "raw-autotune.papercut.akr-propose-from-rejected-a-prose-body-as-does",
+        "raw-autotune.papercut.knowledge-explain-observation-and-knowledge",
+        "raw-autotune.papercut.the-akr-cli-search-syntax-differs-from-the-mcp",
+        "raw-autotune.papercut.the-knowledge-context-mcp-connector-returned"
+    ]
+    created_at 2026-08-11
+}
+
 record akr.papercut.collated-18-papercuts-from-kitchen-concept-lege/1 : papercut {
     title "Collated 18 papercuts from Kitchen-Concept, Lege-ecosystem, SaveYourSkin, bpg-rs and 4 more"
     state verified
@@ -308,6 +460,17 @@ record akr.papercut.completing-a-milestone-failed-because-a/1 : papercut {
     observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
     author "codex"
     created_at 2026-08-09
+}
+
+record akr.papercut.evidence-recorded-after-tests-but-before/1 : papercut {
+    title "Evidence recorded after tests but before  pointed at the parent commit,…"
+    state verified
+    statement """
+        Evidence recorded after tests but before  pointed at the parent commit, so the newly committed completed work immediately failed AKR-R022 as evidence predating its content. The change protocol needs a supported two-phase completion flow or evidence tied to the prepared implementation tree instead of an unknowable future commit.
+        """
+    observed_at git:03e4af3c2e62cb07ab00436e512bedc41cd88436
+    author "codex"
+    created_at 2026-08-11
 }
 
 record akr.papercut.historical-port-design-gap-recovered-from-a/1 : papercut {

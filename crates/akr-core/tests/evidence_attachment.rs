@@ -460,6 +460,39 @@ fn evidence_older_than_the_last_content_change_does_not_satisfy() {
 }
 
 #[test]
+fn co_committed_evidence_satisfies_the_prepared_change() {
+    let mut ledger = ledger_with_milestone();
+    ledger.facts.ancestry =
+        Ancestry::from_pairs(vec![(commit(C2), commit(C1)), (commit(C3), commit(C2))]);
+    ledger
+        .facts
+        .last_change
+        .insert(id("sys.milestone.m1", 1), commit(C3));
+
+    let mut evidence = request("sys.evidence.squelch-audit");
+    evidence.observed_at = commit(C2);
+    let mut written = add_and_attach(
+        &ledger,
+        &evidence,
+        &key("sys.milestone.m1"),
+        "squelch-audit",
+    )
+    .expect("attaches");
+    written
+        .ledger
+        .facts
+        .last_change
+        .insert(id("sys.evidence.squelch-audit", 1), commit(C3));
+
+    let model = ResolvedModel::build(&written.ledger, &BuildInputs::default());
+    assert!(
+        model.checks_of(&id("sys.milestone.m1", 1))[0]
+            .verdict
+            .is_satisfied()
+    );
+}
+
+#[test]
 fn completing_with_an_unsatisfied_check_is_still_akr_r022() {
     // The rule V-020 enforces, now that the facts behind it are real.
     let mut ledger = ledger_with_milestone();
