@@ -96,7 +96,12 @@ fn without_search_overlays(value: Value) -> Value {
         Value::Object(fields) => Value::Object(
             fields
                 .into_iter()
-                .filter(|(name, _)| name != "planning_candidates" && name != "recommended_context")
+                .filter(|(name, _)| {
+                    !matches!(
+                        name.as_str(),
+                        "planning_candidates" | "recommended_context" | "has_more" | "next_offset"
+                    )
+                })
                 .collect(),
         ),
         _ => value,
@@ -203,6 +208,7 @@ fn knowledge_start_can_locate_a_user_supplied_plan_by_its_path() {
     );
 }
 
+#[cfg(feature = "fts5")]
 #[test]
 fn knowledge_start_and_akr_start_share_the_session_head() {
     let example = Example::materialise("differential-session-head");
@@ -379,6 +385,44 @@ fn knowledge_search_and_akr_search_agree() {
 
 #[cfg(feature = "fts5")]
 #[test]
+fn knowledge_search_continuation_advances_through_ranked_results() {
+    let example = Example::materialise("differential-search-pagination");
+    assert_eq!(example.run(&["build"]).code, 0);
+
+    let first = call(
+        &example,
+        "knowledge.search",
+        r#"{"query":"projection","limit":1}"#,
+    );
+    let next = first
+        .get("next_offset")
+        .and_then(Value::as_integer)
+        .expect("the first page has a continuation");
+    let first_key = first
+        .get("results")
+        .and_then(Value::as_array)
+        .and_then(|results| results.first())
+        .and_then(|result| result.get("key"))
+        .and_then(Value::as_str)
+        .expect("the first page is useful");
+
+    let second = call(
+        &example,
+        "knowledge.search",
+        &format!(r#"{{"query":"projection","limit":1,"offset":{next}}}"#),
+    );
+    let second_key = second
+        .get("results")
+        .and_then(Value::as_array)
+        .and_then(|results| results.first())
+        .and_then(|result| result.get("key"))
+        .and_then(Value::as_str)
+        .expect("the continuation page is useful");
+    assert_ne!(first_key, second_key, "the continuation repeated page one");
+}
+
+#[cfg(feature = "fts5")]
+#[test]
 fn knowledge_search_refreshes_a_missing_index() {
     let example = Example::materialise("differential-search-refresh");
     assert_eq!(example.run(&["build"]).code, 0);
@@ -402,19 +446,12 @@ fn knowledge_search_refreshes_a_missing_index() {
 
 #[cfg(not(feature = "fts5"))]
 #[test]
-fn a_cache_without_a_ranker_fails_the_same_way_on_both_surfaces() {
+fn a_cache_without_a_ranker_rejects_mcp_search() {
     // P7 exit criterion 4 reaches the tool surface too: an agent must learn that search is
-    // unavailable, not that the ledger is empty.
+    // unavailable, not that the ledger is empty. CLI/MCP parity belongs to the FTS5 suite:
+    // Cargo does not build this package's independently packaged CLI binary with matching
+    // features, so consulting target/debug/akr here makes the result depend on build order.
     let example = Example::materialise("differential-search-degraded");
-    assert_eq!(example.run(&["build"]).code, 0);
-
-    // No cache at all is the condition both surfaces have to survive, and it is reachable
-    // in either build: the binary without FTS5 never had a ranker, and the one with FTS5
-    // just lost the file its ranker lived in.
-    std::fs::remove_dir_all(example.root().join(".akr/cache")).expect("the cache goes");
-
-    let run = example.run(&["search", "projection"]);
-    assert_eq!(run.code, 3, "{}", run.output());
 
     let payload = call(&example, "knowledge.search", r#"{"query":"projection"}"#);
     let error = payload.get("error").expect("an error payload");

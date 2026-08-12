@@ -183,6 +183,10 @@ pub fn input_schema(name: &str) -> Option<Value> {
                     "limit",
                     integer("Maximum results. Default 20, maximum 100."),
                 ),
+                (
+                    "offset",
+                    integer("Zero-based ranked-result offset. Use `next_offset` to continue."),
+                ),
             ],
             &["query"],
         ),
@@ -279,6 +283,10 @@ pub fn input_schema(name: &str) -> Option<Value> {
                 (
                     "limit",
                     integer("Maximum results. Default 10, maximum 100."),
+                ),
+                (
+                    "offset",
+                    integer("Zero-based ranked-result offset. Use `next_offset` to continue."),
                 ),
             ],
             &["query"],

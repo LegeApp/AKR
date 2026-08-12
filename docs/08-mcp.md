@@ -94,7 +94,8 @@ write.
   "query": "frame budget",            // required
   "kinds": ["constraint","observation"],  // optional filter
   "states": ["active","verified"],        // optional filter
-  "limit": 20                             // optional, default 20, max 100
+  "limit": 20,                            // optional, default 20, max 100
+  "offset": 0                             // optional; continue from next_offset
 }
 // output
 {
@@ -104,7 +105,7 @@ write.
       "state": "active", "title": "16 ms frame budget at p99",
       "score": 0.91, "stale": false, "at_risk": false }
   ],
-  "total": 2, "truncated": false
+  "count": 2, "has_more": false, "next_offset": null
 }
 ```
 
@@ -112,6 +113,13 @@ write.
 authorises.** A record appearing here has no standing it did not already have, and
 nothing enters a context bundle because it matched a query
 ([`09-context-assembly.md`](09-context-assembly.md) §1).
+
+If the MCP output budget cannot carry the requested number of ranked records, the
+response still contains the largest useful first page that fits. It sets `truncated`,
+`has_more`, and `next_offset`, and its `continuation` repeats the original query and
+filters with the advancing offset. A budget limit must never replace every result with a
+notice. `knowledge.source_search` uses the same `limit`/`offset` paging contract while
+retaining its NON-AUTHORITATIVE standing on every page.
 
 Before returning results, search refreshes a missing or stale disposable index from the
 currently loaded ledger. Successful responses therefore carry `index_stale: false`.
@@ -179,9 +187,11 @@ the ledger's own syntax reads that, not a file.
 ```
 
 `budget_tokens` controls context assembly and disables the MCP adapter’s separate fixed
-ceiling for this call. The server does not assemble an 8,000-token bundle and then
-discard it behind a smaller transport limit. When the argument is omitted, the normal
-4,000-token context ceiling applies. The value remains approximate because MCP carries
+ceiling for this call. The same rule applies to `knowledge.start` and its handoff
+assembly. The server does not assemble an 8,000-token bundle and then discard it behind
+a smaller transport limit. When the argument is omitted, the normal per-tool ceiling
+applies; an oversized result retains a compact preview and an actionable continuation
+instead of withholding all content. The value remains approximate because MCP carries
 both readable text and structured metadata.
 
 Sections appear in the fixed order above, always, whether or not they are empty. The

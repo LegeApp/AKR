@@ -9,12 +9,11 @@
 //!
 //! So the limits live here instead, per tool, and they are deliberately small.
 //!
-//! # Truncation is honest or it does not happen
+//! # Truncation is useful or it does not happen
 //!
-//! A result over its hard limit is replaced by a summary and a cursor. It is not quietly
-//! shortened, and it never claims to be complete: the context budget in `akr-core` was
-//! once annotating prose as truncated while emitting all of it, and an agent that cannot
-//! trust a truncation marker will simply ask for everything.
+//! A result over its hard limit returns a compact preview or a real first page and an
+//! actionable continuation. It is never replaced by a notice containing none of the
+//! requested knowledge: that failure mode forced agents to bypass the supported tools.
 
 use akr_core::json::Value;
 
@@ -92,15 +91,15 @@ pub fn enforce(
     tool: &str,
     text: Option<&str>,
     structured: &Value,
-    requested_hard_tokens: Option<usize>,
+    internally_budgeted: Option<usize>,
+    arguments: &Value,
 ) -> Enforced {
     let budget = budget_for(tool);
-    // `knowledge.context` already assembled to the caller's explicit budget. Applying a
+    // Start and context already assembled to the caller's explicit budget. Applying a
     // second ceiling afterwards both wastes that work and makes the input contract
     // untrue, especially because MCP duplicates some information across text and
-    // structured halves. Other tools have no caller-selected budget and keep their fixed
-    // engineering limit.
-    let hard_tokens = requested_hard_tokens.map_or(budget.hard_tokens, |_| usize::MAX);
+    // structured halves.
+    let hard_tokens = internally_budgeted.map_or(budget.hard_tokens, |_| usize::MAX);
     let rendered = structured.to_pretty();
     // Both halves, because both reach the model: a client that shows `content` and a
     // client that parses `structuredContent` are each paying for their own half.
@@ -115,29 +114,11 @@ pub fn enforce(
         };
     }
 
-    let advice = narrowing_advice(tool);
-    let summary = format!(
-        "{tool} produced about {estimated} tokens, over its {} limit, so it was withheld \
-         rather than truncated.\n{advice}",
-        hard_tokens
-    );
-    let structured = Value::object(vec![
-        ("truncated", Value::bool(true)),
-        ("tool", Value::string(tool.to_owned())),
-        (
-            "estimated_tokens",
-            Value::integer(i64::try_from(estimated).unwrap_or(i64::MAX)),
-        ),
-        (
-            "hard_limit_tokens",
-            Value::integer(i64::try_from(hard_tokens).unwrap_or(i64::MAX)),
-        ),
-        ("continuation", narrowing_arguments(tool)),
-        ("help", Value::string(advice)),
-        // Whatever shape the caller expected, the top-level counts survive: a caller can
-        // tell "nothing matched" from "too much matched" without a second call.
-        ("counts", counts_of(structured)),
-    ]);
+    let (summary, structured) = if matches!(tool, "knowledge.search" | "knowledge.source_search") {
+        search_page(tool, structured, arguments, hard_tokens, estimated)
+    } else {
+        compact_preview(tool, structured, arguments, hard_tokens, estimated)
+    };
 
     Enforced {
         text: Some(summary),
@@ -173,20 +154,232 @@ fn narrowing_advice(tool: &str) -> String {
 }
 
 /// A ready-made retry, so the next call is a copy rather than a guess.
-fn narrowing_arguments(tool: &str) -> Value {
-    let arguments = match tool {
+fn narrowing_arguments(tool: &str, original: &Value) -> Value {
+    let changes = match tool {
         "knowledge.get" => vec![("detail", Value::string("summary"))],
         "knowledge.source_get" => vec![("detail", Value::string("snippet"))],
         "knowledge.search" | "knowledge.source_search" => vec![("limit", Value::integer(5))],
+        "knowledge.start" => vec![("budget_tokens", Value::integer(1_500))],
         "knowledge.context" => vec![("budget_tokens", Value::integer(2_000))],
         "knowledge.impact" => vec![("depth", Value::integer(1))],
         "knowledge.validate" => vec![("limit", Value::integer(3)), ("offset", Value::integer(0))],
         _ => return Value::Null,
     };
+    let mut arguments = match original {
+        Value::Object(fields) => fields.clone(),
+        _ => Vec::new(),
+    };
+    for (name, value) in changes {
+        arguments.retain(|(existing, _)| existing != name);
+        arguments.push((name.to_owned(), value));
+    }
     Value::object(vec![
         ("tool", Value::string(tool.to_owned())),
-        ("arguments", Value::object(arguments)),
+        ("arguments", Value::Object(arguments)),
     ])
+}
+
+fn compact_preview(
+    tool: &str,
+    structured: &Value,
+    arguments: &Value,
+    hard_tokens: usize,
+    estimated: usize,
+) -> (String, Value) {
+    let advice = narrowing_advice(tool);
+    let continuation = narrowing_arguments(tool, arguments);
+    let mut preview = preview_value(structured, 0);
+    let counts = counts_of(structured);
+    append_fields(
+        &mut preview,
+        vec![
+            ("truncated", Value::bool(true)),
+            ("tool", Value::string(tool.to_owned())),
+            ("estimated_tokens", usize_value(estimated)),
+            ("hard_limit_tokens", usize_value(hard_tokens)),
+            ("continuation", continuation.clone()),
+            ("help", Value::string(advice.clone())),
+            ("counts", counts),
+        ],
+    );
+    let text = format!(
+        "{tool} returned a compact preview of an approximately {estimated}-token result.\n\
+         {advice}\nContinuation:\n{}\n\n{}",
+        continuation.to_pretty(),
+        preview.to_pretty()
+    );
+    (text, preview)
+}
+
+fn search_page(
+    tool: &str,
+    structured: &Value,
+    arguments: &Value,
+    hard_tokens: usize,
+    estimated: usize,
+) -> (String, Value) {
+    let results = structured
+        .get("results")
+        .and_then(Value::as_array)
+        .unwrap_or(&[]);
+    if results.is_empty() {
+        return compact_preview(tool, structured, arguments, hard_tokens, estimated);
+    }
+    let base_offset = arguments
+        .get("offset")
+        .and_then(Value::as_integer)
+        .and_then(|n| usize::try_from(n).ok())
+        .unwrap_or(0);
+    let mut keep = results.len();
+    let mut candidate = structured.clone();
+    let mut candidate_text = String::new();
+
+    while keep > 0 {
+        let next = base_offset.saturating_add(keep);
+        let continuation = search_continuation(tool, arguments, next);
+        candidate = structured.clone();
+        replace_search_page(
+            &mut candidate,
+            &results[..keep],
+            next,
+            estimated,
+            hard_tokens,
+            &continuation,
+        );
+        candidate_text = render_search_preview(tool, &results[..keep], base_offset, &continuation);
+        let size = estimate_tokens(&candidate_text) + estimate_tokens(&candidate.to_pretty());
+        if size <= hard_tokens || keep == 1 {
+            break;
+        }
+        keep -= 1;
+    }
+    (candidate_text, candidate)
+}
+
+fn search_continuation(tool: &str, arguments: &Value, offset: usize) -> Value {
+    let mut continuation = narrowing_arguments(tool, arguments);
+    if let Value::Object(fields) = &mut continuation {
+        if let Some((_, Value::Object(args))) =
+            fields.iter_mut().find(|(name, _)| name == "arguments")
+        {
+            args.retain(|(name, _)| name != "offset");
+            args.push(("offset".to_owned(), usize_value(offset)));
+        }
+    }
+    continuation
+}
+
+fn replace_search_page(
+    value: &mut Value,
+    results: &[Value],
+    next_offset: usize,
+    estimated: usize,
+    hard_tokens: usize,
+    continuation: &Value,
+) {
+    let counts = counts_of(value);
+    let Value::Object(fields) = value else { return };
+    fields.retain(|(name, _)| {
+        !matches!(
+            name.as_str(),
+            "results"
+                | "count"
+                | "truncated"
+                | "has_more"
+                | "next_offset"
+                | "estimated_tokens"
+                | "hard_limit_tokens"
+                | "continuation"
+        )
+    });
+    fields.extend([
+        ("results".to_owned(), Value::array(results.to_vec())),
+        ("count".to_owned(), usize_value(results.len())),
+        ("truncated".to_owned(), Value::bool(true)),
+        ("has_more".to_owned(), Value::bool(true)),
+        ("next_offset".to_owned(), usize_value(next_offset)),
+        ("estimated_tokens".to_owned(), usize_value(estimated)),
+        ("hard_limit_tokens".to_owned(), usize_value(hard_tokens)),
+        ("continuation".to_owned(), continuation.clone()),
+        ("counts".to_owned(), counts),
+    ]);
+}
+
+fn render_search_preview(
+    tool: &str,
+    results: &[Value],
+    offset: usize,
+    continuation: &Value,
+) -> String {
+    let mut text = format!("{tool} results from offset {offset}:\n");
+    for result in results {
+        if tool == "knowledge.search" {
+            let key = result
+                .get("key")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let rev = result.get("rev").and_then(Value::as_integer).unwrap_or(0);
+            let title = result
+                .get("title")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            text.push_str(&format!("- @{key}/{rev} — {title}\n"));
+        } else {
+            let document = result
+                .get("document")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let chunk = result
+                .get("chunk")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let heading = result
+                .get("heading")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            text.push_str(&format!(
+                "- source:{document} chunk {chunk} — {heading} [NON-AUTHORITATIVE]\n"
+            ));
+        }
+    }
+    text.push_str(&format!("Continue with:\n{}", continuation.to_pretty()));
+    text
+}
+
+fn preview_value(value: &Value, depth: usize) -> Value {
+    match value {
+        Value::String(text) if text.chars().count() > 240 => {
+            let mut preview: String = text.chars().take(240).collect();
+            preview.push('…');
+            Value::string(preview)
+        }
+        Value::Array(items) => Value::array(
+            items
+                .iter()
+                .take(if depth < 2 { 2 } else { 1 })
+                .map(|item| preview_value(item, depth + 1))
+                .collect(),
+        ),
+        Value::Object(fields) => Value::Object(
+            fields
+                .iter()
+                .map(|(name, item)| (name.clone(), preview_value(item, depth + 1)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
+fn append_fields(value: &mut Value, additions: Vec<(&str, Value)>) {
+    let Value::Object(fields) = value else { return };
+    for (name, item) in additions {
+        fields.retain(|(existing, _)| existing != name);
+        fields.push((name.to_owned(), item));
+    }
+}
+
+fn usize_value(value: usize) -> Value {
+    Value::integer(i64::try_from(value).unwrap_or(i64::MAX))
 }
 
 /// The scalar and array-length fields of a payload, so a withheld result still counts.
@@ -316,29 +509,64 @@ mod tests {
     #[test]
     fn a_small_result_passes_through_untouched() {
         let structured = Value::object(vec![("ok", Value::bool(true))]);
-        let enforced = enforce("knowledge.validate", Some("ok\n"), &structured, None);
+        let enforced = enforce(
+            "knowledge.validate",
+            Some("ok\n"),
+            &structured,
+            None,
+            &Value::Object(Vec::new()),
+        );
         assert!(!enforced.truncated);
         assert_eq!(enforced.text.as_deref(), Some("ok\n"));
         assert_eq!(enforced.structured, structured);
     }
 
     #[test]
-    fn an_oversized_result_is_withheld_rather_than_shortened() {
+    fn an_oversized_search_returns_a_useful_page() {
         let structured = big(400);
-        let enforced = enforce("knowledge.search", None, &structured, None);
+        let arguments = Value::object(vec![("query", Value::string("example"))]);
+        let enforced = enforce("knowledge.search", None, &structured, None, &arguments);
         assert!(enforced.truncated);
-        // Withheld, not trimmed: a partial list that does not say it is partial is worse
-        // than no list.
         assert_ne!(enforced.structured, structured);
         assert_eq!(
             enforced.structured.get("truncated"),
             Some(&Value::Bool(true))
         );
+        assert!(
+            enforced
+                .structured
+                .get("results")
+                .and_then(Value::as_array)
+                .is_some_and(|results| !results.is_empty()),
+            "truncation must never replace all useful content with a notice"
+        );
+        let continuation = enforced
+            .structured
+            .get("continuation")
+            .expect("an exact next page");
+        assert_eq!(
+            continuation.get("arguments").and_then(|a| a.get("query")),
+            Some(&Value::String("example".to_owned()))
+        );
+        assert!(
+            continuation
+                .get("arguments")
+                .and_then(|a| a.get("offset"))
+                .and_then(Value::as_integer)
+                .is_some_and(|offset| offset > 0),
+            "the continuation must advance instead of retrying page one"
+        );
     }
 
     #[test]
-    fn a_withheld_result_says_how_to_ask_for_less() {
-        let enforced = enforce("knowledge.get", None, &big(400), None);
+    fn a_compact_preview_preserves_required_retry_arguments() {
+        let enforced = enforce(
+            "knowledge.get",
+            None,
+            &big(400),
+            None,
+            &Value::object(vec![("ref", Value::string("@sys.term.example/1"))]),
+        );
         let continuation = enforced
             .structured
             .get("continuation")
@@ -347,6 +575,10 @@ mod tests {
             continuation.get("arguments").and_then(|a| a.get("detail")),
             Some(&Value::String("summary".to_owned()))
         );
+        assert_eq!(
+            continuation.get("arguments").and_then(|a| a.get("ref")),
+            Some(&Value::String("@sys.term.example/1".to_owned()))
+        );
         assert!(
             enforced.text.expect("a summary").contains("detail"),
             "the text half has to carry the advice too"
@@ -354,8 +586,14 @@ mod tests {
     }
 
     #[test]
-    fn a_withheld_result_still_carries_its_counts() {
-        let enforced = enforce("knowledge.search", None, &big(400), None);
+    fn a_paged_result_still_carries_its_original_counts() {
+        let enforced = enforce(
+            "knowledge.search",
+            None,
+            &big(400),
+            None,
+            &Value::object(vec![("query", Value::string("example"))]),
+        );
         assert_eq!(
             enforced
                 .structured
@@ -367,13 +605,44 @@ mod tests {
     }
 
     #[test]
+    fn an_oversized_source_search_preserves_filters_and_advances() {
+        let arguments = Value::object(vec![
+            ("query", Value::string("decoder advice")),
+            ("mode", Value::string("literal")),
+            ("documents", Value::array(vec![Value::string("audit-2026")])),
+        ]);
+        let enforced = enforce("knowledge.source_search", None, &big(400), None, &arguments);
+        let retry = enforced
+            .structured
+            .get("continuation")
+            .and_then(|continuation| continuation.get("arguments"))
+            .expect("source search has an exact next page");
+        assert_eq!(retry.get("query"), arguments.get("query"));
+        assert_eq!(retry.get("mode"), arguments.get("mode"));
+        assert_eq!(retry.get("documents"), arguments.get("documents"));
+        assert!(
+            retry
+                .get("offset")
+                .and_then(Value::as_integer)
+                .is_some_and(|offset| offset > 0)
+        );
+    }
+
+    #[test]
     fn both_halves_count_towards_the_budget() {
         // The duplication the design set warns about: a client that shows text and parses
         // structure pays for both, so the guard has to measure both.
         let structured = big(200);
         let text = structured.to_pretty();
-        let with_text = enforce("knowledge.search", Some(&text), &structured, None);
-        let without = enforce("knowledge.search", None, &structured, None);
+        let arguments = Value::object(vec![("query", Value::string("example"))]);
+        let with_text = enforce(
+            "knowledge.search",
+            Some(&text),
+            &structured,
+            None,
+            &arguments,
+        );
+        let without = enforce("knowledge.search", None, &structured, None, &arguments);
         assert!(with_text.estimated_tokens > without.estimated_tokens);
     }
 
@@ -386,13 +655,21 @@ mod tests {
     }
 
     #[test]
-    fn an_explicit_context_budget_replaces_the_default_transport_ceiling() {
+    fn explicit_assembly_budgets_replace_default_transport_ceilings() {
         let structured = big(1_000);
         let estimated = estimate_tokens(&structured.to_pretty());
         assert!(estimated > budget_for("knowledge.context").hard_tokens);
-        let enforced = enforce("knowledge.context", None, &structured, Some(1));
-        assert!(!enforced.truncated);
-        assert_eq!(enforced.structured, structured);
+        for tool in ["knowledge.start", "knowledge.context"] {
+            let enforced = enforce(
+                tool,
+                None,
+                &structured,
+                Some(1),
+                &Value::object(vec![("budget_tokens", Value::integer(1))]),
+            );
+            assert!(!enforced.truncated, "{tool}");
+            assert_eq!(enforced.structured, structured, "{tool}");
+        }
     }
 
     #[test]

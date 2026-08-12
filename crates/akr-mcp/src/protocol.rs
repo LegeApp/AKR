@@ -271,7 +271,7 @@ impl Server {
         let outcome = guarded_tool_call(|| tools::call(&self.root, name, &arguments));
         let (text, structured, is_error) = match outcome {
             Ok(payload) => {
-                let requested_hard_tokens = (name == "knowledge.context")
+                let internally_budgeted = matches!(name, "knowledge.start" | "knowledge.context")
                     .then(|| {
                         arguments
                             .get("budget_tokens")
@@ -283,7 +283,8 @@ impl Server {
                     name,
                     payload.text(),
                     payload.structured(),
-                    requested_hard_tokens,
+                    internally_budgeted,
+                    &arguments,
                 );
                 (enforced.text, enforced.structured, false)
             }

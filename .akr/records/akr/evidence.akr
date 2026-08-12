@@ -128,6 +128,18 @@ record akr.evidence.knowledge-provenance-lifecycle-suite/1 : evidence {
         """
 }
 
+record akr.evidence.mcp-actionable-truncation-suite/1 : evidence {
+    title "MCP actionable truncation and paging suite passed"
+    state verified
+    result pass
+    method command
+    observed_at git:2dd07efa746065e627b1445587e3bb0ca0af553b
+    command "cargo test -p akr-mcp"
+    summary """
+        The complete akr-mcp suite passed: oversized search and source-search budget tests retained useful results with advancing continuations, explicit start/context budgets bypassed smaller transport ceilings, ranked offset paging advanced end to end, and all differential, transport, and write tests passed.
+        """
+}
+
 record akr.evidence.mcp-budget-and-skew-suite/1 : evidence {
     title "MCP budget and version-skew unit suite"
     state verified
@@ -136,6 +148,18 @@ record akr.evidence.mcp-budget-and-skew-suite/1 : evidence {
     observed_at git:a77dc6606334df984b3fef605716c4fc361b9c15
     summary """
         cargo test -p akr-mcp: 11 unit tests over budget.rs and skew.rs — oversized results withheld rather than shortened, both halves counted, counts and a ready-made narrower call preserved, and the skew message naming the reconnect.
+        """
+}
+
+record akr.evidence.mcp-feature-suites-pass/1 : evidence {
+    title "The complete MCP test suite passed with default features and without FTS5."
+    state verified
+    result pass
+    method command
+    observed_at git:2dd07efa746065e627b1445587e3bb0ca0af553b
+    command "cargo test -p akr-mcp && cargo test -p akr-mcp --no-default-features"
+    summary """
+        The complete MCP test suite passed with default features and without FTS5.
         """
 }
 
@@ -174,6 +198,18 @@ record akr.evidence.mcp-suite-after-explain-routing-fix/1 : evidence {
         44 tests passed with no failures, including all 17 differential tests. Those 17 had never executed on Windows before: the harness resolved the sibling akr binary without EXE_SUFFIX, so every one of them asserted 'is not built' before running. They pass now, so the CLI-and-MCP agreement this suite exists to hold is checked on Windows for the first time. It also covers a new case, knowledge_explain_and_akr_explain_agree.
         """
     author "GitHub Uploader"
+}
+
+record akr.evidence.non-fts-start-recovery-suite/1 : evidence {
+    title "Both non-FTS knowledge.start recovery tests passed, including explicit user-supplied plan paths."
+    state verified
+    result pass
+    method command
+    observed_at git:2dd07efa746065e627b1445587e3bb0ca0af553b
+    command "cargo test -p akr-mcp --no-default-features --test differential knowledge_start"
+    summary """
+        Both non-FTS knowledge.start recovery tests passed, including explicit user-supplied plan paths.
+        """
 }
 
 record akr.evidence.p10-chunk-unit-suite/1 : evidence {

@@ -133,6 +133,21 @@ fn source_add(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
 
 fn search(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let query = required_str(arguments, "query")?;
+    let offset = arguments
+        .get("offset")
+        .and_then(Value::as_integer)
+        .and_then(|n| usize::try_from(n).ok())
+        .unwrap_or(0)
+        .min(100);
+    let page_size = arguments
+        .get("limit")
+        .and_then(Value::as_integer)
+        .and_then(|n| usize::try_from(n).ok())
+        .unwrap_or(20)
+        .clamp(1, 100);
+    // Fetch one extra ranked row so the MCP surface can publish an honest continuation.
+    // The search store deliberately exposes at most its documented top 100 results.
+    let fetch_limit = offset.saturating_add(page_size).saturating_add(1).min(100);
     let command = Command::Search {
         query: query.to_owned(),
         // Never raw FTS5 over MCP. An agent writing a query has no way to know that a
@@ -141,13 +156,11 @@ fn search(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
         raw_fts: false,
         kinds: string_list(arguments, "kinds"),
         states: string_list(arguments, "states"),
-        limit: arguments
-            .get("limit")
-            .and_then(Value::as_integer)
-            .and_then(|n| usize::try_from(n).ok()),
+        limit: Some(fetch_limit),
     };
     let mut session = open(root, false)?;
-    let output = commands::run(&mut session, &command).map_err(environment)?;
+    let mut output = commands::run(&mut session, &command).map_err(environment)?;
+    paginate_search(&mut output, offset, page_size);
     let text = output.text.clone();
     let mut structured = finish(&session.sources, output)?;
     let candidates = search_planning_candidates(&session, &structured, &[]);
@@ -160,6 +173,79 @@ fn search(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
         }
     }
     Ok(ToolResult::Read { text, structured })
+}
+
+/// Slices the deterministic ranked result set and publishes an exact next-page offset.
+fn paginate_search(output: &mut Output, offset: usize, page_size: usize) {
+    let all = output
+        .result
+        .get("results")
+        .and_then(Value::as_array)
+        .unwrap_or(&[])
+        .to_vec();
+    let page: Vec<Value> = all.iter().skip(offset).take(page_size).cloned().collect();
+    let has_more = offset.saturating_add(page.len()) < all.len();
+    let next_offset = has_more.then(|| offset.saturating_add(page.len()));
+
+    if let Value::Object(fields) = &mut output.result {
+        for (name, value) in fields.iter_mut() {
+            match name.as_str() {
+                "results" => *value = Value::array(page.clone()),
+                "count" => {
+                    *value = Value::integer(i64::try_from(page.len()).unwrap_or(i64::MAX));
+                }
+                _ => {}
+            }
+        }
+        fields.retain(|(name, _)| !matches!(name.as_str(), "has_more" | "next_offset"));
+        fields.push(("has_more".to_owned(), Value::bool(has_more)));
+        fields.push((
+            "next_offset".to_owned(),
+            next_offset.map_or(Value::Null, |next| {
+                Value::integer(i64::try_from(next).unwrap_or(i64::MAX))
+            }),
+        ));
+    }
+    output.text = render_search_page(&page, offset, next_offset);
+}
+
+fn render_search_page(results: &[Value], offset: usize, next_offset: Option<usize>) -> String {
+    let mut text = String::new();
+    for result in results {
+        let key = result
+            .get("key")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let rev = result.get("rev").and_then(Value::as_integer).unwrap_or(0);
+        let kind = result
+            .get("kind")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let state = result
+            .get("state")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let title = result
+            .get("title")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        let score = result
+            .get("score")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        text.push_str(&format!(
+            "  {score}  {key}/{rev}  {kind} {state}  {title}\n"
+        ));
+    }
+    text.push_str(&format!(
+        "{} result{} from offset {offset}\n",
+        results.len(),
+        if results.len() == 1 { "" } else { "s" }
+    ));
+    if let Some(next) = next_offset {
+        text.push_str(&format!("more results: continue at offset {next}\n"));
+    }
+    text
 }
 
 fn start(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
@@ -337,17 +423,72 @@ fn source_search(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError
             format!("`mode`: {mode:?} is not `text`, `literal` or `fts`"),
         ));
     }
+    let offset = arguments
+        .get("offset")
+        .and_then(Value::as_integer)
+        .and_then(|n| usize::try_from(n).ok())
+        .unwrap_or(0)
+        .min(100);
+    let page_size = arguments
+        .get("limit")
+        .and_then(Value::as_integer)
+        .and_then(|n| usize::try_from(n).ok())
+        .unwrap_or(10)
+        .clamp(1, 100);
+    let fetch_limit = offset.saturating_add(page_size).saturating_add(1).min(100);
     let command = Command::SourceSearch {
         query: query.to_owned(),
         mode: mode.to_owned(),
         documents: string_list(arguments, "documents"),
         all_versions: flag(arguments, "all_versions"),
-        limit: arguments
-            .get("limit")
-            .and_then(Value::as_integer)
-            .and_then(|n| usize::try_from(n).ok()),
+        limit: Some(fetch_limit),
     };
-    run_read(root, command)
+    let mut session = open(root, false)?;
+    let mut output = commands::run(&mut session, &command).map_err(environment)?;
+    paginate_source_search(&mut output, offset, page_size);
+    let text = output.text.clone();
+    let structured = finish(&session.sources, output)?;
+    Ok(ToolResult::Read { text, structured })
+}
+
+fn paginate_source_search(output: &mut Output, offset: usize, page_size: usize) {
+    let all = output
+        .result
+        .get("results")
+        .and_then(Value::as_array)
+        .unwrap_or(&[])
+        .to_vec();
+    let page: Vec<Value> = all.iter().skip(offset).take(page_size).cloned().collect();
+    let has_more = offset.saturating_add(page.len()) < all.len();
+    let next_offset = has_more.then(|| offset.saturating_add(page.len()));
+    if let Value::Object(fields) = &mut output.result {
+        for (name, value) in fields.iter_mut() {
+            match name.as_str() {
+                "results" => *value = Value::array(page.clone()),
+                "count" => {
+                    *value = Value::integer(i64::try_from(page.len()).unwrap_or(i64::MAX));
+                }
+                _ => {}
+            }
+        }
+        fields.retain(|(name, _)| !matches!(name.as_str(), "has_more" | "next_offset"));
+        fields.push(("has_more".to_owned(), Value::bool(has_more)));
+        fields.push((
+            "next_offset".to_owned(),
+            next_offset.map_or(Value::Null, |next| {
+                Value::integer(i64::try_from(next).unwrap_or(i64::MAX))
+            }),
+        ));
+    }
+    output.text = format!(
+        "NON-AUTHORITATIVE source results from offset {offset}\n{}",
+        Value::array(page).to_pretty()
+    );
+    if let Some(next) = next_offset {
+        output
+            .text
+            .push_str(&format!("\nmore results: continue at offset {next}\n"));
+    }
 }
 
 /// `knowledge.source_get` — one passage of one registered source.

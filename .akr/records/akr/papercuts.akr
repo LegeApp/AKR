@@ -451,6 +451,55 @@ record akr.papercut.collated-20-papercuts-from-kitchen-concept-lege/1 : papercut
     created_at 2026-08-08
 }
 
+record akr.papercut.collated-9-papercuts-from-lege-ecosystem/1 : papercut {
+    title "Collated 9 papercuts from Lege-ecosystem, SaveYourSkin and jpegXL-rs"
+    state verified
+    statement """
+        Collated 9 papercuts from /mnt/Samsung980_1TB/Rust-projects on 2026-08-12 (D-030). Each source key is also in the collated slot, which is the dedup set for the next run; the sisters were read and never written.
+
+        ## Lege-ecosystem @lege-ecosystem.papercut.knowledge-get-did-not-display-a-work-record-s [about akr]
+        knowledge.get did not display a work record's acceptance checks even at canonical detail, so knowledge.complete had to fail once to reveal the four check IDs needed for evidence mapping.
+
+        ## Lege-ecosystem @lege-ecosystem.papercut.while-creating-ocr-work-records-from-a [about akr]
+        While creating OCR work records from a registered source, using the apparent @source.<id> derived_from form produced AKR-L001. The tool could make the source-vs-record citation distinction clearer in relation errors; papercut logging also required a namespace only after the first call failed.
+
+        ## Lege-ecosystem @lege-ecosystem.papercut.while-creating-the-auto-toc-work-record [about akr]
+        While creating the auto-TOC work record, `knowledge.propose` accepted a `topic` argument in its API schema but rejected it at validation because planning kinds cannot use topics. The schema could make that kind-specific restriction visible before submission.
+
+        ## SaveYourSkin @saveyourskin.papercut.knowledge-start-foregrounded-the-blender [about akr]
+        knowledge.start foregrounded the Blender authority decision, but knowledge.context rejects decisions as goals; the handoff could expose the nearest live milestone/track alongside the decision to avoid a failed orientation call.
+
+        ## SaveYourSkin @saveyourskin.papercut.on-akr-0-3-0-for-windows-knowledge-start [about akr]
+        On AKR 0.3.0 for Windows, knowledge.start ignored budget_tokens 1400, assembled about 2116 tokens, then withheld the entire handoff at the 2000-token cap. A later knowledge.context request at 1850 returned a bundle labeled about 4345 tokens, so budget and hard-limit behavior were inconsistent and required multiple slow retries.
+
+        ## SaveYourSkin @saveyourskin.papercut.while-importing-a-connected-sound-design-record [about akr]
+        While importing a connected sound-design record batch, knowledge.propose reported nested validation failures only after each write attempt; a dry-run/schema-introspection mode for slots and reference heads would prevent cascaded retries. One policy also accepts `rationale`, not the otherwise common `context` slot.
+
+        ## jpegXL-rs @jpegxl-rs.papercut.knowledge-start-withheld-a-6440-token [about akr]
+        knowledge.start withheld a ~6440-token orientation bundle despite a requested 18000-token budget because of an internal 2000-token hard limit; discovering the governing goal therefore requires a separate search/context round trip.
+
+        ## jpegXL-rs @jpegxl-rs.papercut.orienting-on-this-project-through-the-knowledge [about akr]
+        Orienting on this project through the knowledge.* MCP tools failed at the first step: knowledge.start truncated at a 2000-token hard limit even with budget_tokens=1800 (estimated 3245, continuation null, no way to page), and knowledge.search truncated at 1000 tokens with 20 results. Both returned only a truncation notice with zero usable content, so the sanctioned fallback (AGENTS.md section 10) of reading .akr/records/**/*.akr and docs/generated/ directly was the only route to a project summary. A continuation token, or honouring budget_tokens above the hard limit, would make the tools usable on a ledger this size.
+
+        ## jpegXL-rs @jpegxl-rs.papercut.while-repairing-phase-4l-evidence-chronology [about akr]
+        While repairing Phase 4L evidence chronology, knowledge.revise returned the completed work revision to proposed even though the call explicitly passed state="completed". A follow-up knowledge.complete restored the intended terminal state; the tool documentation and project gotcha both say re-passing state should preserve it.
+        """
+    observed_at git:2dd07efa746065e627b1445587e3bb0ca0af553b
+    about "akr"
+    collated [
+        "lege-ecosystem.papercut.knowledge-get-did-not-display-a-work-record-s",
+        "lege-ecosystem.papercut.while-creating-ocr-work-records-from-a",
+        "lege-ecosystem.papercut.while-creating-the-auto-toc-work-record",
+        "saveyourskin.papercut.knowledge-start-foregrounded-the-blender",
+        "saveyourskin.papercut.on-akr-0-3-0-for-windows-knowledge-start",
+        "saveyourskin.papercut.while-importing-a-connected-sound-design-record",
+        "jpegxl-rs.papercut.knowledge-start-withheld-a-6440-token",
+        "jpegxl-rs.papercut.orienting-on-this-project-through-the-knowledge",
+        "jpegxl-rs.papercut.while-repairing-phase-4l-evidence-chronology"
+    ]
+    created_at 2026-08-12
+}
+
 record akr.papercut.completing-a-milestone-failed-because-a/1 : papercut {
     title "Completing a milestone failed because a downstream depends_on edge…"
     state verified
@@ -564,6 +613,18 @@ record akr.papercut.root-cause-of-the-discoverability-miss-the-cli/2 : papercut 
     supersedes [ @akr.papercut.root-cause-of-the-discoverability-miss-the-cli/1 ]
 }
 
+record akr.papercut.running-rustfmt-directly-on-akr-s-rust-2024/1 : papercut {
+    title "Running rustfmt directly on AKR's Rust 2024 files defaulted to an older…"
+    state verified
+    statement """
+        Running rustfmt directly on AKR's Rust 2024 files defaulted to an older edition and rejected existing let-chains; the non-obvious required invocation is rustfmt --edition 2024.
+        """
+    observed_at git:2dd07efa746065e627b1445587e3bb0ca0af553b
+    about "rustfmt"
+    author "codex"
+    created_at 2026-08-12
+}
+
 record akr.papercut.strict-clippy-for-the-new-gui-crate-promoted/1 : papercut {
     title "Strict clippy for the new GUI crate promoted more than 200 existing…"
     state verified
@@ -642,6 +703,30 @@ record akr.papercut.while-beginning-a-change-transaction-the/1 : papercut {
     observed_at git:05fea30a52f59775917cf5a1d1ac1241c0392b44
     author "codex"
     created_at 2026-08-11
+}
+
+record akr.papercut.while-checking-akr-mcp-without-default-features/1 : papercut {
+    title "While checking akr-mcp without default features, the differential…"
+    state verified
+    statement """
+        While checking akr-mcp without default features, the differential harness first used a stale default-feature target/debug/akr unless that CLI binary was rebuilt explicitly; after rebuilding correctly, two knowledge.start fallback tests still fail because the non-FTS validated-head path omits coverage and workspace_fallback metadata. The budget/pagination tests themselves pass in that configuration.
+        """
+    observed_at git:2dd07efa746065e627b1445587e3bb0ca0af553b
+    about "akr"
+    author "codex"
+    created_at 2026-08-12
+}
+
+record akr.papercut.while-locating-the-non-fts-start-and/1 : papercut {
+    title "While locating the non-FTS start and differential harness code, the…"
+    state verified
+    statement """
+        While locating the non-FTS start and differential harness code, the first FFF multi_grep call failed because its transport closed; rg was the only usable fallback.
+        """
+    observed_at git:2dd07efa746065e627b1445587e3bb0ca0af553b
+    about "fff"
+    author "codex"
+    created_at 2026-08-12
 }
 
 record akr.papercut.writing-several-evidence-and-lifecycle-records/1 : papercut {

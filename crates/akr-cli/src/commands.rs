@@ -2258,7 +2258,7 @@ fn start(
     budget: Option<usize>,
 ) -> Result<Output, EnvError> {
     let handoff = crate::handoff::assemble(session, budget)?;
-    let mut output = if let Some(ledger) = &handoff.fallback_ledger {
+    let output = if let Some(ledger) = &handoff.fallback_ledger {
         planning_search_fallback(ledger, task)
     } else {
         search(
@@ -2270,6 +2270,24 @@ fn start(
             None,
         )?
     };
+    Ok(finish_start(
+        output,
+        &session.root,
+        task,
+        paths,
+        budget,
+        handoff,
+    ))
+}
+
+fn finish_start(
+    mut output: Output,
+    root: &Path,
+    task: &str,
+    paths: &[akr_core::model::Glob],
+    budget: Option<usize>,
+    handoff: crate::handoff::Handoff,
+) -> Output {
     let results = output
         .result
         .get("results")
@@ -2278,7 +2296,7 @@ fn start(
         .unwrap_or_default();
     if let Value::Object(fields) = &mut output.result {
         if results.is_empty() {
-            let (fallback, hit_count) = workspace_fallback(&session.root, task);
+            let (fallback, hit_count) = workspace_fallback(root, task);
             output.text.push_str(
                 "\nNo live AKR planning record matched this task. This does not mean no plan exists.\n\
                  Next: read any user-supplied plan, inspect Git history, register outside advice\n\
@@ -2313,6 +2331,15 @@ fn start(
             fields.push(("workspace_fallback".into(), fallback));
         } else {
             fields.push(("planning_candidates".into(), Value::array(results.clone())));
+            if task.contains('/') || task.contains('\\') {
+                let (fallback, hit_count) = workspace_fallback(root, task);
+                if hit_count > 0 {
+                    output.text.push_str(&format!(
+                        "Workspace fallback also found {hit_count} non-authoritative text hit(s) for the supplied path; inspect them before adopting a plan.\n"
+                    ));
+                    fields.push(("workspace_fallback".into(), fallback));
+                }
+            }
         }
         if results.len() == 1
             && let Some(goal) = results[0].get("key").and_then(Value::as_str)
@@ -2343,7 +2370,7 @@ fn start(
         fields.push(("handoff".into(), handoff.value));
     }
     output.text = format!("{}{}", handoff.text, output.text);
-    Ok(output)
+    output
 }
 
 /// A deterministic ledger-only orientation when the working ledger is invalid and the
@@ -2575,15 +2602,17 @@ fn start(
     paths: &[akr_core::model::Glob],
     budget: Option<usize>,
 ) -> Result<Output, EnvError> {
-    let _ = paths;
     let handoff = crate::handoff::assemble(session, budget)?;
     let ledger = handoff.fallback_ledger.as_ref().unwrap_or(&session.ledger);
-    let mut output = planning_search_fallback(ledger, task);
-    if let Value::Object(fields) = &mut output.result {
-        fields.push(("handoff".into(), handoff.value));
-    }
-    output.text = format!("{}{}", handoff.text, output.text);
-    Ok(output)
+    let output = planning_search_fallback(ledger, task);
+    Ok(finish_start(
+        output,
+        &session.root,
+        task,
+        paths,
+        budget,
+        handoff,
+    ))
 }
 
 /// The same command in a binary built without FTS5.

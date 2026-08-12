@@ -126,6 +126,43 @@ record akr.work.desktop-review-gui/1 : work {
     part_of [ @akr.milestone.human-record-review/1 ]
 }
 
+record akr.work.mcp-actionable-truncation/1 : work {
+    title "Keep every budgeted MCP response usable"
+    state completed
+    scope [ path "crates/akr-mcp/**", path "docs/08-mcp.md" ]
+    intent """
+        Replace wholesale MCP result withholding with usable bounded responses and deterministic continuation, while honoring explicit start/context assembly budgets.
+        """
+    acceptance {
+        check explicit-budgets-honored {
+            statement """
+                knowledge.start and knowledge.context with explicit budget_tokens are not discarded by a smaller transport ceiling.
+                """
+            method command
+            command "cargo test -p akr-mcp budget"
+            verified_by [ @akr.evidence.mcp-actionable-truncation-suite/1 ]
+        }
+        check regression-suite {
+            statement """
+                The akr-mcp test suite passes.
+                """
+            method command
+            command "cargo test -p akr-mcp"
+            verified_by [ @akr.evidence.mcp-actionable-truncation-suite/1 ]
+        }
+        check search-page-usable {
+            statement """
+                An oversized knowledge.search response includes usable ranked results plus a continuation preserving the query and advancing the offset.
+                """
+            method command
+            command "cargo test -p akr-mcp budget"
+            verified_by [ @akr.evidence.mcp-actionable-truncation-suite/1 ]
+        }
+    }
+    derived_from [ @akr.papercut.collated-9-papercuts-from-lege-ecosystem/1 ]
+    implements [ @akr.decision.mcp-budgeted-and-instrumented/3 ]
+}
+
 record akr.work.mcp-budget-and-instrumentation/1 : work {
     title "Bound and instrument the MCP surface"
     state completed
@@ -246,6 +283,38 @@ record akr.work.mcp-transport-reliability/1 : work {
         }
     }
     derived_from [ @akr.papercut.collated-18-papercuts-from-evidence-intake/1 ]
+}
+
+record akr.work.non-fts-start-parity/1 : work {
+    title "Keep knowledge.start usable without FTS"
+    state completed
+    scope [ path "crates/akr-cli/src/commands.rs", path "crates/akr-mcp/tests/**" ]
+    intent """
+        Make the validated-head knowledge.start fallback return the same coverage and workspace-path recovery metadata as the FTS path, and make feature-matrix tests invoke a matching CLI build.
+        """
+    acceptance {
+        check feature-suites {
+            statement """
+                The akr-mcp default and no-default feature suites pass with matching CLI binaries.
+                """
+            method command
+            command "cargo test -p akr-mcp"
+            verified_by [ @akr.evidence.mcp-feature-suites-pass/1 ]
+        }
+        check non-fts-start-recovery {
+            statement """
+                Without default features, knowledge.start reports no-planning-match coverage and finds a user-supplied plan path.
+                """
+            method command
+            command "cargo test -p akr-mcp --no-default-features --test differential knowledge_start"
+            verified_by [ @akr.evidence.non-fts-start-recovery-suite/1 ]
+        }
+    }
+    derived_from [ @akr.papercut.while-checking-akr-mcp-without-default-features/1 ]
+    implements [
+        @akr.decision.mcp-budgeted-and-instrumented/3,
+        @akr.decision.start-collates-session-head/1
+    ]
 }
 
 record akr.work.p10-external-sources/1 : work {
