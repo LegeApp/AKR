@@ -154,6 +154,12 @@ pub fn derive(
         .collect();
 
     // 2. Validate the inputs before trusting them (V-101, V-102, V-103).
+    //    Every one of those checks asks whether a record's `observed_at` is reachable from
+    //    the head being resolved against, so walk that history once rather than asking git
+    //    per record — the difference is one process against one per empirical record.
+    if watched.len() > 1 {
+        repository.prime_reachable(head);
+    }
     queue
         .diagnostics
         .extend(validate_inputs(ledger, repository, head, &watched)?);
@@ -381,6 +387,19 @@ pub fn unmatched_watches(
     head: &Commit,
 ) -> Result<Vec<Diagnostic>, GitError> {
     let listing = repository.run_ls_tree(head)?;
+    // Ask git about every scope glob at once. The per-glob calls below then hit the memo,
+    // which on Windows is the difference between one process and one per glob.
+    repository.prime_ignored(
+        sorted_records(ledger)
+            .iter()
+            .filter(|r| r.is_live())
+            .flat_map(|record| {
+                record.scope.iter().filter_map(|term| match term {
+                    crate::model::ScopeTerm::Path(glob) => Some(glob.as_str()),
+                    _ => None,
+                })
+            }),
+    );
     let mut out = Vec::new();
     for record in sorted_records(ledger) {
         if !record.is_live() {

@@ -3,13 +3,14 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: setup-akr-mcp.sh [--repo-dir DIR] [--dry-run] [--no-claude] [--no-codex] [--no-opencode] [--debug]
+Usage: setup-akr-mcp.sh [--repo-dir DIR] [--dry-run] [--no-claude] [--no-codex] [--no-opencode] [--no-agents] [--no-build] [--debug]
 
 One-time setup for the AKR MCP server across:
 - AkR CLI build/install
 - Codex MCP config (~/.codex/config.toml)
 - OpenCode MCP config (~/.config/opencode/opencode.jsonc)
 - Claude MCP registration
+- The AKR section of the global agent instruction files
 
 Options:
   --repo-dir DIR   AKR repo root (default: parent directory of this script)
@@ -18,7 +19,12 @@ Options:
   --no-claude      Skip Claude registration
   --no-codex       Skip Codex config update
   --no-opencode    Skip OpenCode config update
+  --no-agents      Skip the agent instruction files
+  --no-build       Install what is already in target/ without building first
   -h, --help       Show this help
+
+Safe to re-run: every step either rewrites in place or is a no-op. Run it after any
+change to the AKR source or to scripts/agent-section.md.
 USAGE
 }
 
@@ -27,6 +33,8 @@ DRY_RUN=0
 DO_CLAUDE=1
 DO_CODEX=1
 DO_OPENCODE=1
+DO_AGENTS=1
+DO_BUILD=1
 USE_DEBUG=0
 
 while [[ $# -gt 0 ]]; do
@@ -43,6 +51,10 @@ while [[ $# -gt 0 ]]; do
       DO_CODEX=0; shift ;;
     --no-opencode)
       DO_OPENCODE=0; shift ;;
+    --no-agents)
+      DO_AGENTS=0; shift ;;
+    --no-build)
+      DO_BUILD=0; shift ;;
     -h|--help)
       usage; exit 0 ;;
     *)
@@ -70,6 +82,18 @@ AKR_MCP_BIN="$AKR_BIN_DIR/akr-mcp"
 log() { echo "[setup-akr-mcp] $*"; }
 run() { if [[ "$DRY_RUN" -eq 1 ]]; then log "DRY-RUN: $*"; else "$@"; fi; }
 
+# Under Git Bash the paths written into the editor configs are MSYS-style (/c/Users/...).
+# A tool that is itself an MSYS program resolves those; a native Windows one may not. The
+# PowerShell mirror writes native paths, so say so once rather than silently rewriting a
+# setup that currently works.
+case "$(uname -o 2>/dev/null || echo unknown)" in
+  Msys | Cygwin)
+    log "NOTE: running under $(uname -o); editor configs will receive MSYS-style paths"
+    log "      like $AKR_MCP_BIN. If Codex or OpenCode fails to start the server, run"
+    log "      scripts/setup-akr-mcp.ps1 instead — it writes native Windows paths."
+    ;;
+esac
+
 # Build and install AKR MCP
 if [[ "$USE_DEBUG" -eq 1 ]]; then
   BUILD_MODE="debug"
@@ -85,7 +109,12 @@ fi
 
 log "Using repo: $REPO_DIR"
 log "Build mode: $BUILD_MODE"
-if [[ "$DRY_RUN" -eq 1 ]]; then
+# Always build unless told not to. Cargo is the authority on what is stale, and it is a
+# fast no-op when nothing changed; deciding for it is how a script installs yesterday's
+# binary over today's source.
+if [[ "$DO_BUILD" -eq 0 ]]; then
+  log "Skipping build on request (--no-build); installing whatever is in target/$BUILD_MODE"
+elif [[ "$DRY_RUN" -eq 1 ]]; then
   log "DRY-RUN: (cd $REPO_DIR && ${BUILD_CMD[*]})"
 else
   (cd "$REPO_DIR" && "${BUILD_CMD[@]}")
@@ -108,8 +137,26 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   log "DRY-RUN: install $SOURCE_AKR -> $AKR_BIN and $SOURCE_BIN -> $AKR_MCP_BIN"
 else
   mkdir -p "$AKR_BIN_DIR"
-  cp "$SOURCE_AKR" "$AKR_BIN.new" && mv -f "$AKR_BIN.new" "$AKR_BIN"
-  cp "$SOURCE_BIN" "$AKR_MCP_BIN.new" && mv -f "$AKR_MCP_BIN.new" "$AKR_MCP_BIN"
+  install_binary() {
+    local source="$1" dest="$2"
+    if [[ -f "$dest" ]] && cmp -s "$source" "$dest"; then
+      log "Unchanged, leaving in place: $dest"
+      return 0
+    fi
+    cp "$source" "$dest.new"
+    # Displace any existing image before renaming the new one into place. Unix would
+    # allow the replace outright, but under Git Bash on Windows the destination of a
+    # rename cannot be a file some process has running, while renaming that file *away*
+    # is allowed. Cleaning up the displaced copy is best effort for the same reason.
+    if [[ -f "$dest" ]]; then
+      rm -f "$dest.old" 2>/dev/null || true
+      mv -f "$dest" "$dest.old" 2>/dev/null || true
+    fi
+    mv -f "$dest.new" "$dest"
+    rm -f "$dest.old" 2>/dev/null || true
+  }
+  install_binary "$SOURCE_AKR" "$AKR_BIN"
+  install_binary "$SOURCE_BIN" "$AKR_MCP_BIN"
 fi
 log "Installed $AKR_BIN"
 log "Installed $AKR_MCP_BIN"
@@ -128,15 +175,33 @@ if [[ "$DO_CODEX" -eq 1 ]]; then
   else
     if grep -q '^\[mcp_servers\.akr\]' "$CODEX_CFG"; then
       log "Codex already has [mcp_servers.akr]; updating command to $AKR_MCP_BIN"
+      # awk rather than python3: this used to hand an MSYS-style path to a native Windows
+      # python, which cannot open it, and `set -e` then aborted the whole script before the
+      # remaining steps ran. awk also keeps the script's dependencies to what a shell
+      # already has. Only the `command` key inside the akr section is touched; other keys,
+      # other sections and the file's ordering are preserved.
       if [[ "$DRY_RUN" -eq 0 ]]; then
-        python3 - <<PY
-import re
-from pathlib import Path
-path = Path(r"$CODEX_CFG")
-text = path.read_text()
-text = re.sub(r"\[mcp_servers\.akr\]\ncommand\s*=\s*\"[^\"]*\"", f"[mcp_servers.akr]\ncommand = \"$AKR_MCP_BIN\"", text)
-path.write_text(text)
-PY
+        cp "$CODEX_CFG" "$CODEX_CFG.bak"
+        CODEX_TMP="$(mktemp)"
+        CMD="$AKR_MCP_BIN" awk '
+          BEGIN { cmd = ENVIRON["CMD"]; inside = 0; n = 0; found = 0 }
+          # Emit the buffered akr section, with the command key rewritten in place or
+          # added at the top when the section did not carry one.
+          function emit(  i) {
+            if (found == 0) print "command = \"" cmd "\""
+            for (i = 1; i <= n; i++) print buf[i]
+            inside = 0; n = 0; found = 0
+          }
+          /^\[mcp_servers\.akr\][ \t]*$/ { print; inside = 1; n = 0; found = 0; next }
+          inside == 1 && /^\[/ { emit(); print; next }
+          inside == 1 && /^command[ \t]*=/ {
+            buf[++n] = "command = \"" cmd "\""; found = 1; next
+          }
+          inside == 1 { buf[++n] = $0; next }
+          { print }
+          END { if (inside == 1) emit() }
+        ' "$CODEX_CFG" > "$CODEX_TMP"
+        mv "$CODEX_TMP" "$CODEX_CFG"
       fi
     else
       log "Appending [mcp_servers.akr] to Codex config"
@@ -151,14 +216,83 @@ if [[ "$DO_OPENCODE" -eq 1 ]]; then
   if [[ ! -f "$OPCFG" ]]; then
     echo "warning: OpenCode config not found: $OPCFG (skipping OpenCode update)"
   else
+    # A missing jq skips one integration; it does not abort the run. This script is meant
+    # to be re-run after every build, and the steps below it — the agent instruction
+    # files, the Claude registration — must not be hostage to an optional dependency.
     if ! command -v jq >/dev/null 2>&1; then
-      echo "error: jq is required to safely edit OpenCode config. Install jq and rerun, or skip with --no-opencode." >&2
-      exit 1
+      echo "warning: jq not found; skipping OpenCode config (install jq, or pass --no-opencode to silence this)" >&2
+    else
+      log "Updating OpenCode MCP section"
+      TMPFILE="$(mktemp)"
+      if [[ "$DRY_RUN" -eq 1 ]]; then log "DRY-RUN: update OpenCode MCP section"; else jq --arg cmd "$AKR_MCP_BIN" '.mcp.akr = { type: "local", command: [ $cmd ], enabled: true }' "$OPCFG" > "$TMPFILE" && mv "$TMPFILE" "$OPCFG"; fi
     fi
-    log "Updating OpenCode MCP section"
-    TMPFILE="$(mktemp)"
-    if [[ "$DRY_RUN" -eq 1 ]]; then log "DRY-RUN: update OpenCode MCP section"; else jq --arg cmd "$AKR_MCP_BIN" '.mcp.akr = { type: "local", command: [ $cmd ], enabled: true }' "$OPCFG" > "$TMPFILE" && mv "$TMPFILE" "$OPCFG"; fi
   fi
+fi
+
+# Install/refresh the AKR section of the global agent instruction files.
+#
+# The section is delimited by HTML comment markers and rewritten in place, so re-running
+# this script updates the guidance instead of stacking another copy of it. Everything
+# outside the markers — including sections other tools own, like CodeGraph's — is copied
+# through untouched. A file that has no markers gets the section appended once.
+AGENT_SECTION_FILE="$REPO_DIR/scripts/agent-section.md"
+AGENT_BEGIN="<!-- AKR_START -->"
+AGENT_END="<!-- AKR_END -->"
+
+install_agent_section() {
+  local target="$1"
+  local parent
+  parent="$(dirname "$target")"
+  if [[ ! -d "$parent" ]]; then
+    log "No $parent; skipping $target"
+    return 0
+  fi
+  if [[ ! -f "$AGENT_SECTION_FILE" ]]; then
+    echo "error: agent section source missing: $AGENT_SECTION_FILE" >&2
+    return 1
+  fi
+  local action="append to"
+  if [[ -f "$target" ]] && grep -qF "$AGENT_BEGIN" "$target"; then
+    action="refresh in"
+  fi
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    log "DRY-RUN: $action $target"
+    return 0
+  fi
+  [[ -f "$target" ]] || : > "$target"
+  cp "$target" "$target.bak"
+  local tmp
+  tmp="$(mktemp)"
+  BEGIN="$AGENT_BEGIN" END="$AGENT_END" SECTION="$AGENT_SECTION_FILE" awk '
+    BEGIN { begin = ENVIRON["BEGIN"]; end = ENVIRON["END"]; inside = 0; seen = 0 }
+    index($0, begin) == 1 {
+      inside = 1; seen = 1
+      print begin
+      while ((getline line < ENVIRON["SECTION"]) > 0) print line
+      close(ENVIRON["SECTION"])
+      print end
+      next
+    }
+    index($0, end) == 1 { inside = 0; next }
+    inside == 0 { print }
+    END {
+      if (seen == 0) {
+        if (NR > 0) print ""
+        print begin
+        while ((getline line < ENVIRON["SECTION"]) > 0) print line
+        close(ENVIRON["SECTION"])
+        print end
+      }
+    }
+  ' "$target" > "$tmp"
+  mv "$tmp" "$target"
+  log "Agent section ${action%% *}ed: $target (previous copy at $target.bak)"
+}
+
+if [[ "$DO_AGENTS" -eq 1 ]]; then
+  install_agent_section "$HOME/.claude/CLAUDE.md"
+  install_agent_section "$HOME/.codex/AGENTS.md"
+  install_agent_section "$HOME/.config/opencode/AGENTS.md"
 fi
 
 # Register Claude MCP server

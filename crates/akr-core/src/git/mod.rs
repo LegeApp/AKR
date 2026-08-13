@@ -27,6 +27,7 @@ use std::ffi::OsStr;
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Arc, Mutex};
 
 /// The freshness diagnostics this module raises.
 ///
@@ -153,9 +154,140 @@ pub struct Touch {
 /// Cheap to construct and cheap to clone: it holds a working directory and a memo of the
 /// answers already fetched. Nothing is cached across instances, so a test that mutates a
 /// repository makes a new handle and sees the new history.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Repository {
     root: PathBuf,
+    memo: Arc<Mutex<Memo>>,
+}
+
+/// The memo behind [`Repository`].
+///
+/// Only questions whose answer cannot change while a build runs are memoised: whether an
+/// object name exists, whether one commit descends from another, and whether a path is
+/// ignored. Git's object graph only grows and the ignore rules are files on disk, so a
+/// second identical question inside one build has the same answer as the first. Nothing
+/// about the working tree or the index is memoised, because those do change.
+///
+/// This matters more than it looks: freshness asks the same ancestry questions once per
+/// record per watched path, and on Windows every answer that is not memoised costs a
+/// process creation — hundreds of them, which is seconds of wall clock.
+#[derive(Debug, Default)]
+struct Memo {
+    /// Object name -> does it resolve.
+    exists: BTreeMap<String, bool>,
+    /// (descendant, ancestor) -> is the first reachable from the second.
+    ancestry: BTreeMap<(String, String), bool>,
+    /// Commit -> everything reachable from it, once the walk has been worth doing.
+    reachable: BTreeMap<String, BTreeSet<String>>,
+    /// Commit -> how many ancestry questions have been asked about it.
+    probes: BTreeMap<String, u32>,
+    /// Path -> its touching commits, newest first.
+    touching: BTreeMap<String, Vec<Commit>>,
+    /// (commit, path) -> the file's content there, or `None` when it did not exist.
+    blobs: BTreeMap<(String, String), Option<String>>,
+    /// (from, to) -> the paths every commit in that range touched.
+    touches: BTreeMap<(String, String), Vec<Touch>>,
+    /// Commit -> every path tracked at it.
+    trees: BTreeMap<String, BTreeSet<String>>,
+    /// A commit set -> that set in topological order.
+    topological: BTreeMap<String, Vec<Commit>>,
+    /// The working tree's changed paths, for the one snapshot this memo describes.
+    worktree: Option<BTreeSet<String>>,
+    /// Path -> is it ignored.
+    ignored: BTreeMap<String, bool>,
+}
+
+/// How many `merge-base` calls about one commit are worth paying before walking its
+/// history once instead.
+///
+/// Each `merge-base --is-ancestor` is a process; one `rev-list` is also a process but
+/// answers every future question about that commit. Freshness asks one question per
+/// empirical record, so any ledger past a handful of records comes out ahead. Below the
+/// threshold the pairwise form stays cheaper, which is what a small ledger wants.
+const REACHABILITY_PROBE_LIMIT: u32 = 3;
+
+impl Clone for Repository {
+    /// Clones the handle, not the memo: a new handle sees the repository as it is now.
+    fn clone(&self) -> Self {
+        Self {
+            root: self.root.clone(),
+            memo: Arc::default(),
+        }
+    }
+}
+
+/// Memos that outlive one handle, for hosts that answer many questions in one process.
+///
+/// Keyed by repository root, and held only while the repository is demonstrably unchanged:
+/// each [`Repository::shared`] recomputes `HEAD` and the porcelain status, and any
+/// difference throws the whole memo away. That is deliberately blunt. A finer key could
+/// keep more of the memo across a commit, but the thing being cached is the evidence a
+/// knowledge ledger reports as fact, and "recompute it" is a cheaper mistake than "report
+/// yesterday's answer".
+static SHARED: Mutex<BTreeMap<PathBuf, SharedMemo>> = Mutex::new(BTreeMap::new());
+
+#[derive(Debug)]
+struct SharedMemo {
+    /// `HEAD` plus the working-tree state that the memo was built against.
+    key: String,
+    memo: Arc<Mutex<Memo>>,
+}
+
+impl Repository {
+    fn memo<T>(&self, read: impl FnOnce(&mut Memo) -> T) -> T {
+        // A poisoned memo is not a reason to fail a build: the worst case is a
+        // recomputed answer, and the answers are pure.
+        let mut memo = self.memo.lock().unwrap_or_else(|error| error.into_inner());
+        read(&mut memo)
+    }
+
+    /// Opens a repository whose memo is shared with earlier handles on the same root.
+    ///
+    /// For a one-shot command this is [`Repository::open`] plus two cheap queries. For a
+    /// long-lived host — the MCP server answering call after call about one workspace —
+    /// it is the difference between re-asking git everything per call and asking only
+    /// what changed. The memo survives only while `HEAD` and the working tree are
+    /// identical; any edit, stage, or commit discards it.
+    ///
+    /// # Errors
+    /// As [`Repository::open`].
+    pub fn shared(path: &Path) -> Result<Self, GitError> {
+        let probe = Self::open(path)?;
+        let key = probe.worktree_key();
+        let mut registry = SHARED.lock().unwrap_or_else(|error| error.into_inner());
+        let entry = registry
+            .entry(probe.root.clone())
+            .or_insert_with(|| SharedMemo {
+                key: key.clone(),
+                memo: Arc::default(),
+            });
+        if entry.key != key {
+            entry.key = key;
+            entry.memo = Arc::default();
+        }
+        Ok(Self {
+            root: probe.root,
+            memo: entry.memo.clone(),
+        })
+    }
+
+    /// A fingerprint of everything a memoised answer could depend on: the commit being
+    /// resolved against, and every difference between it and the files on disk.
+    ///
+    /// An unreadable answer fingerprints as unknown, which never compares equal to a
+    /// previous one, so a repository git cannot describe is never served from a memo.
+    fn worktree_key(&self) -> String {
+        let head = self
+            .run(&["rev-parse", "HEAD"])
+            .map_or_else(|_| "?".to_owned(), |text| text.trim().to_owned());
+        let status = self
+            .run(&["status", "--porcelain", "--untracked-files=all"])
+            .map_or_else(
+                |_| "?".to_owned(),
+                |text| crate::hash::content_hash(&text).to_string(),
+            );
+        format!("{head} {status}")
+    }
 }
 
 /// One entry of the git index: what is staged, at which mode, as which blob.
@@ -191,7 +323,10 @@ impl Repository {
         let root = run_in(path, &["rev-parse", "--show-toplevel"])
             .map_err(|_| GitError::NotARepository(path.to_path_buf()))?;
         let root = PathBuf::from(root.trim());
-        let repository = Self { root };
+        let repository = Self {
+            root,
+            memo: Arc::default(),
+        };
         if repository
             .run(&["rev-parse", "--is-shallow-repository"])?
             .trim()
@@ -280,9 +415,16 @@ impl Repository {
     }
 
     /// Whether a commit exists in this repository.
+    ///
+    /// Memoised: an object name that resolves once resolves for the rest of the build.
     #[must_use]
     pub fn contains(&self, commit: &Commit) -> bool {
-        self.rev_parse(commit.as_str()).is_ok()
+        if let Some(known) = self.memo(|memo| memo.exists.get(commit.as_str()).copied()) {
+            return known;
+        }
+        let exists = self.rev_parse(commit.as_str()).is_ok();
+        self.memo(|memo| memo.exists.insert(commit.as_str().to_owned(), exists));
+        exists
     }
 
     /// Whether `descendant` is `ancestor`, or is reachable from it.
@@ -298,22 +440,88 @@ impl Repository {
         if descendant == ancestor {
             return Ok(true);
         }
+        let key = (descendant.as_str().to_owned(), ancestor.as_str().to_owned());
+        if let Some(known) = self.memo(|memo| memo.ancestry.get(&key).copied()) {
+            return Ok(known);
+        }
+        // Once the same commit has been asked about often enough, walk its history once
+        // and answer this and every later question about it from the walk.
+        let probes = self.memo(|memo| {
+            let probes = memo
+                .probes
+                .entry(descendant.as_str().to_owned())
+                .or_insert(0);
+            *probes += 1;
+            *probes
+        });
+        if probes > REACHABILITY_PROBE_LIMIT {
+            self.walk_reachable(descendant);
+        }
+        if let Some(reachable) = self.memo(|memo| memo.reachable.get(descendant.as_str()).cloned())
+        {
+            // Reachable is definitive for yes. For no, the commit may be absent rather
+            // than merely unreachable, and those are different answers.
+            let verdict = reachable.contains(ancestor.as_str());
+            if !verdict && !self.contains(ancestor) {
+                return Err(GitError::UnknownRevision(ancestor.as_str().to_owned()));
+            }
+            self.memo(|memo| memo.ancestry.insert(key, verdict));
+            return Ok(verdict);
+        }
         for commit in [descendant, ancestor] {
             if !self.contains(commit) {
                 return Err(GitError::UnknownRevision(commit.as_str().to_owned()));
             }
         }
         // `merge-base --is-ancestor A B` exits 0 when A is an ancestor of B.
-        match self.status(&[
+        let verdict = match self.status(&[
             "merge-base",
             "--is-ancestor",
             ancestor.as_str(),
             descendant.as_str(),
         ]) {
-            Ok(0) => Ok(true),
-            Ok(_) => Ok(false),
-            Err(error) => Err(error),
+            Ok(0) => true,
+            Ok(_) => false,
+            Err(error) => return Err(error),
+        };
+        self.memo(|memo| memo.ancestry.insert(key, verdict));
+        Ok(verdict)
+    }
+
+    /// Walks `commit`'s history once, up front, so ancestry questions about it are free.
+    ///
+    /// The adaptive path below does this on its own after enough questions, but a caller
+    /// that already knows it is about to ask one question per record — freshness, about
+    /// `HEAD` — can skip the pairwise calls entirely by saying so.
+    pub fn prime_reachable(&self, commit: &Commit) {
+        self.walk_reachable(commit);
+    }
+
+    /// Records everything reachable from `commit`, in one `rev-list`.
+    ///
+    /// Best effort, and silent on failure: an absent walk only means the pairwise form
+    /// keeps answering. A commit that does not resolve is left unwalked so that the
+    /// caller still reports it as unknown.
+    fn walk_reachable(&self, commit: &Commit) {
+        if self.memo(|memo| memo.reachable.contains_key(commit.as_str())) {
+            return;
         }
+        let Ok(text) = self.run(&["rev-list", commit.as_str()]) else {
+            return;
+        };
+        let reachable: BTreeSet<String> = text
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(ToOwned::to_owned)
+            .collect();
+        self.memo(|memo| {
+            // Everything the walk listed demonstrably exists.
+            for oid in &reachable {
+                memo.exists.insert(oid.clone(), true);
+            }
+            memo.reachable.insert(commit.as_str().to_owned(), reachable);
+        });
     }
 
     /// The commits in `(from, to]`, newest first.
@@ -349,6 +557,13 @@ impl Repository {
             Some(from) => format!("{}..{}", from.as_str(), to.as_str()),
             None => to.as_str().to_owned(),
         };
+        let key = (
+            from.map(|c| c.as_str().to_owned()).unwrap_or_default(),
+            to.as_str().to_owned(),
+        );
+        if let Some(known) = self.memo(|memo| memo.touches.get(&key).cloned()) {
+            return Ok(known);
+        }
         // `-m` so a merge reports the paths it changed rather than nothing at all.
         let text = self.run(&[
             "log",
@@ -381,7 +596,9 @@ impl Repository {
                 });
             }
         }
-        Ok(out.into_iter().collect())
+        let touches: Vec<Touch> = out.into_iter().collect();
+        self.memo(|memo| memo.touches.insert(key, touches.clone()));
+        Ok(touches)
     }
 
     /// Paths with uncommitted changes in the working tree or the index.
@@ -393,6 +610,11 @@ impl Repository {
     /// # Errors
     /// [`GitError::CommandFailed`] if git cannot read the status.
     pub fn working_tree_changes(&self) -> Result<BTreeSet<String>, GitError> {
+        // The working tree is volatile, but the shared memo it lands in is discarded the
+        // moment `git status` differs, so within one snapshot this is a stable answer.
+        if let Some(known) = self.memo(|memo| memo.worktree.clone()) {
+            return Ok(known);
+        }
         let text = self.run(&["status", "--porcelain", "-z", "--untracked-files=all"])?;
         let mut out = BTreeSet::new();
         for entry in text.split('\0').filter(|e| e.len() > 3) {
@@ -400,6 +622,7 @@ impl Repository {
             // which this loop sees as a short entry and skips.
             out.insert(entry[3..].trim().to_owned());
         }
+        self.memo(|memo| memo.worktree = Some(out.clone()));
         Ok(out)
     }
 
@@ -408,11 +631,17 @@ impl Repository {
     /// # Errors
     /// [`GitError::CommandFailed`] if git cannot walk the history.
     pub fn commits_touching(&self, path: &str) -> Result<Vec<Commit>, GitError> {
+        if let Some(known) = self.memo(|memo| memo.touching.get(path).cloned()) {
+            return Ok(known);
+        }
         let text = self.run(&["log", "--format=%H", "--follow", "--", path])?;
-        text.lines()
+        let commits: Vec<Commit> = text
+            .lines()
             .filter(|l| !l.trim().is_empty())
             .map(|l| Commit::new(l.trim()).map_err(GitError::from))
-            .collect()
+            .collect::<Result<_, _>>()?;
+        self.memo(|memo| memo.touching.insert(path.to_owned(), commits.clone()));
+        Ok(commits)
     }
 
     /// The contents of a path at a commit, or `None` when it did not exist there.
@@ -420,11 +649,17 @@ impl Repository {
     /// # Errors
     /// [`GitError::CommandFailed`] only for a failure that is not "no such path".
     pub fn file_at(&self, commit: &Commit, path: &str) -> Result<Option<String>, GitError> {
-        match self.run(&["show", &format!("{}:{path}", commit.as_str())]) {
-            Ok(text) => Ok(Some(text)),
-            Err(GitError::CommandFailed { .. }) => Ok(None),
-            Err(other) => Err(other),
+        let key = (commit.as_str().to_owned(), path.to_owned());
+        if let Some(known) = self.memo(|memo| memo.blobs.get(&key).cloned()) {
+            return Ok(known);
         }
+        let content = match self.run(&["show", &format!("{}:{path}", commit.as_str())]) {
+            Ok(text) => Some(text),
+            Err(GitError::CommandFailed { .. }) => None,
+            Err(other) => return Err(other),
+        };
+        self.memo(|memo| memo.blobs.insert(key, content.clone()));
+        Ok(content)
     }
 
     /// Reads one path at many commits through a single `cat-file --batch` process.
@@ -433,6 +668,23 @@ impl Repository {
         commits: &[Commit],
         path: &str,
     ) -> Result<BTreeMap<Commit, Option<String>>, GitError> {
+        // A path at a commit is immutable, so the batch only has to ask for the versions
+        // the memo has not already seen — often none at all on a second call.
+        let mut out = BTreeMap::new();
+        let mut wanted = Vec::new();
+        for commit in commits {
+            let key = (commit.as_str().to_owned(), path.to_owned());
+            match self.memo(|memo| memo.blobs.get(&key).cloned()) {
+                Some(known) => {
+                    out.insert(commit.clone(), known);
+                }
+                None => wanted.push(commit.clone()),
+            }
+        }
+        if wanted.is_empty() {
+            return Ok(out);
+        }
+        let commits: &[Commit] = &wanted;
         let input = commits
             .iter()
             .map(|commit| format!("{}:{path}\n", commit.as_str()))
@@ -471,6 +723,14 @@ impl Repository {
             }
             out.insert(commit.clone(), Some(text));
         }
+        self.memo(|memo| {
+            for (commit, content) in &out {
+                memo.blobs.insert(
+                    (commit.as_str().to_owned(), path.to_owned()),
+                    content.clone(),
+                );
+            }
+        });
         Ok(out)
     }
 
@@ -482,13 +742,55 @@ impl Repository {
     /// # Errors
     /// [`GitError::CommandFailed`] if git cannot read the tree.
     pub fn run_ls_tree(&self, commit: &Commit) -> Result<BTreeSet<String>, GitError> {
+        if let Some(known) = self.memo(|memo| memo.trees.get(commit.as_str()).cloned()) {
+            return Ok(known);
+        }
         let text = self.run(&["ls-tree", "-r", "--name-only", commit.as_str()])?;
-        Ok(text
+        let listing: BTreeSet<String> = text
             .lines()
             .map(str::trim)
             .filter(|l| !l.is_empty())
             .map(ToOwned::to_owned)
-            .collect())
+            .collect();
+        self.memo(|memo| {
+            memo.trees
+                .insert(commit.as_str().to_owned(), listing.clone())
+        });
+        Ok(listing)
+    }
+
+    /// Answers [`Repository::is_ignored`] for many paths in one invocation.
+    ///
+    /// The per-path form costs a process each, and freshness asks it once per scope glob in
+    /// the ledger. This asks once for all of them and fills the memo, so the individual
+    /// calls that follow are free. Best effort: if the batch fails for any reason the memo
+    /// is simply left unprimed and the per-path form runs as before.
+    pub fn prime_ignored<'a>(&self, paths: impl IntoIterator<Item = &'a str>) {
+        let wanted: Vec<String> = paths
+            .into_iter()
+            .filter(|path| self.memo(|memo| !memo.ignored.contains_key(*path)))
+            .map(ToOwned::to_owned)
+            .collect();
+        if wanted.is_empty() {
+            return;
+        }
+        // `-z` makes both the input and the output NUL-separated, so a path is never split
+        // on a character it is allowed to contain. check-ignore exits 1 when nothing
+        // matched, which is an answer and not a failure.
+        let Ok(output) = self.run_bytes_allowing_no_match(
+            &["check-ignore", "--no-index", "-z", "--stdin"],
+            &wanted.join("\0"),
+        ) else {
+            return;
+        };
+        let text = String::from_utf8_lossy(&output);
+        let ignored: BTreeSet<&str> = text.split('\0').filter(|path| !path.is_empty()).collect();
+        self.memo(|memo| {
+            for path in wanted {
+                let verdict = ignored.contains(path.as_str());
+                memo.ignored.insert(path, verdict);
+            }
+        });
     }
 
     /// Whether a repository-relative path or glob is intentionally ignored.
@@ -499,14 +801,21 @@ impl Repository {
     /// # Errors
     /// [`GitError::CommandFailed`] when git cannot execute the query.
     pub fn is_ignored(&self, path: &str) -> Result<bool, GitError> {
-        match self.status(&["check-ignore", "--quiet", "--no-index", "--", path])? {
-            0 => Ok(true),
-            1 => Ok(false),
-            code => Err(GitError::CommandFailed {
-                subcommand: "check-ignore --quiet --no-index".to_owned(),
-                stderr: format!("exited with status {code}"),
-            }),
+        if let Some(known) = self.memo(|memo| memo.ignored.get(path).copied()) {
+            return Ok(known);
         }
+        let ignored = match self.status(&["check-ignore", "--quiet", "--no-index", "--", path])? {
+            0 => true,
+            1 => false,
+            code => {
+                return Err(GitError::CommandFailed {
+                    subcommand: "check-ignore --quiet --no-index".to_owned(),
+                    stderr: format!("exited with status {code}"),
+                });
+            }
+        };
+        self.memo(|memo| memo.ignored.insert(path.to_owned(), ignored));
+        Ok(ignored)
     }
 
     /// Every entry of the git index, in path order.
@@ -675,16 +984,26 @@ impl Repository {
         if commits.is_empty() {
             return Ok(Vec::new());
         }
+        let key = commits
+            .iter()
+            .map(Commit::as_str)
+            .collect::<Vec<_>>()
+            .join(" ");
+        if let Some(known) = self.memo(|memo| memo.topological.get(&key).cloned()) {
+            return Ok(known);
+        }
         let mut args: Vec<String> = vec!["rev-list".to_owned(), "--topo-order".to_owned()];
         args.extend(commits.iter().map(|c| c.as_str().to_owned()));
         let text = self.run(&args)?;
         let wanted: BTreeSet<&str> = commits.iter().map(Commit::as_str).collect();
-        Ok(text
+        let ordered: Vec<Commit> = text
             .lines()
             .map(str::trim)
             .filter(|line| wanted.contains(line))
             .filter_map(|line| Commit::new(line).ok())
-            .collect())
+            .collect();
+        self.memo(|memo| memo.topological.insert(key, ordered.clone()));
+        Ok(ordered)
     }
 
     // -- process plumbing -------------------------------------------------------------
@@ -696,7 +1015,7 @@ impl Repository {
     fn run_with_stdin<S: AsRef<OsStr>>(&self, args: &[S], input: &str) -> Result<String, GitError> {
         use std::io::Write as _;
         use std::process::Stdio;
-        let mut child = Command::new("git")
+        let mut child = command()
             .args(args)
             .current_dir(&self.root)
             .stdin(Stdio::piped())
@@ -727,7 +1046,7 @@ impl Repository {
     ) -> Result<Vec<u8>, GitError> {
         use std::io::Write as _;
         use std::process::Stdio;
-        let mut child = Command::new("git")
+        let mut child = command()
             .args(args)
             .current_dir(&self.root)
             .stdin(Stdio::piped())
@@ -762,8 +1081,49 @@ impl Repository {
         Ok(output.stdout)
     }
 
+    /// Like [`Self::run_bytes_with_stdin`], but treats exit 1 as an empty answer.
+    ///
+    /// `check-ignore` uses exit 1 for "nothing matched", which is a verdict rather than a
+    /// failure. Anything above 1 is still an error.
+    fn run_bytes_allowing_no_match<S: AsRef<OsStr>>(
+        &self,
+        args: &[S],
+        input: &str,
+    ) -> Result<Vec<u8>, GitError> {
+        use std::io::Write as _;
+        use std::process::Stdio;
+        let mut child = command()
+            .args(args)
+            .current_dir(&self.root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| GitError::CommandFailed {
+                subcommand: describe(args),
+                stderr: e.to_string(),
+            })?;
+        if let Some(stdin) = child.stdin.as_mut() {
+            let _ = stdin.write_all(input.as_bytes());
+        }
+        drop(child.stdin.take());
+        let output = child
+            .wait_with_output()
+            .map_err(|e| GitError::CommandFailed {
+                subcommand: describe(args),
+                stderr: e.to_string(),
+            })?;
+        match output.status.code() {
+            Some(0 | 1) => Ok(output.stdout),
+            _ => Err(GitError::CommandFailed {
+                subcommand: describe(args),
+                stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+            }),
+        }
+    }
+
     fn status<S: AsRef<OsStr>>(&self, args: &[S]) -> Result<i32, GitError> {
-        let output = Command::new("git")
+        let output = command()
             .args(args)
             .current_dir(&self.root)
             .output()
@@ -775,6 +1135,30 @@ impl Repository {
     }
 }
 
+/// A `git` command, configured so it never steals the foreground.
+///
+/// Every git invocation in the workspace goes through here. On Windows a child
+/// console application spawned from a process without a console — the desktop
+/// review shell is a `windows_subsystem = "windows"` binary — allocates one of
+/// its own, which flashes a console window on screen and takes focus away from
+/// whatever the user was typing into. `CREATE_NO_WINDOW` suppresses that; it
+/// changes nothing about the command's output, which is captured through pipes
+/// either way. On other platforms this is a plain `Command::new("git")`.
+pub fn command() -> Command {
+    let command = Command::new("git");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt as _;
+        /// `CREATE_NO_WINDOW` from the Win32 process-creation flags.
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let mut command = command;
+        command.creation_flags(CREATE_NO_WINDOW);
+        return command;
+    }
+    #[cfg(not(windows))]
+    command
+}
+
 fn describe<S: AsRef<OsStr>>(args: &[S]) -> String {
     args.iter()
         .map(|a| a.as_ref().to_string_lossy().into_owned())
@@ -783,7 +1167,7 @@ fn describe<S: AsRef<OsStr>>(args: &[S]) -> String {
 }
 
 fn run_in<S: AsRef<OsStr>>(dir: &Path, args: &[S]) -> Result<String, GitError> {
-    let output = Command::new("git")
+    let output = command()
         .args(args)
         .current_dir(dir)
         .output()

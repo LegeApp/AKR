@@ -30,6 +30,8 @@ The `fts5` feature (default on, plumbed through all three crates) controls wheth
 
 If you are in a sandbox with no Rust toolchain and `static.rust-lang.org` blocked, `scripts/fetch-rust-sandbox.sh` fetches one from the npm mirror of the official component tarballs, and `scripts/run-tests-sliced.sh` runs the test binaries a few at a time for environments that cap a command's wall clock.
 
+`scripts/setup-akr-mcp.sh` and its PowerShell mirror install the binaries and register the MCP server with Codex, OpenCode and Claude. They also install `scripts/agent-section.md` — the short, workspace-agnostic "how to use AKR" brief — into the global agent instruction files (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.config/opencode/AGENTS.md`), between `<!-- AKR_START -->` and `<!-- AKR_END -->` markers. Edit that file, not the installed copies: re-running either script rewrites the marked block in place and leaves everything around it, including sections other tools own, untouched. `--no-agents` / `-NoAgents` skips it. This repo's own `AGENTS.md` is the fuller protocol and is not what gets installed.
+
 ## Workspace layout
 
 - **`crates/akr-core`** — the model (`model/`), lexer/parser/formatter (`syntax/`), validation rules V-001..V-024 (`validate/`), resolver, git freshness (`freshness/`, `git/`), context assembly (`context/`), SQLite index + renderers (`render/`), lock file (`lock/`), atomic write ops (`ops/`).
@@ -60,3 +62,4 @@ The `docs/` and `spec/` trees are a normative specification the code implements,
 - **Exit codes are semantic**: 0 success, 1 ledger diagnostics, 2 usage, 3 environment. Staleness never changes an exit code (D-024).
 - `docs/generated/**` views are build outputs — never hand-edit.
 - One implementation for CLI and MCP: any behavior reachable via MCP must be reproducible from the command line.
+- **Git is spawned only through `akr_core::git`** (`crates/akr-core/src/git/mod.rs`). Use `command()` rather than `Command::new("git")`: it suppresses the console window a child process would otherwise open on Windows, which is what made the desktop shell flash consoles. Every query goes through the `Repository` memo, so a repeated question costs no process; on Windows each spawn is ~30ms and freshness asks thousands. `Repository::shared` extends that memo across handles for a long-lived host (the MCP server), keyed on `HEAD` plus porcelain status — any change discards the whole memo rather than risk serving a stale fact. New git queries belong in that module, memoised if their answer cannot change while the repository does not.

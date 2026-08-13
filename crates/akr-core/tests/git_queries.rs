@@ -445,3 +445,187 @@ fn a_logical_key_round_trips_through_git_queries() {
     let parsed = LogicalKey::parse("fx.milestone.m1").expect("valid");
     assert_eq!(parsed.to_string(), "fx.milestone.m1");
 }
+
+// -------------------------------------------------------------------------------------
+// The memo
+// -------------------------------------------------------------------------------------
+
+#[test]
+fn repeated_questions_are_answered_from_the_memo() {
+    let mut repo = TempRepo::new("memo");
+    let first = repo.commit_file("a.txt", "one\n", "first");
+    let second = repo.commit_file("a.txt", "two\n", "second");
+    let git = Repository::open(repo.root()).expect("opens");
+    let (first, second) = (commit(&first), commit(&second));
+
+    // Asking the same question repeatedly must not change the answer.
+    for _ in 0..3 {
+        assert!(git.contains(&first));
+        assert!(git.is_descendant(&second, &first).expect("ancestry"));
+        assert!(!git.is_descendant(&first, &second).expect("ancestry"));
+    }
+    // A fresh handle re-asks git rather than inheriting the memo.
+    let clone = git.clone();
+    assert!(clone.contains(&second));
+    assert!(clone.is_descendant(&second, &first).expect("ancestry"));
+    // An absent object is still absent, and still not an ancestor of anything.
+    let absent = commit("0123456789012345678901234567890123456789");
+    assert!(!git.contains(&absent));
+    assert!(git.is_descendant(&second, &absent).is_err());
+}
+
+#[test]
+fn batched_and_per_path_ignore_checks_agree() {
+    let mut repo = TempRepo::new("ignored");
+    repo.write(".gitignore", "target/\n*.tmp\n");
+    repo.write("src/main.rs", "fn main() {}\n");
+    repo.commit("ignores");
+    let git = Repository::open(repo.root()).expect("opens");
+
+    let paths = ["target/debug/**", "src/**", "scratch.tmp", "docs/*.md"];
+    // Per-path answers first, from an unprimed handle.
+    let one_at_a_time: Vec<bool> = paths
+        .iter()
+        .map(|path| git.is_ignored(path).expect("query"))
+        .collect();
+    assert_eq!(one_at_a_time, [true, false, true, false]);
+
+    // The batch must reach the same verdicts on a handle that has not seen them.
+    let batched = git.clone();
+    batched.prime_ignored(paths);
+    let after: Vec<bool> = paths
+        .iter()
+        .map(|path| batched.is_ignored(path).expect("query"))
+        .collect();
+    assert_eq!(after, one_at_a_time);
+
+    // Priming twice, or priming nothing, changes nothing.
+    batched.prime_ignored(paths);
+    batched.prime_ignored(std::iter::empty());
+    let again: Vec<bool> = paths
+        .iter()
+        .map(|path| batched.is_ignored(path).expect("query"))
+        .collect();
+    assert_eq!(again, one_at_a_time);
+}
+
+#[test]
+fn walking_history_reaches_the_same_verdicts_as_pairwise_ancestry() {
+    // Past a few questions about one commit, the handle walks that commit's history once
+    // and answers from the walk. The verdicts must not change — including the two cases
+    // the walk alone cannot distinguish: a commit that exists but is unreachable, and a
+    // commit that is not in the repository at all.
+    let mut repo = TempRepo::new("reachability");
+    let a = commit(&repo.commit_file("a.txt", "1\n", "a"));
+    repo.branch("side");
+    let side = commit(&repo.commit_file("side.txt", "s\n", "side"));
+    repo.checkout("main");
+    let b = commit(&repo.commit_file("a.txt", "2\n", "b"));
+    let c = commit(&repo.commit_file("a.txt", "3\n", "c"));
+    let d = commit(&repo.commit_file("a.txt", "4\n", "d"));
+    let head = commit(&repo.commit_file("a.txt", "5\n", "head"));
+    let git = Repository::open(repo.root()).expect("opens");
+
+    // Enough distinct questions about `head` to trip the walk, then the ones that matter.
+    for ancestor in [&a, &b, &c, &d] {
+        assert!(
+            git.is_descendant(&head, ancestor).expect("ancestry"),
+            "{ancestor} is on the first-parent line"
+        );
+    }
+    assert!(
+        !git.is_descendant(&head, &side).expect("ancestry"),
+        "an unmerged branch commit exists but is not reachable"
+    );
+    assert!(git.contains(&side));
+    let absent = commit("0123456789012345678901234567890123456789");
+    assert!(
+        git.is_descendant(&head, &absent).is_err(),
+        "an absent commit is unknown, not merely unreachable"
+    );
+
+    // A handle that never crosses the threshold answers identically.
+    let pairwise = Repository::open(repo.root()).expect("opens");
+    assert!(pairwise.is_descendant(&head, &a).expect("ancestry"));
+    assert!(!pairwise.is_descendant(&head, &side).expect("ancestry"));
+    assert!(pairwise.is_descendant(&head, &head).expect("ancestry"));
+}
+
+// -------------------------------------------------------------------------------------
+// The shared memo
+// -------------------------------------------------------------------------------------
+
+#[test]
+fn a_shared_memo_is_dropped_when_the_working_tree_moves() {
+    let mut repo = TempRepo::new("shared-worktree");
+    repo.commit_file("a.txt", "one\n", "first");
+
+    let clean = Repository::shared(repo.root()).expect("opens");
+    assert!(clean.working_tree_changes().expect("status").is_empty());
+    // Ask twice: the second answer comes from the memo and must agree with the first.
+    assert!(clean.working_tree_changes().expect("status").is_empty());
+
+    repo.write("b.txt", "untracked\n");
+    let dirty = Repository::shared(repo.root()).expect("opens");
+    assert!(
+        dirty
+            .working_tree_changes()
+            .expect("status")
+            .contains("b.txt"),
+        "a new handle must see the edit, not the memo it was taken against"
+    );
+}
+
+#[test]
+fn a_shared_memo_is_dropped_when_head_moves() {
+    let mut repo = TempRepo::new("shared-head");
+    repo.commit_file("a.txt", "one\n", "first");
+    let before = Repository::shared(repo.root())
+        .expect("opens")
+        .commits_touching("a.txt")
+        .expect("history");
+    assert_eq!(before.len(), 1);
+
+    let second = commit(&repo.commit_file("a.txt", "two\n", "second"));
+    let after = Repository::shared(repo.root())
+        .expect("opens")
+        .commits_touching("a.txt")
+        .expect("history");
+    assert_eq!(after.len(), 2, "the new commit must be visible");
+    assert_eq!(after.first(), Some(&second));
+
+    // Tree listings are commit-keyed, so both commits still answer for themselves.
+    let git = Repository::shared(repo.root()).expect("opens");
+    assert!(git.run_ls_tree(&second).expect("tree").contains("a.txt"));
+}
+
+#[test]
+fn a_shared_memo_and_a_private_one_agree() {
+    let mut repo = TempRepo::new("shared-agrees");
+    let first = commit(&repo.commit_file("a.txt", "one\n", "first"));
+    let head = commit(&repo.commit_file("a.txt", "two\n", "second"));
+    repo.write("dirty.txt", "x\n");
+
+    let private = Repository::open(repo.root()).expect("opens");
+    let shared = Repository::shared(repo.root()).expect("opens");
+    assert_eq!(
+        private.working_tree_changes().expect("status"),
+        shared.working_tree_changes().expect("status")
+    );
+    assert_eq!(
+        private.commits_touching("a.txt").expect("history"),
+        shared.commits_touching("a.txt").expect("history")
+    );
+    assert_eq!(
+        private.is_descendant(&head, &first).expect("ancestry"),
+        shared.is_descendant(&head, &first).expect("ancestry")
+    );
+    assert_eq!(
+        private.file_at(&first, "a.txt").expect("blob"),
+        shared.file_at(&first, "a.txt").expect("blob")
+    );
+    assert_eq!(
+        private.touches_in(Some(&first), &head).expect("touches"),
+        shared.touches_in(Some(&first), &head).expect("touches")
+    );
+}

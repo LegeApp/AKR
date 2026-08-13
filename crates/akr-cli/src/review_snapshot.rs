@@ -15,6 +15,60 @@ use akr_core::resolve::Verdict;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+/// A coarse stage of a snapshot load.
+///
+/// A load is one opaque call that can take seconds — most of it waiting on git — so a
+/// client with a window needs to be able to say what it is waiting for. These are stage
+/// boundaries, not a percentage: the phases are ordered and each is reported once, which
+/// is enough for a determinate progress bar and honest about the fact that the cost
+/// inside a phase is not knowable in advance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ReviewPhase {
+    /// Reading and parsing the workspace.
+    Opening,
+    /// Resolving revisions to their heads.
+    Resolving,
+    /// Asking git which records are stale or at risk.
+    Freshness,
+    /// Projecting records into owned review values.
+    Projecting,
+    /// Collecting diagnostics and counts.
+    Summarising,
+}
+
+impl ReviewPhase {
+    /// Every phase, in the order a load reports them.
+    pub const ALL: [Self; 5] = [
+        Self::Opening,
+        Self::Resolving,
+        Self::Freshness,
+        Self::Projecting,
+        Self::Summarising,
+    ];
+
+    /// A short present-tense description, for a status line.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Opening => "reading ledger",
+            Self::Resolving => "resolving revisions",
+            Self::Freshness => "checking git freshness",
+            Self::Projecting => "projecting records",
+            Self::Summarising => "collecting diagnostics",
+        }
+    }
+
+    /// Which step this is, one-based.
+    #[must_use]
+    pub fn step(self) -> usize {
+        Self::ALL
+            .iter()
+            .position(|phase| *phase == self)
+            .unwrap_or(0)
+            + 1
+    }
+}
+
 /// Inputs which make a snapshot deterministic.
 #[derive(Debug, Clone, Default)]
 pub struct ReviewOptions {
@@ -235,6 +289,23 @@ impl ReviewSnapshot {
     /// # Errors
     /// [`ReviewLoadError`] when the workspace or required Git history is unavailable.
     pub fn load(root: &Path, options: ReviewOptions) -> Result<Self, ReviewLoadError> {
+        Self::load_reporting(root, options, &|_| {})
+    }
+
+    /// Loads a snapshot, reporting each phase as it begins.
+    ///
+    /// `progress` is called on the loading thread, once per [`ReviewPhase`], in order. It
+    /// must not block: a client that draws from it should hand the phase to its event loop
+    /// rather than paint from here.
+    ///
+    /// # Errors
+    /// [`ReviewLoadError`] when the workspace or required Git history is unavailable.
+    pub fn load_reporting(
+        root: &Path,
+        options: ReviewOptions,
+        progress: &(dyn Fn(ReviewPhase) + Sync),
+    ) -> Result<Self, ReviewLoadError> {
+        progress(ReviewPhase::Opening);
         let global = Global {
             dir: root.to_path_buf(),
             profile: Profile::Strict,
@@ -245,8 +316,11 @@ impl ReviewSnapshot {
         };
         let mut session = Session::open(&global).map_err(ReviewLoadError)?;
         session.attach_lock();
+        progress(ReviewPhase::Resolving);
         let model = session.resolve();
+        progress(ReviewPhase::Freshness);
         let queue = session.review_queue();
+        progress(ReviewPhase::Projecting);
 
         let stale: BTreeMap<_, _> = queue.stale.iter().map(|item| (&item.id, item)).collect();
         let at_risk: BTreeMap<_, _> = queue.at_risk.iter().map(|item| (&item.id, item)).collect();
@@ -287,6 +361,7 @@ impl ReviewSnapshot {
         }
         records.sort_by(|left, right| left.key.cmp(&right.key));
 
+        progress(ReviewPhase::Summarising);
         let mut diagnostics = session.diagnostics(&model);
         diagnostics.extend(queue.diagnostics.clone());
         diagnostics.sort_by_key(akr_core::diagnostics::Diagnostic::sort_key);

@@ -513,7 +513,7 @@ pub(crate) fn context_of(session: &Session) -> WriteContext {
 /// AKR is not an identity system (D-005): `author` is free text, and the one honest source
 /// of a name inside a repository is the repository's own configuration. Absent is fine.
 fn git_author(session: &Session) -> Option<String> {
-    let output = std::process::Command::new("git")
+    let output = akr_core::git::command()
         .args(["config", "user.name"])
         .current_dir(&session.root)
         .output()

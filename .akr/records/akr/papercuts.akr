@@ -451,6 +451,51 @@ record akr.papercut.collated-20-papercuts-from-kitchen-concept-lege/1 : papercut
     created_at 2026-08-08
 }
 
+record akr.papercut.collated-8-papercuts-from-lege-ecosystem/1 : papercut {
+    title "Collated 8 papercuts from Lege-ecosystem and SaveYourSkin"
+    state verified
+    statement """
+        Collated 8 papercuts from /mnt/Samsung980_1TB/Rust-projects on 2026-08-13 (D-030). Each source key is also in the collated slot, which is the dedup set for the next run; the sisters were read and never written.
+
+        ## Lege-ecosystem @lege-ecosystem.papercut.while-proposing-the-jbig2-smask-preservation [about akr]
+        While proposing the JBIG2 SMask preservation work record, source citations with start_line/end_line were rejected because AKR also requires exact start_byte/end_byte. The proposal schema does not make that coupled range requirement obvious at authoring time; I retried with path-level citations.
+
+        ## SaveYourSkin @saveyourskin.papercut.after-completing-all-g1-g7-children-revising [about akr]
+        After completing all G1-G7 children, revising the spatial track from active to completed was refused because active normative records legitimately depend on the track and the validator treated the resulting completed revision as a superseded target (`slot depends_on may not reference ... /2, which is superseded`). A completed planning prerequisite should remain satisfiable, or the diagnostic should identify the exact dependent that requires repointing.
+
+        ## SaveYourSkin @saveyourskin.papercut.completing-sound-acoustic-studio-and-walk-test [about akr]
+        Completing sound-acoustic-studio-and-walk-test was refused because its inherited part_of relation still targets superseded sound-design/1 even though context also derives it under /2. The child must be revised to the current parent before completion; superseding a track should ideally retarget or clearly disposition child parentage.
+
+        ## SaveYourSkin @saveyourskin.papercut.completing-sound-source-profile-and-lod-audit [about akr]
+        Completing sound-source-profile-and-lod-audit failed because its recovered part_of relations still included terminal sound-design/1 alongside the current track, even though the context bundle had already dispositioned it into sound-design/2. Completion required a relation-only revision first.
+
+        ## SaveYourSkin @saveyourskin.papercut.knowledge-revise-activates-a-proposed [about akr]
+        knowledge.revise activates a proposed constraint cleanly, but a follow-up revision using `retired_claims` (with or without replacement claims) emits malformed-source parser diagnostics such as unclosed brackets and `constraint has no slot claim`. The API appears to serialize claim retirement incorrectly, preventing removal of a now-false live-counterexample claim.
+
+        ## SaveYourSkin @saveyourskin.papercut.knowledge-search-could-not-refresh-or-use-the [about akr]
+        knowledge.search could not refresh or use the ledger index because the cache was built without FTS5, forcing direct reads of already-known record keys for gameplay prioritization.
+
+        ## SaveYourSkin @saveyourskin.papercut.while-proposing-a-work-record-i-used-a-natural [about akr]
+        While proposing a work record I used a natural `summary` slot and had to retry after schema rejection; surfacing the valid kind-specific slots in the proposal tool description or accepting `summary` as an alias would avoid this round trip.
+
+        ## SaveYourSkin @saveyourskin.papercut.while-recording-an-unplanned-completed [about akr]
+        While recording an unplanned completed integration slice, knowledge.propose did not surface the required `work.intent` slot until validation rejected the first write; including kind-specific required slots in the tool schema or error-free template would avoid the retry.
+        """
+    observed_at git:94498f67d73d18323a5b06a3e5e59e307286947b
+    about "akr"
+    collated [
+        "lege-ecosystem.papercut.while-proposing-the-jbig2-smask-preservation",
+        "saveyourskin.papercut.after-completing-all-g1-g7-children-revising",
+        "saveyourskin.papercut.completing-sound-acoustic-studio-and-walk-test",
+        "saveyourskin.papercut.completing-sound-source-profile-and-lod-audit",
+        "saveyourskin.papercut.knowledge-revise-activates-a-proposed",
+        "saveyourskin.papercut.knowledge-search-could-not-refresh-or-use-the",
+        "saveyourskin.papercut.while-proposing-a-work-record-i-used-a-natural",
+        "saveyourskin.papercut.while-recording-an-unplanned-completed"
+    ]
+    created_at 2026-08-13
+}
+
 record akr.papercut.collated-9-papercuts-from-lege-ecosystem/1 : papercut {
     title "Collated 9 papercuts from Lege-ecosystem, SaveYourSkin and jpegXL-rs"
     state verified
@@ -554,6 +599,18 @@ record akr.papercut.i-tried-assuming-get-supported-a-source/1 : papercut {
     observed_at git:911c29573461ba912cc141f49f4d8c05c61ec5e1
     author "codex"
     created_at 2026-08-09
+}
+
+record akr.papercut.knowledge-context-guidance-suggests-reading-a/1 : papercut {
+    title "knowledge.context guidance suggests reading a task record by goal, but…"
+    state verified
+    statement """
+        knowledge.context guidance suggests reading a task record by goal, but it rejects papercut records and only then tells the caller to use knowledge.get. The context API documentation should state its planning-record restriction up front.
+        """
+    observed_at git:94498f67d73d18323a5b06a3e5e59e307286947b
+    about "akr"
+    author "codex"
+    created_at 2026-08-13
 }
 
 record akr.papercut.knowledge-context-rejects-completed-work-goals/1 : papercut {

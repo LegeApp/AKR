@@ -213,7 +213,11 @@ impl Session {
         if self.git_facts_loaded {
             return Ok(());
         }
-        let repository = match Repository::open(&self.root) {
+        // `shared` rather than `open`: a one-shot command pays two extra queries for the
+        // freshness check, and a long-lived host — the MCP server, which opens a session
+        // per tool call — reuses everything git already answered about an unchanged
+        // repository instead of re-asking per call.
+        let repository = match Repository::shared(&self.root) {
             Ok(repository) => Some(repository),
             Err(akr_core::git::GitError::ShallowHistory) => {
                 return Err(EnvError::new(

@@ -231,10 +231,33 @@ impl std::fmt::Display for SnapshotError {
 }
 impl std::error::Error for SnapshotError {}
 
+/// One stage of a load, as the shell reports it.
+///
+/// A load can take seconds — nearly all of it waiting on git subprocesses — so the shell
+/// shows which stage it is on and how far through the ordered list that is.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoadPhase {
+    /// Present-tense description, e.g. "checking git freshness".
+    pub label: String,
+    /// One-based position in the sequence.
+    pub step: usize,
+    /// How many stages there are in total.
+    pub total: usize,
+}
+
 /// The only data-access seam the GUI needs. Implementations may call
 /// `akr_cli::review_snapshot::ReviewSnapshot::load` on a worker thread.
 pub trait WorkspaceLoader: Send + Sync + 'static {
-    fn load(&self, workspace: &Path) -> Result<ReviewSnapshot, SnapshotError>;
+    fn load(&self, workspace: &Path) -> Result<ReviewSnapshot, SnapshotError> {
+        self.load_reporting(workspace, &|_| {})
+    }
+    /// Loads while reporting stage boundaries. `progress` is called on the
+    /// worker thread and must not block.
+    fn load_reporting(
+        &self,
+        workspace: &Path,
+        progress: &(dyn Fn(LoadPhase) + Sync),
+    ) -> Result<ReviewSnapshot, SnapshotError>;
 }
 
 #[derive(Debug, Clone)]
@@ -244,6 +267,8 @@ pub struct WorkspaceTab {
     pub selected_key: Option<String>,
     pub load_generation: u64,
     pub error: Option<String>,
+    /// The stage the in-flight load last reported, if one is in flight.
+    pub phase: Option<LoadPhase>,
 }
 
 impl WorkspaceTab {
@@ -254,6 +279,7 @@ impl WorkspaceTab {
             selected_key: None,
             load_generation: 0,
             error: None,
+            phase: None,
         }
     }
 }
