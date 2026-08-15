@@ -7,6 +7,39 @@ use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 use support::Example;
 
+#[test]
+fn version_and_initialize_report_the_cargo_package_version() {
+    let output = Command::new(env!("CARGO_BIN_EXE_akr-mcp"))
+        .arg("--version")
+        .output()
+        .expect("version runs");
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8(output.stdout).expect("version is UTF-8"),
+        format!("akr-mcp {}\n", env!("CARGO_PKG_VERSION"))
+    );
+
+    let server = akr_mcp::Server::new("/workspace-not-opened-by-this-test");
+    let request = parse(
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}"#,
+    )
+    .expect("request is JSON");
+    let response = server.handle(&request).expect("request has an id");
+    let version = response
+        .get("result")
+        .and_then(|result| result.get("serverInfo"))
+        .and_then(|info| info.get("version"))
+        .and_then(Value::as_str);
+    assert_eq!(version, Some(env!("CARGO_PKG_VERSION")));
+    assert_eq!(
+        response
+            .get("result")
+            .and_then(|result| result.get("protocolVersion"))
+            .and_then(Value::as_str),
+        Some("2025-06-18")
+    );
+}
+
 fn call(
     input: &mut impl Write,
     output: &mut impl BufRead,
@@ -24,6 +57,85 @@ fn call(
     output.read_line(&mut line).expect("response reads");
     assert!(!line.is_empty(), "server closed before response {id}");
     parse(line.trim()).expect("response is JSON")
+}
+
+fn content_length_call(input: &mut impl Write, output: &mut impl BufRead, body: &str) -> Value {
+    write!(input, "Content-Length: {}\r\n\r\n{body}", body.len()).expect("frame writes");
+    input.flush().expect("frame flushes");
+
+    let mut length = None;
+    loop {
+        let mut line = String::new();
+        output.read_line(&mut line).expect("response header reads");
+        assert!(
+            !line.is_empty(),
+            "server closed before Content-Length response"
+        );
+        if line == "\r\n" || line == "\n" {
+            break;
+        }
+        if let Some(value) = line.strip_prefix("Content-Length:") {
+            length = Some(
+                value
+                    .trim()
+                    .parse::<usize>()
+                    .expect("numeric content length"),
+            );
+        }
+    }
+    let mut body = vec![0; length.expect("Content-Length response header")];
+    output.read_exact(&mut body).expect("response body reads");
+    parse(std::str::from_utf8(&body).expect("response is UTF-8")).expect("response is JSON")
+}
+
+#[test]
+fn a_real_subprocess_serves_content_length_initialize_and_tools_list() {
+    let example = Example::materialise("mcp-content-length-subprocess");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_akr-mcp"))
+        .arg("--dir")
+        .arg(example.root())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("server starts");
+    let mut input = child.stdin.take().expect("stdin");
+    let mut output = BufReader::new(child.stdout.take().expect("stdout"));
+
+    let initialized = content_length_call(
+        &mut input,
+        &mut output,
+        r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{}}}"#,
+    );
+    assert_eq!(
+        initialized
+            .get("result")
+            .and_then(|result| result.get("protocolVersion"))
+            .and_then(Value::as_str),
+        Some("2025-06-18")
+    );
+
+    let listed = content_length_call(
+        &mut input,
+        &mut output,
+        r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#,
+    );
+    assert!(
+        listed
+            .get("result")
+            .and_then(|result| result.get("tools"))
+            .and_then(Value::as_array)
+            .is_some_and(|tools| tools.iter().any(|tool| {
+                tool.get("name").and_then(Value::as_str) == Some("knowledge.papercut")
+            })),
+        "{}",
+        listed.to_pretty()
+    );
+
+    drop(input);
+    let completed = child.wait_with_output().expect("server exits on EOF");
+    assert!(completed.status.success());
+    assert!(completed.stderr.is_empty(), "{:?}", completed.stderr);
 }
 
 #[test]

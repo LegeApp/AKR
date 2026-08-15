@@ -34,6 +34,25 @@ pub fn is_write(name: &str) -> bool {
         .is_some_and(|tool| tool.writes)
 }
 
+fn missing_commit(session: &Session, suggest_observed_at: bool) -> ToolError {
+    let hint = if suggest_observed_at {
+        "; make an initial commit, or pass `observed_at`"
+    } else {
+        "; make an initial commit, or pass `observed_at`"
+    };
+    if session.repository.is_some() {
+        ToolError::new(
+            "AKR-G001",
+            format!("no commit to record: the repository has no commits yet{hint}"),
+        )
+    } else {
+        ToolError::new(
+            "AKR-G001",
+            format!("no commit to record: not inside a git repository{hint}"),
+        )
+    }
+}
+
 /// The payload that returns to the MCP protocol.
 #[must_use]
 pub enum ToolResult {
@@ -961,12 +980,10 @@ fn evidence_record(
                 )
             })?
         }
-        None => session.commit.clone().ok_or_else(|| {
-            ToolError::new(
-                "AKR-G001",
-                "no commit to record: not inside a git repository; pass `observed_at`",
-            )
-        })?,
+        None => session
+            .commit
+            .clone()
+            .ok_or_else(|| missing_commit(&session, true))?,
     };
     let summary = arguments.get("summary").and_then(Value::as_str);
     let title = arguments
@@ -1027,12 +1044,10 @@ fn papercut(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let agent = required_str(arguments, "agent")?;
     let namespace = arguments.get("namespace").and_then(Value::as_str);
 
-    let commit = session.commit.clone().ok_or_else(|| {
-        ToolError::new(
-            "AKR-G001",
-            "no commit to record: not inside a git repository",
-        )
-    })?;
+    let commit = session
+        .commit
+        .clone()
+        .ok_or_else(|| missing_commit(&session, false))?;
     let key = akr_core::papercut::allocate_key(&session.ledger, namespace, message)
         .map_err(|e| ToolError::new("AKR-C004", e.to_string()))?;
     let request = akr_core::papercut::LogPapercut {

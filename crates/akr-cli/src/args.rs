@@ -1622,7 +1622,7 @@ fn parse_change(
     let sub = positional.first().map(|s| s.as_str()).ok_or_else(|| {
         UsageError::new(
             "AKR-C003",
-            format!("{name} requires a subcommand (begin|show|prepare|verify|abort)"),
+            format!("{name} requires a subcommand (begin|show|status|prepare|verify|abort)"),
         )
     })?;
     Ok(match sub {
@@ -1639,7 +1639,7 @@ fn parse_change(
                 untracked_reason: option_value(tail, "--untracked-reason"),
             }
         }
-        "show" => Command::ChangeShow,
+        "show" | "status" => Command::ChangeShow,
         "abort" => Command::ChangeAbort,
         "prepare" | "verify" => {
             if !tail.iter().any(|a| a == "--staged") {
@@ -1657,7 +1657,7 @@ fn parse_change(
                 "AKR-C001",
                 format!("unknown subcommand {other:?} for command \"change\""),
             )
-            .with_help("supported subcommands: begin, show, prepare, verify, abort"));
+            .with_help("supported subcommands: begin, show, status, prepare, verify, abort"));
         }
     })
 }
@@ -1950,6 +1950,7 @@ pub fn help_for(name: &str) -> Option<String> {
              \x20                 [--primary <key>] [--related <key>]... [--note <text>]\n\
              \x20                 [--untracked-reason <text>]\n\
              akr change show\n\
+             akr change status\n\
              akr change prepare --staged\n\
              akr change verify --staged\n\
              akr change abort\n\
@@ -2023,9 +2024,15 @@ pub fn help_for(name: &str) -> Option<String> {
              <key> is dot-delimited: namespace.topic.slug — the first segment must be a\n\
              namespace declared in .akr/project.akr.\n\
              \n\
-             --from accepts an AKR slot-list fragment, not plain Markdown or an\n\
-             unlabelled prose paragraph. Every kind requires its prose slot, so a\n\
-             propose without --from is refused. Run\n\
+             --from accepts an AKR slot-list fragment, not YAML, Markdown, or an\n\
+             unlabelled prose paragraph. A work record looks like:\n\
+             \n\
+             \x20   intent \"\"\"\n\
+             \x20       The work is to ...\n\
+             \x20   \"\"\"\n\
+             \n\
+             Every kind requires its prose slot (`intent` for work, `statement` for\n\
+             most others), so a propose without --from is refused. Run\n\
              `akr explain <kind>` for the kind's required slots.\n\
              \n\
              FLAGS\n\
@@ -2190,7 +2197,7 @@ pub fn help() -> String {
         ("diff", "the semantic delta of the staged ledger; --staged"),
         (
             "change",
-            "the change transaction; begin, prepare, show, abort",
+            "the change transaction; begin, prepare, show, status, abort",
         ),
         ("git", "generate and make the commit; message, commit, log"),
         ("propose", "create a record; --kind, --title, --from"),

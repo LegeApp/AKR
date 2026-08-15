@@ -138,6 +138,13 @@ pub fn assemble(session: &Session, budget: Option<usize>) -> Result<Handoff, Env
         .max(2);
     let related_omitted = related.len().saturating_sub(related_limit);
 
+    let namespaces: Vec<String> = snapshot
+        .ledger
+        .project
+        .namespaces
+        .iter()
+        .map(ToString::to_string)
+        .collect();
     let mut text = String::from("AKR SESSION HEAD\n");
     text.push_str(&format!(
         "snapshot    {} — {}\nledger      {} ({})\n",
@@ -153,6 +160,9 @@ pub fn assemble(session: &Session, budget: Option<usize>) -> Result<Handoff, Env
             _ => "validated HEAD fallback",
         }
     ));
+    if !namespaces.is_empty() {
+        text.push_str(&format!("namespaces  {}\n", namespaces.join(", ")));
+    }
     if snapshot.excluded_diagnostics > 0 {
         text.push_str(&format!(
             "warning     excluded invalid working ledger ({} errors)\n",
@@ -246,6 +256,10 @@ pub fn assemble(session: &Session, budget: Option<usize>) -> Result<Handoff, Env
                     Value::integer(snapshot.excluded_diagnostics as i64),
                 ),
             ]),
+        ),
+        (
+            "namespaces",
+            Value::array(namespaces.iter().cloned().map(Value::string).collect()),
         ),
         (
             "recent_focus",

@@ -24,6 +24,7 @@ use crate::diagnostics::{Code, Diagnostic, Label, Severity, Subject, codes::inde
 use crate::freshness::ReviewQueue;
 use crate::resolve::{ResolvedModel, SpanIndex};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 mod populate;
 #[cfg(feature = "fts5")]
@@ -218,7 +219,7 @@ pub fn is_stale_against(path: &Path, expected: &str) -> bool {
     if !path.exists() {
         return false;
     }
-    let Ok(connection) = rusqlite::Connection::open(path) else {
+    let Ok(connection) = open_configured(path) else {
         return false;
     };
     let expected = expected.strip_prefix("sha256:").unwrap_or(expected);
@@ -235,7 +236,7 @@ pub fn is_stale_against(path: &Path, expected: &str) -> bool {
 /// The `source_graph_hash` that the on-disk cache is currently stamped with, if any.
 #[must_use]
 pub fn cached_source_graph_hash(path: &Path) -> Option<String> {
-    let connection = rusqlite::Connection::open(path).ok()?;
+    let connection = open_configured(path).ok()?;
     connection
         .query_row(
             "SELECT value FROM meta WHERE key = 'source_graph_hash'",
@@ -245,10 +246,30 @@ pub fn cached_source_graph_hash(path: &Path) -> Option<String> {
         .ok()
 }
 
+/// How long a concurrent session waits on a busy cache before failing.
+///
+/// Several agent hosts each spawn their own `akr-mcp`. They share one on-disk SQLite
+/// cache, and a default `busy_timeout` of zero turns ordinary overlap into `AKR-I001`.
+const CACHE_BUSY_TIMEOUT: Duration = Duration::from_millis(5_000);
+
+pub(crate) fn open_configured(path: &Path) -> rusqlite::Result<rusqlite::Connection> {
+    let connection = rusqlite::Connection::open(path)?;
+    configure_cache(&connection)?;
+    Ok(connection)
+}
+
+fn configure_cache(connection: &rusqlite::Connection) -> rusqlite::Result<()> {
+    connection.busy_timeout(CACHE_BUSY_TIMEOUT)?;
+    // WAL lets readers proceed while another session rebuilds. `synchronous=NORMAL` is
+    // the usual WAL pairing; the cache is disposable, so a torn write is a rebuild.
+    let _ = connection.execute_batch("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
+    Ok(())
+}
+
 /// Opens the cache, refusing a file that is not one.
 fn open(path: &Path) -> Result<rusqlite::Connection, IndexError> {
     let existed = path.exists();
-    let connection = rusqlite::Connection::open(path).map_err(|error| {
+    let connection = open_configured(path).map_err(|error| {
         IndexError::new(
             codes::I001,
             format!("cannot read index cache at {}: {error}", path.display()),

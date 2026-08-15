@@ -738,8 +738,11 @@ fn slots_schema() -> Value {
         (
             "description",
             Value::string(
-                "Content slots for the record's kind. Planning kinds accept `note` (D-026): \
-                 operator commentary, rendered in views for terminal records.",
+                "Content slots for the record's kind. Required prose is `intent` on work \
+                 and `statement` on most other kinds — not `summary` or `goal`. Topic is \
+                 only valid on normative kinds. Planning kinds accept `note` (D-026): \
+                 operator commentary, rendered in views for terminal records. Call \
+                 knowledge.explain with the kind for the exact contract.",
             ),
         ),
         ("additionalProperties", Value::bool(true)),
@@ -783,8 +786,10 @@ fn relations_schema() -> Value {
         (
             "description",
             Value::string(
-                "relation name -> array of references. Use depends_on for a prerequisite; \
-                 a completed planning prerequisite remains satisfied. Use derived_from \
+                "relation name -> array of references. Target kinds are constrained \
+                 (V-005): `implements` accepts requirement, policy, constraint or \
+                 decision, not a work record. Use depends_on for a prerequisite; a \
+                 completed planning prerequisite remains satisfied. Use derived_from \
                  for provenance rather than prerequisite ordering.",
             ),
         ),

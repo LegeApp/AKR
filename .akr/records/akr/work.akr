@@ -235,6 +235,29 @@ record akr.work.mcp-budget-and-instrumentation/1 : work {
     implements [ @akr.decision.mcp-budgeted-and-instrumented ]
 }
 
+record akr.work.mcp-handshake-and-collated-papercuts/1 : work {
+    title "Make AKR MCP handshake with current clients and fix collated papercuts"
+    state proposed
+    intent """
+        Reproduce and eliminate sister-project AKR MCP failed-to-connect reports: Grok and similar clients negotiate protocol 2025-06-18 and/or Content-Length framing, after which akr-mcp currently answers 2024-11-05 over NDJSON-only and the host attaches with zero tools. Also absorb the 2026-08-14 collated papercuts that are still live: named get slots, start namespaces, start default budget, change status alias, empty-repo commit message, --from slot-list example, write-time enum validation, and SQLite busy-timeout for concurrent MCP sessions.
+        """
+    target 2026-08-16
+    acceptance {
+        check collated-cli-mcp-papercuts {
+            statement """
+                The 2026-08-14 collated AKR papercuts for get slot names, start namespaces, start default budget, change status, empty-repo observed_at, --from help, and invalid enum methods have tests.
+                """
+            method command
+        }
+        check handshake-speaks-current-clients {
+            statement """
+                initialize echoes 2025-06-18 and 2025-03-26 when requested, and the stdio server answers both NDJSON and Content-Length framed requests with a non-empty tools/list.
+                """
+            method command
+        }
+    }
+}
+
 record akr.work.mcp-help-and-format-cleanup/1 : work {
     title "Propagate MCP error help and restore formatting hygiene"
     state completed

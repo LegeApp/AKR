@@ -1,10 +1,11 @@
 //! JSON-RPC 2.0 over stdio: the transport `docs/08-mcp.md` §1 specifies.
 //!
-//! One JSON document per line, requests in on stdin, responses out on stdout. Line
-//! framing rather than `Content-Length` headers because the server is launched as a child
-//! process by the agent runtime and the stream is never shared with anything else; a
-//! newline is unambiguous, greppable, and replayable from a file, which is what
-//! `tests/differential.rs` does.
+//! Requests in on stdin, responses out on stdout. The historical framing is one JSON
+//! document per line — greppable, replayable, and what `tests/differential.rs` still
+//! speaks. Official MCP stdio clients (Grok, Claude Code, the TypeScript SDK) send
+//! `Content-Length` headers instead. The server accepts both and answers in the framing
+//! of the request that produced the response, so a host that cannot parse NDJSON is not
+//! left attached with zero tools.
 //!
 //! Four methods: `initialize`, `server/discover`, `tools/list`, `tools/call`.
 //! Notifications — a request with no `id` — are acknowledged by producing no response, as
@@ -27,13 +28,22 @@ use crate::tools;
 
 /// The legacy protocol version this server still accepts.
 pub const PROTOCOL_LEGACY: &str = "2024-11-05";
+/// The March 2025 MCP revision, still sent by some hosts.
+pub const PROTOCOL_2025_03: &str = "2025-03-26";
+/// The June 2025 MCP revision, what Grok and current SDKs send.
+pub const PROTOCOL_2025_06: &str = "2025-06-18";
 /// The current protocol version this server now negotiates.
 pub const PROTOCOL_CURRENT: &str = "2026-07-28";
 /// Supported protocol versions, in preference order.
-pub const SUPPORTED_PROTOCOLS: &[&str] = &[PROTOCOL_CURRENT, PROTOCOL_LEGACY];
+pub const SUPPORTED_PROTOCOLS: &[&str] = &[
+    PROTOCOL_CURRENT,
+    PROTOCOL_2025_06,
+    PROTOCOL_2025_03,
+    PROTOCOL_LEGACY,
+];
 
 /// The server's own version, matching the tool version the CLI reports.
-pub const SERVER_VERSION: &str = "0.1.0";
+pub const SERVER_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// A server bound to one workspace.
 pub struct Server {
@@ -271,14 +281,18 @@ impl Server {
         let outcome = guarded_tool_call(|| tools::call(&self.root, name, &arguments));
         let (text, structured, is_error) = match outcome {
             Ok(payload) => {
-                let internally_budgeted = matches!(name, "knowledge.start" | "knowledge.context")
-                    .then(|| {
-                        arguments
-                            .get("budget_tokens")
-                            .and_then(Value::as_integer)
-                            .and_then(|value| usize::try_from(value).ok())
-                    })
-                    .flatten();
+                // Start and context assemble to their own budget. When the caller omits
+                // `budget_tokens`, still treat them as internally budgeted at the
+                // assembly default: a second, smaller adapter ceiling produced a compact
+                // preview that itself exceeded the advertised hard limit.
+                let internally_budgeted = match name {
+                    "knowledge.start" => Some(token_budget(&arguments, 1_400)),
+                    "knowledge.context" => arguments
+                        .get("budget_tokens")
+                        .and_then(Value::as_integer)
+                        .and_then(|value| usize::try_from(value).ok()),
+                    _ => None,
+                };
                 let enforced = crate::budget::enforce(
                     name,
                     payload.text(),
@@ -371,38 +385,168 @@ fn select_protocol(parameters: &Value) -> &'static str {
         .unwrap_or(PROTOCOL_LEGACY)
 }
 
-/// Reads newline-delimited JSON-RPC from `input` and writes responses to `output`.
+fn token_budget(arguments: &Value, default: usize) -> usize {
+    arguments
+        .get("budget_tokens")
+        .and_then(Value::as_integer)
+        .and_then(|value| usize::try_from(value).ok())
+        .unwrap_or(default)
+}
+
+/// How one stdio message was framed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Framing {
+    Ndjson,
+    ContentLength,
+}
+
+/// Reads one JSON-RPC request from `input`.
+///
+/// NDJSON (a `{` or `[` on its own line) and official MCP `Content-Length` headers are
+/// both accepted. The response is written in the same framing so a host that cannot
+/// parse the other style still sees a valid handshake.
 ///
 /// # Errors
-/// Any I/O failure on either stream. A malformed line is answered with a JSON-RPC parse
+/// Any I/O failure on either stream. A malformed frame is answered with a JSON-RPC parse
 /// error rather than ending the session: one bad message should not take down a server an
 /// agent is mid-task with.
-pub fn serve(server: &Server, input: impl BufRead, mut output: impl Write) -> std::io::Result<()> {
-    for line in input.lines() {
-        let line = line?;
-        if line.trim().is_empty() {
-            continue;
-        }
-        let response = match parse(&line) {
-            Ok(request) => server.handle(&request),
-            Err(error) => Some(Value::object(vec![
+pub fn serve(
+    server: &Server,
+    mut input: impl BufRead,
+    mut output: impl Write,
+) -> std::io::Result<()> {
+    while let Some((body, framing)) = read_frame(&mut input)? {
+        let response = match body {
+            FrameBody::Json(body) if body.trim().is_empty() => continue,
+            FrameBody::Json(body) => match parse(body.trim()) {
+                Ok(request) => server.handle(&request),
+                Err(error) => Some(Value::object(vec![
+                    ("jsonrpc", Value::string("2.0")),
+                    ("id", Value::Null),
+                    (
+                        "error",
+                        Value::object(vec![
+                            ("code", Value::integer(-32700)),
+                            ("message", Value::string(format!("parse error: {error}"))),
+                        ]),
+                    ),
+                ])),
+            },
+            FrameBody::Invalid(message) => Some(Value::object(vec![
                 ("jsonrpc", Value::string("2.0")),
                 ("id", Value::Null),
                 (
                     "error",
                     Value::object(vec![
                         ("code", Value::integer(-32700)),
-                        ("message", Value::string(format!("parse error: {error}"))),
+                        ("message", Value::string(format!("parse error: {message}"))),
                     ]),
                 ),
             ])),
         };
         if let Some(response) = response {
-            writeln!(output, "{}", compact(&response))?;
-            output.flush()?;
+            write_frame(&mut output, &compact(&response), framing)?;
         }
     }
     Ok(())
+}
+
+enum FrameBody {
+    Json(String),
+    Invalid(String),
+}
+
+fn read_frame(input: &mut impl BufRead) -> std::io::Result<Option<(FrameBody, Framing)>> {
+    loop {
+        // `fill_buf` may expose only `Con` from a fragmented `Content-Length` header.
+        // Read the complete line before deciding its framing so ordinary pipe writes
+        // cannot turn a valid header into a malformed NDJSON request.
+        let mut first = String::new();
+        if input.read_line(&mut first)? == 0 {
+            return Ok(None);
+        }
+        if first.trim().is_empty() {
+            continue;
+        }
+        let trimmed = first.trim_start();
+        if trimmed.starts_with('{') || trimmed.starts_with('[') {
+            return Ok(Some((FrameBody::Json(first), Framing::Ndjson)));
+        }
+
+        // Official MCP headers start with `Content-Length:`. Anything else is a
+        // malformed NDJSON line — treating it as a header would swallow the next
+        // real request, which is how a bad line used to take the session down.
+        if !starts_like_header(first.as_bytes()) {
+            return Ok(Some((FrameBody::Json(first), Framing::Ndjson)));
+        }
+
+        let mut content_length = None;
+        let mut header = Some(first);
+        while let Some(line) = header.take() {
+            if line == "\n" || line == "\r\n" {
+                break;
+            }
+            if let Some((name, value)) = line.split_once(':') {
+                if name.eq_ignore_ascii_case("content-length") {
+                    match value.trim().parse() {
+                        Ok(length) => content_length = Some(length),
+                        Err(_) => {
+                            return Ok(Some((
+                                FrameBody::Invalid("invalid Content-Length header".to_owned()),
+                                Framing::ContentLength,
+                            )));
+                        }
+                    }
+                }
+            }
+            let mut line = String::new();
+            if input.read_line(&mut line)? == 0 {
+                return Ok(Some((
+                    FrameBody::Invalid("unterminated Content-Length headers".to_owned()),
+                    Framing::ContentLength,
+                )));
+            }
+            header = Some(line);
+        }
+        let Some(len) = content_length else {
+            return Ok(Some((
+                FrameBody::Invalid("missing Content-Length header".to_owned()),
+                Framing::ContentLength,
+            )));
+        };
+        let mut body = vec![0_u8; len];
+        input.read_exact(&mut body)?;
+        let body = String::from_utf8(body)
+            .map(FrameBody::Json)
+            .unwrap_or_else(|_| FrameBody::Invalid("Content-Length body is not UTF-8".to_owned()));
+        return Ok(Some((body, Framing::ContentLength)));
+    }
+}
+
+fn starts_like_header(bytes: &[u8]) -> bool {
+    let line = bytes
+        .split(|byte| *byte == b'\n' || *byte == b'\r')
+        .next()
+        .unwrap_or(bytes);
+    let Ok(text) = std::str::from_utf8(line) else {
+        return false;
+    };
+    let Some((name, _)) = text.split_once(':') else {
+        return false;
+    };
+    let name = name.trim();
+    !name.is_empty()
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+}
+
+fn write_frame(output: &mut impl Write, body: &str, framing: Framing) -> std::io::Result<()> {
+    match framing {
+        Framing::Ndjson => writeln!(output, "{body}")?,
+        Framing::ContentLength => write!(output, "Content-Length: {}\r\n\r\n{body}", body.len())?,
+    }
+    output.flush()
 }
 
 /// One response, on one line.
@@ -420,11 +564,38 @@ fn compact(value: &Value) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
+    use std::io::{BufRead, Cursor, Read};
 
-    use akr_core::json::parse;
+    use akr_core::json::{Value, parse};
 
     use super::{Server, guarded_tool_call, serve};
+
+    struct FragmentedInput {
+        bytes: Vec<u8>,
+        cursor: usize,
+        chunk_size: usize,
+    }
+
+    impl Read for FragmentedInput {
+        fn read(&mut self, into: &mut [u8]) -> std::io::Result<usize> {
+            let available = self.fill_buf()?;
+            let count = available.len().min(into.len());
+            into[..count].copy_from_slice(&available[..count]);
+            self.consume(count);
+            Ok(count)
+        }
+    }
+
+    impl BufRead for FragmentedInput {
+        fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+            let end = (self.cursor + self.chunk_size).min(self.bytes.len());
+            Ok(&self.bytes[self.cursor..end])
+        }
+
+        fn consume(&mut self, amount: usize) {
+            self.cursor = (self.cursor + amount).min(self.bytes.len());
+        }
+    }
 
     #[test]
     fn a_tool_panic_becomes_a_retryable_internal_error() {
@@ -474,5 +645,91 @@ mod tests {
                 .last()
                 .is_some_and(|line| line.contains("\"id\": 999"))
         );
+    }
+
+    #[test]
+    fn content_length_initialize_echoes_the_requested_protocol_and_lists_tools() {
+        let init = br#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"grok","version":"1"}}}"#;
+        let list = br#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#;
+        let mut input = Vec::new();
+        write_content_length(&mut input, init);
+        write_content_length(&mut input, list);
+
+        let mut output = Vec::new();
+        serve(
+            &Server::new("/workspace-not-opened-by-this-test"),
+            Cursor::new(input),
+            &mut output,
+        )
+        .expect("content-length session stays up");
+
+        let (first, rest) = split_content_length(&output).expect("first frame");
+        let (second, rest) = split_content_length(rest).expect("second frame");
+        assert!(rest.is_empty(), "{}", String::from_utf8_lossy(rest));
+
+        let initialize = parse(&first).expect("initialize JSON");
+        assert_eq!(
+            initialize
+                .get("result")
+                .and_then(|result| result.get("protocolVersion"))
+                .and_then(Value::as_str),
+            Some("2025-06-18")
+        );
+        let tools = parse(&second).expect("tools/list JSON");
+        let listed = tools
+            .get("result")
+            .and_then(|result| result.get("tools"))
+            .and_then(Value::as_array)
+            .expect("tools array");
+        assert!(
+            listed
+                .iter()
+                .any(|tool| tool.get("name").and_then(Value::as_str) == Some("knowledge.start")),
+            "{second}"
+        );
+    }
+
+    #[test]
+    fn a_fragmented_content_length_header_is_not_misclassified_as_ndjson() {
+        let body = br#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#;
+        let mut bytes = Vec::new();
+        write_content_length(&mut bytes, body);
+        let mut output = Vec::new();
+        serve(
+            &Server::new("/workspace-not-opened-by-this-test"),
+            FragmentedInput {
+                bytes,
+                cursor: 0,
+                chunk_size: 3,
+            },
+            &mut output,
+        )
+        .expect("fragmented session stays up");
+
+        let (response, rest) = split_content_length(&output).expect("Content-Length response");
+        assert!(rest.is_empty());
+        assert!(
+            parse(&response)
+                .expect("response is JSON")
+                .get("result")
+                .is_some(),
+            "{response}"
+        );
+    }
+
+    fn write_content_length(into: &mut Vec<u8>, body: &[u8]) {
+        into.extend_from_slice(format!("Content-Length: {}\r\n\r\n", body.len()).as_bytes());
+        into.extend_from_slice(body);
+    }
+
+    fn split_content_length(bytes: &[u8]) -> Option<(String, &[u8])> {
+        let text = std::str::from_utf8(bytes).ok()?;
+        let (headers, rest) = text.split_once("\r\n\r\n")?;
+        let length: usize = headers
+            .lines()
+            .find_map(|line| line.strip_prefix("Content-Length: "))
+            .and_then(|value| value.parse().ok())?;
+        let body = rest.get(..length)?.to_owned();
+        Some((body, &rest.as_bytes()[length..]))
     }
 }

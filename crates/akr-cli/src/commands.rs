@@ -1125,11 +1125,11 @@ fn get(
         ));
     }
     if detail != Detail::Summary
-        && let Some(body) = akr_core::context::body_of(record)
+        && let Some((slot, body)) = akr_core::context::named_body_of(record)
     {
-        text.push('\n');
+        text.push_str(&format!("\n  {}\n", slot.name()));
         for line in body.lines() {
-            text.push_str(&format!("  {line}\n"));
+            text.push_str(&format!("    {line}\n"));
         }
     }
     if detail != Detail::Summary && !record.claims.is_empty() {

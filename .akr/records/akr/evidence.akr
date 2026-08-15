@@ -1,6 +1,18 @@
 akr 0.1
 project akr
 
+record akr.evidence.collated-papercut-cli-mcp/1 : evidence {
+    title "CLI tests cover named get slots, start namespaces, change status alias, YAML --from slot-list remedy, and T012 enum rejection before AKR-I002."
+    state verified
+    result pass
+    method command
+    observed_at git:a72ffa4be531adbf3e9abcac9d8fa1717819b2ca
+    command "cargo test -p akr-cli --test handoff --test writes --test index --test change_protocol --test commands -- --test-threads=1"
+    summary """
+        CLI tests cover named get slots, start namespaces, change status alias, YAML --from slot-list remedy, and T012 enum rejection before AKR-I002.
+        """
+}
+
 record akr.evidence.collated-papercut-fixes/1 : evidence {
     title "The full workspace suite passed after subject-scoped collation, paged MCP validation diagnostics, clearer authoring schemas, and corrected CLI help."
     state verified
@@ -160,6 +172,18 @@ record akr.evidence.mcp-feature-suites-pass/1 : evidence {
     command "cargo test -p akr-mcp && cargo test -p akr-mcp --no-default-features"
     summary """
         The complete MCP test suite passed with default features and without FTS5.
+        """
+}
+
+record akr.evidence.mcp-handshake-current-clients/1 : evidence {
+    title "akr-mcp 0.3.1 initialize echoes 2025-06-18 and lists 23 tools over NDJSON; Content-Length handshake unit test and full akr-mcp suite passed; installed binary reports akr-mcp 0.3.1."
+    state verified
+    result pass
+    method command
+    observed_at git:a72ffa4be531adbf3e9abcac9d8fa1717819b2ca
+    command "cargo test -p akr-mcp -- --test-threads=1"
+    summary """
+        akr-mcp 0.3.1 initialize echoes 2025-06-18 and lists 23 tools over NDJSON; Content-Length handshake unit test and full akr-mcp suite passed; installed binary reports akr-mcp 0.3.1.
         """
 }
 

@@ -345,7 +345,7 @@ What was found to be true of the system, at a specific commit.
 | --- | --- | --- | --- |
 | `statement` | prose | yes | What is true. Present tense, about the code as it was. |
 | `observed_at` | commit | **yes** | The commit the observation is about (V-009). |
-| `method` | enum | no | `manual`, `command`, `instrumented`. |
+| `method` | enum | no | `manual`, `command`, `instrumented`, `observation`. |
 | `watches` | glob[] | no | Paths whose change should make someone re-check this. |
 | `review_after` | date | no | A date after which this should be re-checked regardless. |
 

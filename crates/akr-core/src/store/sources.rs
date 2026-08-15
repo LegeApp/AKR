@@ -70,7 +70,7 @@ pub fn sync(
         ));
     }
 
-    let mut connection = Connection::open(path).map_err(|error| {
+    let mut connection = super::open_configured(path).map_err(|error| {
         IndexError::new(
             codes::I001,
             format!("cannot read source index at {}: {error}", path.display()),
@@ -583,7 +583,7 @@ fn open_for_read(path: &Path) -> Result<Connection, IndexError> {
             "the source index has not been built; run `akr build`",
         ));
     }
-    Connection::open(path).map_err(|error| {
+    super::open_configured(path).map_err(|error| {
         IndexError::new(
             codes::I001,
             format!("cannot read source index at {}: {error}", path.display()),

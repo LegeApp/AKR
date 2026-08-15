@@ -244,6 +244,83 @@ record akr.papercut.collated-10-papercuts-from-evidence-intake/2 : papercut {
     created_at 2026-08-09
 }
 
+record akr.papercut.collated-16-papercuts-from-kitchen-concept-lege/1 : papercut {
+    title "Collated 16 papercuts from Kitchen-Concept, Lege-ecosystem, SaveYourSkin, jpegXL-rs and 1 more"
+    state verified
+    statement """
+        Collated 16 papercuts from /mnt/Samsung980_1TB/Rust-projects on 2026-08-14 (D-030). Each source key is also in the collated slot, which is the dedup set for the next run; the sisters were read and never written.
+
+        ## Kitchen-Concept @kitchen.papercut.akr-mcp-server-failed-to-connect-at-session [about akr]
+        AKR MCP server failed to connect at session start, so knowledge.start/context were unavailable; used the akr CLI instead.
+
+        ## Lege-ecosystem @lege-ecosystem.papercut.akr-papercut-collate-defaults-to-scanning [about akr]
+        akr papercut collate defaults to scanning sibling workspaces of the current root, so running it in Lege-ecosystem looks like it should list this folder's cuts but instead walks Rust-projects/*. Local review is akr view papercuts; collate is an aggregator. Defaulting --projects to the current workspace (and requiring --projects .. to scan sisters) would match the obvious meaning.
+
+        ## Lege-ecosystem @lege-ecosystem.papercut.akr-propose-from-rejected-a-yaml-like-statement [about akr]
+        akr propose --from rejected a YAML-like statement: fragment with expected a value, found :. The accepted shape is an AKR slot-list (statement """ ... """), which CLI help does not show.
+
+        ## Lege-ecosystem @lege-ecosystem.papercut.knowledge-evidence-add-many-rejected-an [about akr]
+        knowledge.evidence_add_many rejected an otherwise valid evidence batch because the repository shorthand `lege` is not the declared `lege-ecosystem` namespace; surfacing valid namespaces in the write error or start bundle would avoid the retry.
+
+        ## Lege-ecosystem @lege-ecosystem.papercut.knowledge-papercut-failed-on-first-use-because [about akr]
+        knowledge.papercut failed on first use because this multi-namespace workspace required an explicit namespace, but knowledge.start did not surface the available namespace choices in its session head. Including them in the handoff would prevent the retry.
+
+        ## Lege-ecosystem @lege-ecosystem.papercut.knowledge-start-returned-a-2350-token-compact [about akr]
+        knowledge.start returned a 2350-token compact preview that exceeded its own 2000-token hard limit and required a second narrower call; honoring the requested/default hard limit on the first response would avoid the retry.
+
+        ## Lege-ecosystem @lege-ecosystem.papercut.while-proposing-a-work-record-the-callable [about akr]
+        While proposing a work record, the callable schema did not expose that `intent` is mandatory or that `topic` is invalid for planning kinds; the validator rejected the otherwise structured call. Including kind-specific required slots and field applicability in tool metadata would avoid the retry.
+
+        ## SaveYourSkin @saveyourskin.papercut.akr-build-fails-on-this-working-tree-with-error [about akr]
+        `akr build` fails on this working tree with "error[AKR-I002]: cannot write revisions: CHECK constraint failed: method IS NULL OR method IN ('manual','command','observation','instrumented')". It succeeds against HEAD, so one of the uncommitted record edits in .akr/records/saveyourskin/ carries a method value outside that set. The error names neither the record nor the offending value, which makes it hard to find; reporting the key and method would fix that. Consequence: the lock cannot be refreshed, so knowledge.validate reports AKR-R052 for every newly written record.
+
+        ## SaveYourSkin @saveyourskin.papercut.akr-mcp-server-failed-to-connect-used-the-akr [about akr]
+        AKR MCP server failed to connect; used the akr CLI for start/context/propose/validate.
+
+        ## SaveYourSkin @saveyourskin.papercut.knowledge-get-rendered-a-work-record-s-main [about akr]
+        knowledge.get rendered a work record's main slot without naming it, so a faithful knowledge.revise first tried `goal`; the schema only then revealed the slot is `intent`. Exposing slot names in body/canonical output would avoid a failed write attempt.
+
+        ## SaveYourSkin @saveyourskin.papercut.knowledge-propose-accepted-an-implements [about akr]
+        knowledge.propose accepted an `implements` relation to a work record at the call boundary and only later rejected it under V-005; relation target-kind constraints in the tool description would make completed-slice recording single-pass.
+
+        ## SaveYourSkin @saveyourskin.papercut.knowledge-propose-accepted-observation-method [about akr]
+        knowledge.propose accepted observation method `inspection` and wrote a verified revision, but `akr build` rejects that stored historical revision because the index CHECK allows only manual/command/observation/instrumented. Revising the head to `instrumented` cannot repair the now-invalid sealed revision, so write-time validation and the index schema need the same enum or a supported repair path.
+
+        ## SaveYourSkin @saveyourskin.papercut.while-recording-a-completed-work-slice [about akr]
+        While recording a completed work slice, knowledge.propose's schema exposed slots as an unconstrained object and did not tell me that work records accept intent/target/note rather than summary; the call failed only after validation. Publishing per-kind slot names in the tool schema or description would avoid the retry.
+
+        ## SaveYourSkin @saveyourskin.papercut.while-recording-a-verified-gameplay-video [about akr]
+        While recording a verified gameplay-video observation, knowledge.propose parsed a descriptive method containing `15 fps` and punctuation as slot syntax instead of rejecting it as an invalid enum value. The schema should validate/quote the method argument before serializing it.
+
+        ## jpegXL-rs @jpegxl-rs.papercut.while-checking-an-in-progress-akr-change-akr [about akr]
+        While checking an in-progress AKR change, `akr change status` was rejected because the CLI exposes `change show` instead; a status alias or help hint would make this transition easier to discover.
+
+        ## orderflower @orderflower.papercut.on-a-freshly-initialised-repo-with-no-commits [about akr]
+        On a freshly initialised repo with no commits yet, knowledge.evidence_add and knowledge.papercut both fail with "no commit to record: not inside a git repository". That blocks knowledge.complete for every acceptance check at exactly the moment a first milestone finishes, and the message points at the wrong cause: git init had been run, there simply were no commits. A message naming the real fix (make an initial commit, or pass observed_at) would have saved a detour.
+        """
+    observed_at git:a72ffa4be531adbf3e9abcac9d8fa1717819b2ca
+    about "akr"
+    collated [
+        "kitchen.papercut.akr-mcp-server-failed-to-connect-at-session",
+        "lege-ecosystem.papercut.akr-papercut-collate-defaults-to-scanning",
+        "lege-ecosystem.papercut.akr-propose-from-rejected-a-yaml-like-statement",
+        "lege-ecosystem.papercut.knowledge-evidence-add-many-rejected-an",
+        "lege-ecosystem.papercut.knowledge-papercut-failed-on-first-use-because",
+        "lege-ecosystem.papercut.knowledge-start-returned-a-2350-token-compact",
+        "lege-ecosystem.papercut.while-proposing-a-work-record-the-callable",
+        "saveyourskin.papercut.akr-build-fails-on-this-working-tree-with-error",
+        "saveyourskin.papercut.akr-mcp-server-failed-to-connect-used-the-akr",
+        "saveyourskin.papercut.knowledge-get-rendered-a-work-record-s-main",
+        "saveyourskin.papercut.knowledge-propose-accepted-an-implements",
+        "saveyourskin.papercut.knowledge-propose-accepted-observation-method",
+        "saveyourskin.papercut.while-recording-a-completed-work-slice",
+        "saveyourskin.papercut.while-recording-a-verified-gameplay-video",
+        "jpegxl-rs.papercut.while-checking-an-in-progress-akr-change-akr",
+        "orderflower.papercut.on-a-freshly-initialised-repo-with-no-commits"
+    ]
+    created_at 2026-08-14
+}
+
 record akr.papercut.collated-18-papercuts-from-evidence-intake/1 : papercut {
     title "Collated 18 papercuts from Evidence-intake-project, Lege-ecosystem, SaveYourSkin, jpegXL-rs and 1 more"
     state verified
@@ -784,6 +861,17 @@ record akr.papercut.while-locating-the-non-fts-start-and/1 : papercut {
     about "fff"
     author "codex"
     created_at 2026-08-12
+}
+
+record akr.papercut.while-running-the-workspace-suite-on-windows/1 : papercut {
+    title "While running the workspace suite on Windows, `akr-cli`'s transcript…"
+    state verified
+    statement """
+        While running the workspace suite on Windows, `akr-cli`'s transcript harness unconditionally spawned `sh` for its limited `sed` directives and failed with program not found. Implement those fixture rewrites in Rust/PowerShell-independent code or skip them with an explicit platform diagnostic.
+        """
+    observed_at git:a72ffa4be531adbf3e9abcac9d8fa1717819b2ca
+    author "codex"
+    created_at 2026-08-14
 }
 
 record akr.papercut.writing-several-evidence-and-lifecycle-records/1 : papercut {

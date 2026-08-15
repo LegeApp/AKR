@@ -34,6 +34,27 @@ use akr_core::ops::{
 };
 use std::path::Path;
 
+fn missing_commit(session: &Session, suggest_flag: bool) -> EnvError {
+    let hint = if suggest_flag {
+        "make an initial commit, or pass --observed-at <commit>"
+    } else {
+        "make an initial commit, or pass observed_at"
+    };
+    if session.repository.is_some() {
+        EnvError::new(
+            "AKR-G001",
+            "no commit to record: the repository has no commits yet",
+        )
+        .help(hint)
+    } else {
+        EnvError::new(
+            "AKR-G001",
+            "no commit to record: not inside a git repository",
+        )
+        .help(hint)
+    }
+}
+
 /// Runs a write command.
 ///
 /// # Errors
@@ -252,13 +273,10 @@ fn evidence_add(
             )
             .help("AKR takes full commit hashes, never abbreviations (D-008)")
         })?,
-        None => session.commit.clone().ok_or_else(|| {
-            EnvError::new(
-                "AKR-G001",
-                "no commit to record: not inside a git repository",
-            )
-            .help("pass --observed-at <commit> explicitly")
-        })?,
+        None => session
+            .commit
+            .clone()
+            .ok_or_else(|| missing_commit(session, true))?,
     };
     if let Some(repository) = &session.repository
         && !repository.contains(&commit)
@@ -316,12 +334,10 @@ pub fn papercut(
             ));
         }
     };
-    let commit = session.commit.clone().ok_or_else(|| {
-        EnvError::new(
-            "AKR-G001",
-            "no commit to record: not inside a git repository",
-        )
-    })?;
+    let commit = session
+        .commit
+        .clone()
+        .ok_or_else(|| missing_commit(session, false))?;
     let key = akr_core::papercut::allocate_key(&session.ledger, namespace, message)
         .map_err(|e| EnvError::new("AKR-C004", e.to_string()))?;
     let request = akr_core::papercut::LogPapercut {
@@ -445,12 +461,10 @@ fn papercut_collate(
         ));
     }
 
-    let commit = session.commit.clone().ok_or_else(|| {
-        EnvError::new(
-            "AKR-G001",
-            "no commit to record: not inside a git repository",
-        )
-    })?;
+    let commit = session
+        .commit
+        .clone()
+        .ok_or_else(|| missing_commit(session, false))?;
     let mut entry_projects: Vec<String> = collate
         .entries
         .iter()
@@ -646,6 +660,10 @@ fn body_template(
         EnvError::new(
             "AKR-C031",
             format!("{} does not parse as a record: {message}", path.display()),
+        )
+        .help(
+            "pass an AKR slot-list (`intent \"\"\" ... \"\"\"` for work, `statement \"\"\" \
+             ... \"\"\"` for most other kinds), not YAML or Markdown",
         )
     };
     let Some(tree) = parsed.file else {

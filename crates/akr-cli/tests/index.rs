@@ -149,6 +149,26 @@ fn a_second_build_finds_the_cache_current_and_leaves_it_alone() {
 }
 
 #[test]
+fn invalid_enum_values_are_reported_before_index_population() {
+    let example = Example::materialise("index-invalid-enum");
+    example.write_file(
+        ".akr/records/sys/invalid-enum.akr",
+        &format!(
+            "akr 0.1\nproject save-your-skin\n\nrecord sys.obs.invalid-method/1 : observation {{\n    title \"Invalid method\"\n    state verified\n    statement \"\"\"\n        A deliberately invalid enum value.\n        \"\"\"\n    observed_at git:{}\n    method automated\n}}\n",
+            example.commit(5)
+        ),
+    );
+
+    let build = example.run(&["build"]);
+    let output = build.output();
+    assert_ne!(build.code, 0, "{output}");
+    assert!(output.contains("AKR-T012"), "{output}");
+    assert!(output.contains("sys.obs.invalid-method/1"), "{output}");
+    assert!(output.contains("`automated`"), "{output}");
+    assert!(!output.contains("AKR-I002"), "{output}");
+}
+
+#[test]
 fn a_projection_only_commit_does_not_move_source_graph_provenance() {
     let root = std::env::temp_dir().join(format!(
         "akr-index-projection-commit-{}",

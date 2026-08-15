@@ -205,6 +205,42 @@ fn evidence_add_refuses_an_incomplete_request_without_writing() {
 // -------------------------------------------------------------------------------------
 
 #[test]
+fn a_yaml_like_from_file_names_the_accepted_slot_list() {
+    let example = Example::materialise("write-propose-yaml-from");
+    let body = example.root().join("yaml-like.akr");
+    std::fs::write(&body, "statement: this is yaml, not an AKR slot-list\n").expect("write decoy");
+    let run = example.run(&[
+        "propose",
+        "sys.work.yaml-decoy",
+        "--kind",
+        "work",
+        "--title",
+        "YAML decoy",
+        "--from",
+        body.to_str().expect("utf-8"),
+    ]);
+    assert_ne!(run.code, 0, "{}", run.output());
+    assert!(run.output().contains("AKR-C031"), "{}", run.output());
+    assert!(
+        run.output().contains("slot-list") || run.output().contains("intent"),
+        "{}",
+        run.output()
+    );
+}
+
+#[test]
+fn get_names_the_work_records_intent_slot() {
+    let example = Example::materialise("write-get-names-intent");
+    let run = example.run(&["get", "sys.work.m3-plan"]);
+    assert_eq!(run.code, 0, "{}", run.output());
+    assert!(
+        run.stdout.contains("intent"),
+        "body names the slot: {}",
+        run.stdout
+    );
+}
+
+#[test]
 fn a_proposal_with_no_body_is_refused_outright() {
     let example = Example::materialise("write-propose-bodyless");
     // §4 validates the *resulting* ledger, and a record with no required prose slot does

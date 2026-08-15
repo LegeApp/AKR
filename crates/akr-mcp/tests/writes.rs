@@ -67,6 +67,32 @@ fn error_text(payload: &Value) -> String {
 }
 
 #[test]
+fn papercut_write_preserves_a_legacy_observation_method() {
+    let example = Example::materialise("mcp-papercut-legacy-observation-method");
+    let legacy = format!(
+        "akr 0.1\nproject save-your-skin\n\nrecord sys.observation.legacy-method/1 : observation {{\n    title \"Legacy direct observation\"\n    state verified\n    statement \"\"\"\n        A historical record used the formerly accepted direct-observation method.\n        \"\"\"\n    observed_at git:{}\n    method observation\n}}\n",
+        example.commit(5)
+    );
+    example.write_file(".akr/records/sys/legacy-observation.akr", &legacy);
+
+    let (payload, is_error) = call(
+        &example,
+        "knowledge.papercut",
+        r#"{
+            "agent": "regression",
+            "namespace": "sys",
+            "message": "The historical observation remained readable while logging this papercut."
+        }"#,
+    );
+    assert!(!is_error, "{}", error_text(&payload));
+    assert_eq!(
+        example.read_file(".akr/records/sys/legacy-observation.akr"),
+        legacy,
+        "the write must not rewrite sealed historical bytes"
+    );
+}
+
+#[test]
 fn propose_creates_a_record_and_refuses_the_same_key_twice() {
     let example = Example::materialise("mcp-propose");
     let arguments = r#"{

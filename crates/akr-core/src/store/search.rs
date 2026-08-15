@@ -71,7 +71,7 @@ pub fn search(path: &Path, request: &Request) -> Result<Vec<Hit>, IndexError> {
             "index is stale and rebuilding is disabled",
         ));
     }
-    let connection = rusqlite::Connection::open(path).map_err(|error| {
+    let connection = super::open_configured(path).map_err(|error| {
         IndexError::new(
             codes::I001,
             format!("cannot read index cache at {}: {error}", path.display()),

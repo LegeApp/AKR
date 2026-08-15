@@ -105,6 +105,8 @@ fn a_transaction_opens_shows_and_aborts() {
         show.output()
     );
     assert!(show.stdout.contains("prepared no"), "{}", show.output());
+    let status = example.run(&["change", "status"]);
+    assert_eq!(status.stdout, show.stdout, "{}", status.output());
 
     // Twice is a mistake, not an overwrite: silently replacing an open transaction would
     // discard whatever the previous one recorded.

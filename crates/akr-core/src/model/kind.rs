@@ -182,6 +182,22 @@ impl Kind {
         }
     }
 
+    /// The permitted values for an enum-valued content slot on this kind.
+    ///
+    /// `None` means that the slot is not an enum belonging to this kind. Keeping these
+    /// sets beside the kind's content-slot table gives lowering one typed source for the
+    /// constraints declared in `spec/tables/vocabulary.json`.
+    #[must_use]
+    pub const fn content_enum_values(self, slot: ContentSlot) -> Option<&'static [&'static str]> {
+        match (self, slot) {
+            (Self::Observation, ContentSlot::Method) => Some(OBSERVATION_METHOD_VALUES),
+            (Self::Evidence, ContentSlot::Result) => Some(EVIDENCE_RESULT_VALUES),
+            (Self::Evidence, ContentSlot::Method) => Some(EVIDENCE_METHOD_VALUES),
+            (Self::Assessment, ContentSlot::Confidence) => Some(ASSESSMENT_CONFIDENCE_VALUES),
+            _ => None,
+        }
+    }
+
     /// Whether an `acceptance` block is required (milestones only).
     #[must_use]
     pub const fn requires_acceptance(self) -> bool {
@@ -246,6 +262,14 @@ const EVIDENCE_SLOTS: &[ContentSlotSpec] = &[
     opt(C::Summary),
 ];
 const ASSESSMENT_SLOTS: &[ContentSlotSpec] = &[req(C::Statement), opt(C::Confidence), opt(C::AsOf)];
+// `observation` was accepted by released AKR 0.1 builds and occurs in sealed sister
+// ledgers. Revisions are immutable and every write validates the complete history, so
+// removing it here would make those ledgers permanently unwritable. Keep it in the
+// vocabulary alongside the more specific provenance methods.
+const OBSERVATION_METHOD_VALUES: &[&str] = &["manual", "command", "instrumented", "observation"];
+const EVIDENCE_RESULT_VALUES: &[&str] = &["pass", "fail", "inconclusive"];
+const EVIDENCE_METHOD_VALUES: &[&str] = &["manual", "command", "observation"];
+const ASSESSMENT_CONFIDENCE_VALUES: &[&str] = &["low", "medium", "high"];
 // D-027: both slots are filled by the tooling — no `watches`, so a papercut never
 // enters the review queue.
 const PAPERCUT_SLOTS: &[ContentSlotSpec] = &[

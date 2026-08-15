@@ -1071,6 +1071,12 @@ fn tally_exclusions(model: &ResolvedModel<'_>, selected: &BTreeSet<RevisionId>) 
 /// A record's required prose slot, for rendering.
 #[must_use]
 pub fn body_of(record: &Record) -> Option<&str> {
+    named_body_of(record).map(|(_, text)| text)
+}
+
+/// The required prose slot and its text, so a renderer can name the slot.
+#[must_use]
+pub fn named_body_of(record: &Record) -> Option<(ContentSlot, &str)> {
     for slot in [
         ContentSlot::Intent,
         ContentSlot::Statement,
@@ -1081,7 +1087,7 @@ pub fn body_of(record: &Record) -> Option<&str> {
         ContentSlot::Summary,
     ] {
         if let Some(ContentValue::Prose(text) | ContentValue::Text(text)) = record.get(slot) {
-            return Some(text);
+            return Some((slot, text));
         }
     }
     None

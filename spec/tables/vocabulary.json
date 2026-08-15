@@ -207,7 +207,7 @@
         {"name": "statement", "type": "prose", "required": true},
         {"name": "observed_at", "type": "commit", "required": true},
         {"name": "method", "type": "enum", "required": false,
-         "values": ["manual", "command", "instrumented"]},
+         "values": ["manual", "command", "instrumented", "observation"]},
         {"name": "watches", "type": "glob[]", "required": false},
         {"name": "review_after", "type": "date", "required": false}
       ]

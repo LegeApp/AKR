@@ -40,6 +40,18 @@ fn assert_envelope(text: &str, command: &str) {
 }
 
 #[test]
+fn propose_help_shows_a_slot_list_example() {
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_akr"))
+        .args(["propose", "--help"])
+        .output()
+        .expect("runs");
+    let text = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{text}");
+    assert!(text.contains("slot-list"), "{text}");
+    assert!(text.contains("intent"), "{text}");
+}
+
+#[test]
 fn help_and_version_need_no_workspace() {
     let dir = std::env::temp_dir();
     for args in [vec!["--help"], vec!["--version"]] {

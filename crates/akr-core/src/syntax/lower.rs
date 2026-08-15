@@ -189,7 +189,7 @@ impl Ctx {
                         .collect();
                     record.relations.insert(relation, targets);
                 } else if let Some(content) = ContentSlot::from_name(name) {
-                    if let Some(value) = self.content_value(content, &slot.value) {
+                    if let Some(value) = self.content_value(kind, content, &slot.value) {
                         record.content.insert(content, value);
                     }
                 } else {
@@ -550,7 +550,12 @@ impl Ctx {
             .collect()
     }
 
-    fn content_value(&mut self, slot: ContentSlot, value: &Value) -> Option<ContentValue> {
+    fn content_value(
+        &mut self,
+        kind: Kind,
+        slot: ContentSlot,
+        value: &Value,
+    ) -> Option<ContentValue> {
         let span = value.span();
         Some(match slot {
             ContentSlot::ObservedAt | ContentSlot::AsOf => match value {
@@ -600,13 +605,43 @@ impl Ctx {
                     .collect(),
             ),
             ContentSlot::Method | ContentSlot::Result | ContentSlot::Confidence => {
-                match Segment::new(&self.word(value)) {
-                    Ok(segment) => ContentValue::Enum(segment),
-                    Err(error) => {
+                let candidate = self.word(value);
+                match Segment::new(&candidate) {
+                    Ok(segment)
+                        if kind
+                            .content_enum_values(slot)
+                            .is_none_or(|values| values.contains(&segment.as_str())) =>
+                    {
+                        ContentValue::Enum(segment)
+                    }
+                    Ok(_) => {
+                        let expected = kind.content_enum_values(slot).unwrap_or_default();
+                        let record = self
+                            .id
+                            .as_ref()
+                            .map_or_else(|| "<unknown>".to_owned(), ToString::to_string);
                         self.error(
                             c::T012,
                             span,
-                            error.to_string(),
+                            format!(
+                                "record {record} has invalid `{slot}` value `{candidate}`; expected one of: {}",
+                                expected.join(", ")
+                            ),
+                            Some(SlotRef::Content(slot)),
+                        );
+                        return None;
+                    }
+                    Err(error) => {
+                        let record = self
+                            .id
+                            .as_ref()
+                            .map_or_else(|| "<unknown>".to_owned(), ToString::to_string);
+                        self.error(
+                            c::T012,
+                            span,
+                            format!(
+                                "record {record} has invalid `{slot}` value `{candidate}`: {error}"
+                            ),
                             Some(SlotRef::Content(slot)),
                         );
                         return None;

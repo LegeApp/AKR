@@ -94,6 +94,18 @@ fn every_content_slot_matches_the_json_in_name_order_and_requiredness() {
                 "requiredness of {}.{}",
                 kind, got.slot
             );
+            let json_values = want.get("values").map(strings);
+            let code_values = kind.content_enum_values(got.slot).map(|values| {
+                values
+                    .iter()
+                    .map(|value| (*value).to_owned())
+                    .collect::<BTreeSet<_>>()
+            });
+            assert_eq!(
+                json_values, code_values,
+                "enum values of {}.{}",
+                kind, got.slot
+            );
         }
     }
 }

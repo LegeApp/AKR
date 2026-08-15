@@ -5,7 +5,7 @@ build {
     tool "akr 0.3.1"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:24c98cbf98fa0be640c755df72fcf487d1e42847677dfc302d19e6695d2e5e5a"
+    source_graph "sha256:d695e4b3fb8072d4bd6acbfad9f9e5c4ee9831566431d3a43d5049426ae872ce"
 }
 
 source ".akr/project.akr" {
@@ -24,8 +24,8 @@ source ".akr/records/akr/decisions.akr" {
 }
 
 source ".akr/records/akr/evidence.akr" {
-    hash "sha256:de4a8d361b3b03c7ff15676eec29e0267f3380493676677b7d51d60b58d5c894"
-    records 35
+    hash "sha256:ad1032f02c7cb540dee66a030b6265cdc755889e31b92e12f8693d1d875a92a6"
+    records 37
 }
 
 source ".akr/records/akr/milestones.akr" {
@@ -34,13 +34,13 @@ source ".akr/records/akr/milestones.akr" {
 }
 
 source ".akr/records/akr/papercuts.akr" {
-    hash "sha256:62410525044b3b0335a79f8781476b5ec0c8a0e8f7034f9e4e8596dc33146930"
-    records 38
+    hash "sha256:52b29669b59104b5593f274e2d3692be325261f4d9990b7584effcc75f6b0c85"
+    records 40
 }
 
 source ".akr/records/akr/work.akr" {
-    hash "sha256:9ffec0829a6f5ed7d4194e40755510938b17d712d272c5b9646f08717b01f12c"
-    records 27
+    hash "sha256:8db5e783a974e67140be0b2cb5aaff51f5a109495be9905e42ae77d22160ff4b"
+    records 28
 }
 
 resolution @akr.decision.completed-planning-work-satisfies-dependency/1 {
@@ -290,6 +290,11 @@ seal @akr.decision.start-collates-session-head/1 {
     hash "sha256:c55c5201b740bb0d7278902dbf2e209f916100eab250bb6143bc81ec0ea8c12d"
 }
 
+seal @akr.evidence.collated-papercut-cli-mcp/1 {
+    state verified
+    hash "sha256:ef4b0ead03edb66e8460cd59d0c849d3dcdb60909198812ac5a28241f680968d"
+}
+
 seal @akr.evidence.collated-papercut-fixes/1 {
     state verified
     hash "sha256:a680288e83a7da63ba3f98e92597a47a0d0e01696dc65ae1a2fcc35ccaae2b50"
@@ -353,6 +358,11 @@ seal @akr.evidence.mcp-budget-and-skew-suite/1 {
 seal @akr.evidence.mcp-feature-suites-pass/1 {
     state verified
     hash "sha256:7f6d2a2d31c922f001a01adff180e2e3702425c191aadae4c1e7031b31cfd348"
+}
+
+seal @akr.evidence.mcp-handshake-current-clients/1 {
+    state verified
+    hash "sha256:0d7e59dae79cb9547dae7c1b34aa261045f747695cfb9d45c0d56eaf698933f4"
 }
 
 seal @akr.evidence.mcp-help-parity/1 {
@@ -515,6 +525,11 @@ seal @akr.papercut.collated-10-papercuts-from-evidence-intake/2 {
     hash "sha256:db0b196d843a9ee777def3e851c181726350fdab0ea0605f284f2754845aa95c"
 }
 
+seal @akr.papercut.collated-16-papercuts-from-kitchen-concept-lege/1 {
+    state verified
+    hash "sha256:909f322cc384e608da42b81effae631d9723fe31ec74e7b93ab30a422d871de6"
+}
+
 seal @akr.papercut.collated-18-papercuts-from-evidence-intake/1 {
     state verified
     hash "sha256:088a420747382b87caa194da80aa9091157b5151822f59219d4047f1055f1866"
@@ -648,6 +663,11 @@ seal @akr.papercut.while-checking-akr-mcp-without-default-features/1 {
 seal @akr.papercut.while-locating-the-non-fts-start-and/1 {
     state verified
     hash "sha256:c3300f371bd5b01ea0ddf9efa26236dbfe9fa5b7e3c9d6ea6aeedce3ca7745f8"
+}
+
+seal @akr.papercut.while-running-the-workspace-suite-on-windows/1 {
+    state verified
+    hash "sha256:88d3ab07de53ebb0340ff1b2218c16eb323698d32908453d77feef03d80fb93a"
 }
 
 seal @akr.papercut.writing-several-evidence-and-lifecycle-records/1 {

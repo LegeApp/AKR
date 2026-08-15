@@ -711,7 +711,9 @@ fn both_supported_protocol_versions_are_accepted() {
         &example,
         "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\"}}\n\
          {\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2026-07-28\"}}\n\
-         {\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"server/discover\",\"params\":{\"protocolVersion\":\"2026-07-28\"}}\n",
+         {\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"server/discover\",\"params\":{\"protocolVersion\":\"2026-07-28\"}}\n\
+         {\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\"}}\n\
+         {\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\"}}\n",
     );
 
     let legacy = responses[0]
@@ -750,5 +752,20 @@ fn both_supported_protocol_versions_are_accepted() {
             .and_then(|(_, value)| value.as_array())
             .is_some(),
         "{discover:?}",
+    );
+
+    assert_eq!(
+        responses[3]
+            .get("result")
+            .and_then(|result| result.get("protocolVersion"))
+            .and_then(Value::as_str),
+        Some("2025-06-18")
+    );
+    assert_eq!(
+        responses[4]
+            .get("result")
+            .and_then(|result| result.get("protocolVersion"))
+            .and_then(Value::as_str),
+        Some("2025-03-26")
     );
 }

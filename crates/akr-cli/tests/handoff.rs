@@ -44,6 +44,16 @@ fn start_prepends_a_validated_handoff_and_preserves_orientation() {
             .and_then(Value::as_array)
             .is_some_and(|branches| !branches.is_empty())
     );
+    assert!(run.stdout.contains("namespaces"), "{}", run.stdout);
+    assert!(
+        result
+            .get("handoff")
+            .and_then(|handoff| handoff.get("namespaces"))
+            .and_then(Value::as_array)
+            .is_some_and(|namespaces| !namespaces.is_empty()),
+        "{:?}",
+        result
+    );
 }
 
 #[test]

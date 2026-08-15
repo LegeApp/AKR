@@ -30,10 +30,12 @@ Two invariants make the surface trustworthy:
   cannot skip validation, cannot write an unformatted record, and cannot read anything an
   operator could not read by running a command.
 
-The framing is the stdio transport's: one JSON-RPC message per line, and therefore no
-line break *inside* a message. A pretty-printed request is not a request — it is several
-malformed ones, and the server answers each fragment with its own parse error rather than
-guessing where the message was meant to end.
+The framing is the stdio transport's. A newline-delimited JSON-RPC document is still
+accepted — and is what the differential harness speaks — so a pretty-printed request is
+several malformed ones, and the server answers each fragment with its own parse error
+rather than guessing where the message was meant to end. Official MCP clients send
+`Content-Length` headers instead; the server accepts that framing too and answers in
+kind, so a host that cannot parse NDJSON is not left attached with an empty tool list.
 
 ## 2. Tool catalogue
 
