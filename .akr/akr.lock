@@ -5,7 +5,7 @@ build {
     tool "akr 0.3.1"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:d695e4b3fb8072d4bd6acbfad9f9e5c4ee9831566431d3a43d5049426ae872ce"
+    source_graph "sha256:06c94b891f83bcc5000193caadefd258b4b3273a6fb2f178f1ef058bbcd047ee"
 }
 
 source ".akr/project.akr" {
@@ -34,8 +34,8 @@ source ".akr/records/akr/milestones.akr" {
 }
 
 source ".akr/records/akr/papercuts.akr" {
-    hash "sha256:52b29669b59104b5593f274e2d3692be325261f4d9990b7584effcc75f6b0c85"
-    records 40
+    hash "sha256:7ff6d87df3d6f589b59381f15b5c05f8aa06653bf40c4b58788a268b8876f55f"
+    records 44
 }
 
 source ".akr/records/akr/work.akr" {
@@ -475,6 +475,11 @@ seal @akr.evidence.write-latency-and-lifecycle-suite/1 {
     hash "sha256:146239e8b586659fb08e94f4eb81edf1eb7c4cea97cce1d6ad9fc4a6228ecb97"
 }
 
+seal @akr.papercut.a-subagent-spawned-with-worktree-isolation-into/1 {
+    state verified
+    hash "sha256:f0228bf0f56b8661d18617680e1529fd495092af4bfc27150a01b334e92e4390"
+}
+
 seal @akr.papercut.after-an-immediate-akr-check-akr-77-records-88/1 {
     state verified
     hash "sha256:eea6255e905188c26ecf515f00254040fc93ede19f285882f7c4f1a1c57ce7ee"
@@ -555,6 +560,11 @@ seal @akr.papercut.collated-8-papercuts-from-lege-ecosystem/1 {
     hash "sha256:40f3338a6d97f05f8be9d295a53c7908fb2a2b633ca94703a21b0ba100c205f9"
 }
 
+seal @akr.papercut.collated-8-papercuts-from-lege-ecosystem-legeos/1 {
+    state verified
+    hash "sha256:74d6900d491942cda4ceb9383a08b4ab136944a163cfe18646fa71d426c613e0"
+}
+
 seal @akr.papercut.collated-9-papercuts-from-lege-ecosystem/1 {
     state verified
     hash "sha256:3820b1cffed6532843f7b46cd19682d5b062d479c12d196882df4cd9fc6dba0c"
@@ -563,6 +573,11 @@ seal @akr.papercut.collated-9-papercuts-from-lege-ecosystem/1 {
 seal @akr.papercut.completing-a-milestone-failed-because-a/1 {
     state verified
     hash "sha256:77041f683522a32d7233c8cb9c88717696034df97ea9a8be408787c5390190eb"
+}
+
+seal @akr.papercut.crates-akr-cli-tests-commands-rs-is-the-only/1 {
+    state verified
+    hash "sha256:97797a90d032d57543d231fc461a4b198808c811e47685a800bee78a1407af42"
 }
 
 seal @akr.papercut.evidence-recorded-after-tests-but-before/1 {
@@ -613,6 +628,11 @@ seal @akr.papercut.root-cause-of-the-discoverability-miss-the-cli/1 {
 seal @akr.papercut.root-cause-of-the-discoverability-miss-the-cli/2 {
     state withdrawn
     hash "sha256:36e4464a699a9cbc042c081ff33853feb7164540220545f34b1281fbf3c8a9db"
+}
+
+seal @akr.papercut.running-akr-papercut-collate-m-agent-silently/1 {
+    state verified
+    hash "sha256:9666eb09f45e076b3f5e074f391277d137c315ab32e453d8292f7a3fbe4f398b"
 }
 
 seal @akr.papercut.running-rustfmt-directly-on-akr-s-rust-2024/1 {
