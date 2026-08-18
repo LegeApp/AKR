@@ -141,12 +141,18 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
             goal,
             paths,
             budget,
-        } => context(session, goal, paths, *budget),
+        } => {
+            let paths = normalize_query_paths(paths, &session.root)?;
+            context(session, goal, &paths, *budget)
+        }
         Command::Start {
             task,
             paths,
             budget,
-        } => start(session, task, paths, *budget),
+        } => {
+            let paths = normalize_query_paths(paths, &session.root)?;
+            start(session, task, &paths, *budget)
+        }
         Command::Search {
             query,
             raw_fts,
@@ -323,6 +329,31 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
             unreachable!("handled by run_standalone")
         }
     }
+}
+
+/// Normalizes `--paths` / MCP `paths` query arguments (`akr context`, `akr start`, and their
+/// `knowledge.*` MCP equivalents, which are the same function called through
+/// [`commands::run`](run)): native separators become `/`, and an absolute path inside the
+/// repository becomes repo-root-relative. One call site for both surfaces, ahead of the one
+/// place D-008 validation happens ([`akr_core::context::assemble`]), so the two never
+/// disagree about what a `--paths`/`paths` argument means.
+///
+/// # Errors
+/// [`EnvError`] `AKR-X013` when an absolute path does not lie inside `root`.
+fn normalize_query_paths(
+    paths: &[akr_core::model::Glob],
+    root: &Path,
+) -> Result<Vec<akr_core::model::Glob>, EnvError> {
+    paths
+        .iter()
+        .map(|glob| {
+            akr_core::model::normalize_query_path(glob.as_str(), root).map_err(|error| {
+                EnvError::new("AKR-X013", format!("--paths {error}")).help(
+                    "paths are matched against the repository; pass one inside it, relative or absolute",
+                )
+            })
+        })
+        .collect()
 }
 
 // -------------------------------------------------------------------------------------

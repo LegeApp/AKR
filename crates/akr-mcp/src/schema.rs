@@ -581,10 +581,7 @@ fn evidence_schema() -> Value {
             ),
             (
                 "method",
-                enumeration(
-                    "How it was observed.",
-                    &["manual", "command", "observation"],
-                ),
+                enumeration("How it was observed.", &evidence_method_values()),
             ),
             (
                 "command",
@@ -716,6 +713,41 @@ fn enumeration(description: &str, values: &[&str]) -> Value {
             Value::array(values.iter().map(|v| Value::string(*v)).collect()),
         ),
     ])
+}
+
+/// The `check.method` values (D-016), taken from `CheckMethod::ALL` rather than
+/// duplicated here, so the tool schema can never drift from the ledger's own enum.
+fn check_method_values() -> Vec<&'static str> {
+    akr_core::model::CheckMethod::ALL
+        .iter()
+        .map(|method| method.name())
+        .collect()
+}
+
+/// The `evidence.method` values (D-016), taken from the same per-kind enum table the
+/// type-checker reads (`Kind::content_enum_values`), so this can never drift from
+/// `spec/tables/vocabulary.json`.
+fn evidence_method_values() -> Vec<&'static str> {
+    // Nothing in this crate may panic: a panic here would take the schema down with it,
+    // and `tools/list` is the first thing a client asks for — a dead server on the
+    // handshake is the one failure an agent cannot diagnose. The fallback is the same
+    // list, and `evidence_method_values_track_the_ledger` fails loudly if they diverge.
+    akr_core::model::Kind::Evidence
+        .content_enum_values(akr_core::model::ContentSlot::Method)
+        .map_or_else(
+            || vec!["manual", "command", "observation"],
+            <[&'static str]>::to_vec,
+        )
+}
+
+/// The `disposition.outcome` values, taken from `Outcome::ALL` — the same table
+/// `tools.rs` parses the argument against, so the schema cannot advertise a value the
+/// dispatcher would then reject.
+fn outcome_values() -> Vec<&'static str> {
+    akr_core::model::Outcome::ALL
+        .iter()
+        .map(|outcome| outcome.name())
+        .collect()
 }
 
 fn string_array(description: &str) -> Value {
@@ -899,7 +931,10 @@ fn acceptance_schema(description: &str) -> Value {
                         string("The check identifier, unique within the record."),
                     ),
                     ("statement", string("The observable outcome.")),
-                    ("method", string("manual, command or observation.")),
+                    (
+                        "method",
+                        enumeration("How the check is carried out.", &check_method_values()),
+                    ),
                     ("command", string("The exact command, for method command.")),
                     (
                         "verified_by",
@@ -929,9 +964,7 @@ fn dispositions_schema() -> Value {
                     ("child", string("The child's key.")),
                     (
                         "outcome",
-                        string(
-                            "carried_forward, completed_elsewhere, intentionally_dropped or still_required_separately.",
-                        ),
+                        enumeration("What became of the child.", &outcome_values()),
                     ),
                     (
                         "into",
@@ -943,4 +976,40 @@ fn dispositions_schema() -> Value {
             ),
         ),
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `evidence_method_values` falls back rather than panicking, because a panic on the
+    /// `tools/list` path would kill the server during the handshake. That makes the
+    /// fallback a silent-drift risk, so the divergence is caught here instead.
+    #[test]
+    fn evidence_method_values_track_the_ledger() {
+        let table = akr_core::model::Kind::Evidence
+            .content_enum_values(akr_core::model::ContentSlot::Method)
+            .expect("evidence.method is an enum content slot");
+        assert_eq!(evidence_method_values(), table.to_vec());
+    }
+
+    /// The schema must never advertise a value the dispatcher rejects, nor omit one it
+    /// accepts.
+    #[test]
+    fn schema_enums_match_their_authoritative_tables() {
+        assert_eq!(
+            check_method_values(),
+            akr_core::model::CheckMethod::ALL
+                .iter()
+                .map(|m| m.name())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            outcome_values(),
+            akr_core::model::Outcome::ALL
+                .iter()
+                .map(|o| o.name())
+                .collect::<Vec<_>>()
+        );
+    }
 }

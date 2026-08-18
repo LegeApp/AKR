@@ -137,6 +137,17 @@ pub fn assemble(session: &Session, budget: Option<usize>) -> Result<Handoff, Env
         .saturating_sub(planning.len().min(item_limit) / 2)
         .max(2);
     let related_omitted = related.len().saturating_sub(related_limit);
+    // Every other list here is bounded by `item_limit`, and the text view reports the
+    // overlay as counts alone; the JSON view enumerated it in full, so an uncommitted
+    // workspace could spend the whole budget describing its own dirt and crowd out the
+    // records the caller asked for.
+    let overlay_omitted = snapshot.overlay.added.len().saturating_sub(item_limit)
+        + snapshot.overlay.revised.len().saturating_sub(item_limit)
+        + snapshot
+            .overlay
+            .transitions
+            .len()
+            .saturating_sub(item_limit);
 
     let namespaces: Vec<String> = snapshot
         .ledger
@@ -308,8 +319,8 @@ pub fn assemble(session: &Session, budget: Option<usize>) -> Result<Handoff, Env
         (
             "overlay",
             Value::object(vec![
-                ("added", refs_json(&snapshot.overlay.added)),
-                ("revised", refs_json(&snapshot.overlay.revised)),
+                ("added", refs_json(&snapshot.overlay.added, item_limit)),
+                ("revised", refs_json(&snapshot.overlay.revised, item_limit)),
                 (
                     "transitions",
                     Value::array(
@@ -317,6 +328,7 @@ pub fn assemble(session: &Session, budget: Option<usize>) -> Result<Handoff, Env
                             .overlay
                             .transitions
                             .iter()
+                            .take(item_limit)
                             .map(|transition| {
                                 Value::object(vec![
                                     ("ref", Value::string(format!("@{}", transition.id))),
@@ -350,6 +362,7 @@ pub fn assemble(session: &Session, budget: Option<usize>) -> Result<Handoff, Env
             Value::object(vec![
                 ("planning", Value::integer(planning_omitted as i64)),
                 ("related", Value::integer(related_omitted as i64)),
+                ("overlay", Value::integer(overlay_omitted as i64)),
             ]),
         ),
     ]);
@@ -586,9 +599,10 @@ fn state_counts_json(records: &[&Record]) -> Value {
     )
 }
 
-fn refs_json(ids: &[RevisionId]) -> Value {
+fn refs_json(ids: &[RevisionId], limit: usize) -> Value {
     Value::array(
         ids.iter()
+            .take(limit)
             .map(|id| Value::string(format!("@{id}")))
             .collect(),
     )

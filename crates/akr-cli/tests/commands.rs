@@ -333,6 +333,114 @@ fn context_normalizes_a_current_pin_and_guides_other_reference_forms() {
     assert!(anchored.output().contains("akr get"));
 }
 
+#[test]
+fn context_paths_accepts_native_separators_and_an_absolute_in_repo_path() {
+    let example = Example::materialise("context-paths-normalization");
+    let baseline = example.run(&[
+        "context",
+        "--goal",
+        "sys.milestone.m3-playable-day",
+        "--paths",
+        "sim/src/project/**",
+    ]);
+    assert_eq!(baseline.code, 0, "{}", baseline.output());
+
+    // A backslash path — what an agent on Windows naturally types — must produce the
+    // identical bundle, not `AKR-X011` ("backslashes are not path separators").
+    let backslash = example.run(&[
+        "context",
+        "--goal",
+        "sys.milestone.m3-playable-day",
+        "--paths",
+        r"sim\src\project\**",
+    ]);
+    assert_eq!(backslash.code, 0, "{}", backslash.output());
+    assert_eq!(
+        backslash.stdout, baseline.stdout,
+        "a backslash path must normalize to the same bundle as its forward-slash form"
+    );
+
+    // Mixed separators normalize the same way.
+    let mixed = example.run(&[
+        "context",
+        "--goal",
+        "sys.milestone.m3-playable-day",
+        "--paths",
+        r"sim/src\project/**",
+    ]);
+    assert_eq!(mixed.code, 0, "{}", mixed.output());
+    assert_eq!(mixed.stdout, baseline.stdout);
+
+    // An absolute path inside the repository — the shape an agent gets from `pwd`-joining a
+    // relative one, or pastes straight from an editor — is made repo-root-relative rather
+    // than rejected as `AKR-X011: globs are repo-root-relative and may not start with `/``.
+    let absolute = format!(r"{}\sim\src\project\**", example.root().display());
+    let absolute_run = example.run(&[
+        "context",
+        "--goal",
+        "sys.milestone.m3-playable-day",
+        "--paths",
+        &absolute,
+    ]);
+    assert_eq!(absolute_run.code, 0, "{}", absolute_run.output());
+    assert_eq!(absolute_run.stdout, baseline.stdout);
+}
+
+#[test]
+fn context_paths_rejects_an_absolute_path_outside_the_repository() {
+    let example = Example::materialise("context-paths-outside-repo");
+    let outside_root = example
+        .root()
+        .parent()
+        .expect("materialised root has a parent")
+        .join("definitely-outside-the-repository");
+    let outside = format!(r"{}\src\lib.rs", outside_root.display());
+
+    let run = example.run(&[
+        "context",
+        "--goal",
+        "sys.milestone.m3-playable-day",
+        "--paths",
+        &outside,
+    ]);
+    assert_eq!(run.code, 3, "{}", run.output());
+    assert!(run.output().contains("AKR-X013"), "{}", run.output());
+    assert!(
+        run.output().contains("outside the repository"),
+        "{}",
+        run.output()
+    );
+
+    // A sibling directory that merely shares a name prefix with the repository root (e.g.
+    // `…\commands-context-paths-outside-repo2`) must not be treated as inside it.
+    let mut sibling_name = example
+        .root()
+        .file_name()
+        .expect("root has a name")
+        .to_string_lossy()
+        .into_owned();
+    sibling_name.push('2');
+    let sibling_root = example
+        .root()
+        .parent()
+        .expect("materialised root has a parent")
+        .join(sibling_name);
+    let sibling = format!(r"{}\src\lib.rs", sibling_root.display());
+    let sibling_run = example.run(&[
+        "context",
+        "--goal",
+        "sys.milestone.m3-playable-day",
+        "--paths",
+        &sibling,
+    ]);
+    assert_eq!(sibling_run.code, 3, "{}", sibling_run.output());
+    assert!(
+        sibling_run.output().contains("AKR-X013"),
+        "{}",
+        sibling_run.output()
+    );
+}
+
 // -------------------------------------------------------------------------------------
 // The second worked example
 // -------------------------------------------------------------------------------------

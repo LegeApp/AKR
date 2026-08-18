@@ -12,6 +12,7 @@ mod builder;
 mod ident;
 mod kind;
 mod ledger;
+mod query_path;
 mod record;
 mod refs;
 mod relation;
@@ -24,6 +25,7 @@ pub use kind::{Class, ContentSlot, ContentSlotSpec, Kind};
 pub use ledger::{
     Ancestry, ContentHash, HeadError, Ledger, LedgerFacts, PartOfIndex, Project, SealFact,
 };
+pub use query_path::{QueryPathError, normalize_query_path};
 pub use record::{
     Acceptance, Check, CheckMethod, Claim, ContentValue, Disposition, EvidenceResult, Outcome,
     Record, Source, SourceKind, SourceRange, SourceRole,

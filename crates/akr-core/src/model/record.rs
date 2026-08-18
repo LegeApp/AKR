@@ -90,6 +90,14 @@ pub enum CheckMethod {
 }
 
 impl CheckMethod {
+    /// Every check method, in the order `spec/tables/vocabulary.json` declares them for
+    /// the `check` block's `method` slot.
+    pub const ALL: &'static [CheckMethod] = &[
+        CheckMethod::Manual,
+        CheckMethod::Command,
+        CheckMethod::Observation,
+    ];
+
     /// The name as written in source.
     #[must_use]
     pub const fn name(self) -> &'static str {
