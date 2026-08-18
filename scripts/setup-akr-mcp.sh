@@ -231,10 +231,21 @@ fi
 
 # Install/refresh the AKR section of the global agent instruction files.
 #
-# The section is delimited by HTML comment markers and rewritten in place, so re-running
-# this script updates the guidance instead of stacking another copy of it. Everything
-# outside the markers — including sections other tools own, like CodeGraph's — is copied
-# through untouched. A file that has no markers gets the section appended once.
+# The section lives between HTML comment markers. Everything outside them is yours --
+# your own notes, sections other tools own like CodeGraph's -- and is copied through
+# byte for byte, including its line endings.
+#
+# Three rules make re-running this safe:
+#
+#   1. Idempotent. If the file already says what this script would write, it is left
+#      alone entirely: not rewritten, not re-timestamped, and no .bak. Refreshing the
+#      MCP binaries therefore does not touch your instruction files at all.
+#   2. Collapsing. Any number of marked blocks -- however they got there -- become one,
+#      at the position of the first. Earlier versions re-expanded every block on every
+#      run, so once a file had two it kept two forever.
+#   3. Non-destructive. An unbalanced marker pair is refused, not guessed at. There is no
+#      way to know where a block with no end marker was meant to stop, and the earlier
+#      version answered "the end of the file", silently deleting everything after it.
 AGENT_SECTION_FILE="$REPO_DIR/scripts/agent-section.md"
 AGENT_BEGIN="<!-- AKR_START -->"
 AGENT_END="<!-- AKR_END -->"
@@ -251,42 +262,99 @@ install_agent_section() {
     echo "error: agent section source missing: $AGENT_SECTION_FILE" >&2
     return 1
   fi
-  local action="append to"
-  if [[ -f "$target" ]] && grep -qF "$AGENT_BEGIN" "$target"; then
-    action="refresh in"
+
+  local existed=0 begins=0 ends=0
+  if [[ -f "$target" ]]; then
+    existed=1
+    begins="$(grep -cF "$AGENT_BEGIN" "$target" || true)"
+    ends="$(grep -cF "$AGENT_END" "$target" || true)"
   fi
-  if [[ "$DRY_RUN" -eq 1 ]]; then
-    log "DRY-RUN: $action $target"
+  if [[ "$begins" -ne "$ends" ]]; then
+    echo "warning: $target has $begins '$AGENT_BEGIN' and $ends '$AGENT_END' markers;" >&2
+    echo "         leaving it untouched. Balance the pair (or delete the stray marker)" >&2
+    echo "         and re-run; this script will not guess where the block ends." >&2
     return 0
   fi
-  [[ -f "$target" ]] || : > "$target"
-  cp "$target" "$target.bak"
+
+  # Match the line ending the file already uses, so a CRLF file does not come back as a
+  # whole-file diff -- the most annoying way for a setup script to touch a file you
+  # maintain by hand.
+  #
+  # Counted with `tr`, which sees bytes. Do not use grep: under MSYS, `grep -c $'\r$'`
+  # reports a match on every line of a file that contains no CR byte at all.
+  local cr=""
+  if [[ "$existed" -eq 1 ]] && [[ "$(tr -dc '\r' < "$target" | wc -c)" -gt 0 ]]; then
+    cr=$'\r'
+  fi
+
+  local source=/dev/null
+  [[ "$existed" -eq 1 ]] && source="$target"
   local tmp
   tmp="$(mktemp)"
-  BEGIN="$AGENT_BEGIN" END="$AGENT_END" SECTION="$AGENT_SECTION_FILE" awk '
-    BEGIN { begin = ENVIRON["BEGIN"]; end = ENVIRON["END"]; inside = 0; seen = 0 }
-    index($0, begin) == 1 {
-      inside = 1; seen = 1
-      print begin
-      while ((getline line < ENVIRON["SECTION"]) > 0) print line
+  BEGIN="$AGENT_BEGIN" END="$AGENT_END" SECTION="$AGENT_SECTION_FILE" CR="$cr" awk '
+    BEGIN {
+      begin = ENVIRON["BEGIN"]; end = ENVIRON["END"]; cr = ENVIRON["CR"]
+      inside = 0; emitted = 0
+    }
+    # A marker is recognised wherever it sits on its own line, whatever the indentation
+    # and whatever the line ending. The previous version demanded column 1, so an
+    # indented marker was invisible to the rewriter but visible to the grep that chose
+    # the log line -- it announced a refresh and appended a duplicate.
+    function bare(s) { sub(/\r$/, "", s); gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    function emit_block(   line) {
+      printf "%s%s\n", begin, cr
+      while ((getline line < ENVIRON["SECTION"]) > 0) {
+        sub(/\r$/, "", line)
+        printf "%s%s\n", line, cr
+      }
       close(ENVIRON["SECTION"])
-      print end
+      printf "%s%s\n", end, cr
+    }
+    {
+      tag = bare($0)
+      if (tag == begin) {
+        inside = 1
+        if (emitted == 0) { emit_block(); emitted = 1 }
+        next
+      }
+      if (tag == end) { inside = 0; next }
+      # Reprint with the chosen ending rather than passing $0 straight through:
+      # MSYS awk strips a trailing CR on read, so a plain `print` would quietly
+      # convert a CRLF file to LF. Stripping first keeps this right on the awks
+      # that do preserve it.
+      if (inside == 0) { line = $0; sub(/\r$/, "", line); printf "%s%s\n", line, cr }
       next
     }
-    index($0, end) == 1 { inside = 0; next }
-    inside == 0 { print }
     END {
-      if (seen == 0) {
-        if (NR > 0) print ""
-        print begin
-        while ((getline line < ENVIRON["SECTION"]) > 0) print line
-        close(ENVIRON["SECTION"])
-        print end
+      if (emitted == 0) {
+        if (NR > 0) printf "%s\n", cr
+        emit_block()
       }
     }
-  ' "$target" > "$tmp"
-  mv "$tmp" "$target"
-  log "Agent section ${action%% *}ed: $target (previous copy at $target.bak)"
+  ' "$source" > "$tmp"
+
+  if [[ "$existed" -eq 1 ]] && cmp -s "$tmp" "$target"; then
+    rm -f "$tmp"
+    log "Agent section already current, leaving in place: $target"
+    return 0
+  fi
+
+  local action="Appended"
+  [[ "$begins" -gt 0 ]] && action="Refreshed"
+  if [[ "$DRY_RUN" -eq 1 ]]; then
+    rm -f "$tmp"
+    log "DRY-RUN: would change the agent section in $target ($action)"
+    return 0
+  fi
+
+  if [[ "$existed" -eq 1 ]]; then
+    cp "$target" "$target.bak"
+    mv "$tmp" "$target"
+    log "$action agent section: $target (previous copy at $target.bak)"
+  else
+    mv "$tmp" "$target"
+    log "$action agent section: $target (new file)"
+  fi
 }
 
 if [[ "$DO_AGENTS" -eq 1 ]]; then

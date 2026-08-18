@@ -298,10 +298,23 @@ if (-not $NoOpenCode) {
 
 # Install/refresh the AKR section of the global agent instruction files.
 #
-# The section lives between HTML comment markers and is rewritten in place, so re-running
-# this script updates the guidance instead of stacking another copy of it. Everything
-# outside the markers — including sections other tools own, like CodeGraph's — is copied
-# through untouched. A file with no markers gets the section appended once.
+# The section lives between HTML comment markers. Everything outside them is yours --
+# your own notes, sections other tools own like CodeGraph's -- and is copied through
+# unchanged, including the file's line endings.
+#
+# Three rules make re-running this safe:
+#
+#   1. Idempotent. If the file already says what this script would write, it is left
+#      alone entirely: not rewritten, not re-timestamped, and no .bak. Refreshing the
+#      MCP binaries therefore does not touch your instruction files at all.
+#   2. Collapsing. Any number of marked blocks become one, at the position of the first.
+#      The earlier version rewrote every block on every run, so once a file had two it
+#      kept two forever.
+#   3. Non-destructive. An unbalanced marker pair is refused, not guessed at.
+#
+# The earlier version also ended with a blanket CRLF-to-LF conversion of the whole file,
+# which rewrote every line the user had ever written. That is gone: the section is
+# emitted with whatever ending the file already uses.
 $AgentSectionFile = Join-Path $RepoDir "scripts\agent-section.md"
 $AgentBegin = "<!-- AKR_START -->"
 $AgentEnd = "<!-- AKR_END -->"
@@ -317,42 +330,70 @@ function Install-AgentSection {
     if (-not (Test-Path -LiteralPath $AgentSectionFile)) {
         throw "agent section source missing: $AgentSectionFile"
     }
-    $section = (Get-Content -Raw -LiteralPath $AgentSectionFile).TrimEnd("`r", "`n")
-    $block = "$AgentBegin`n$section`n$AgentEnd"
 
+    $existed = Test-Path -LiteralPath $Target
     $existing = ""
-    if (Test-Path -LiteralPath $Target) {
-        $existing = Get-Content -Raw -LiteralPath $Target
+    if ($existed) {
+        $existing = [System.IO.File]::ReadAllText($Target)
         if ($null -eq $existing) { $existing = "" }
     }
-    $hasMarkers = $existing.Contains($AgentBegin) -and $existing.Contains($AgentEnd)
-    $action = if ($hasMarkers) { "refresh" } else { "append" }
-    Invoke-Step "$action AKR section in $Target" {
-        if (Test-Path -LiteralPath $Target) {
-            Copy-Item -LiteralPath $Target -Destination "$Target.bak" -Force
-        }
-        if ($hasMarkers) {
-            # Singleline so `.` spans the section body; the markers themselves anchor it,
-            # so nothing outside the pair is considered.
-            $pattern = [regex]::Escape($AgentBegin) + '.*?' + [regex]::Escape($AgentEnd)
-            $newText = [regex]::Replace(
-                $existing,
-                $pattern,
-                { param($m) $block },
-                [System.Text.RegularExpressions.RegexOptions]::Singleline
-            )
-        } elseif ([string]::IsNullOrWhiteSpace($existing)) {
-            $newText = "$block`n"
-        } else {
-            $separator = if ($existing.EndsWith("`n")) { "`n" } else { "`n`n" }
-            $newText = "$existing$separator$block`n"
-        }
-        # LF only: these files are read by tools on every platform, and a mixed-ending
-        # rewrite of someone else's file is a diff nobody asked for.
-        $newText = $newText.Replace("`r`n", "`n")
-        [System.IO.File]::WriteAllText($Target, $newText)
+
+    # Markers are recognised on their own line whatever the indentation, so a marker the
+    # user tidied inward is still found. Counting them separately is what catches a pair
+    # that no longer balances.
+    $beginLine = '(?m)^[ \t]*' + [regex]::Escape($AgentBegin) + '[ \t]*\r?$'
+    $endLine   = '(?m)^[ \t]*' + [regex]::Escape($AgentEnd)   + '[ \t]*\r?$'
+    $nBegin = [regex]::Matches($existing, $beginLine).Count
+    $nEnd   = [regex]::Matches($existing, $endLine).Count
+    if ($nBegin -ne $nEnd) {
+        Write-Warning "$Target has $nBegin '$AgentBegin' and $nEnd '$AgentEnd' markers; leaving it untouched."
+        Write-Warning "Balance the pair (or delete the stray marker) and re-run; this script will not guess where the block ends."
+        return
     }
-    Log "Agent section ${action}ed: $Target"
+
+    # Match the file's existing line ending rather than imposing one.
+    $eol = if ($existing -match "`r`n") { "`r`n" } else { "`n" }
+    $section = (Get-Content -Raw -LiteralPath $AgentSectionFile).TrimEnd("`r", "`n")
+    $section = ($section -replace "`r`n", "`n") -replace "`n", $eol
+    $block = $AgentBegin + $eol + $section + $eol + $AgentEnd
+
+    $blockRx = '(?ms)^[ \t]*' + [regex]::Escape($AgentBegin) + '.*?^[ \t]*' + [regex]::Escape($AgentEnd) + '[ \t]*(\r?\n)?'
+    $found = [regex]::Matches($existing, $blockRx)
+
+    if ($found.Count -gt 0) {
+        # Excise every block, then reinsert one where the first used to be. Removing back
+        # to front keeps the earlier offsets valid.
+        $insertAt = $found[0].Index
+        $newText = $existing
+        for ($i = $found.Count - 1; $i -ge 0; $i--) {
+            $newText = $newText.Remove($found[$i].Index, $found[$i].Length)
+        }
+        $newText = $newText.Insert($insertAt, $block + $eol)
+    } elseif ([string]::IsNullOrWhiteSpace($existing)) {
+        $newText = $block + $eol
+    } else {
+        $separator = if ($existing.EndsWith($eol)) { $eol } else { $eol + $eol }
+        $newText = $existing + $separator + $block + $eol
+    }
+
+    if ($existed -and $newText -ceq $existing) {
+        Log "Agent section already current, leaving in place: $Target"
+        return
+    }
+
+    $action = if ($nBegin -gt 0) { "Refreshed" } else { "Appended" }
+    if ($DryRun) {
+        Log "DRY-RUN: would change the agent section in $Target ($action)"
+        return
+    }
+    if ($existed) {
+        Copy-Item -LiteralPath $Target -Destination "$Target.bak" -Force
+        [System.IO.File]::WriteAllText($Target, $newText)
+        Log "$action agent section: $Target (previous copy at $Target.bak)"
+    } else {
+        [System.IO.File]::WriteAllText($Target, $newText)
+        Log "$action agent section: $Target (new file)"
+    }
 }
 
 if (-not $NoAgents) {
