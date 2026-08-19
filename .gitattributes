@@ -1,0 +1,11 @@
+# Line endings are part of this repository's output contract. `akr build` emits
+# byte-reproducible views and the fixture corpus is compared byte for byte, so a file
+# whose endings depend on who checked it out is a source of phantom diffs and false
+# fixture failures. One file (crates/akr-cli/tests/commands.rs) was committed with CRLF
+# and no rule pinned the convention: `cargo fmt` rewrote it to LF, git reported all ~400
+# lines as delete-and-re-add around every small change, and `cargo fmt --check` did not
+# flag it, so nothing warned. Pin it here rather than rely on each clone's core.autocrlf.
+* text=auto eol=lf
+
+# Build outputs that happen to be committed. Never diffed, never normalised.
+*.exe binary
