@@ -47,7 +47,7 @@ pub fn add(
     }
 
     // Deduplicate by id.
-    let mut catalog = source::load_catalog(&workspace_root).map_err(|d| to_env(d))?;
+    let mut catalog = source::load_catalog(&workspace_root).map_err(to_env)?;
     if catalog.iter().any(|d| d.id == safe_id) {
         return Err(EnvError::new(
             "AKR-C042",
@@ -94,24 +94,24 @@ pub fn add(
         fragments: Vec::new(),
     };
     catalog.push(doc.clone());
-    source::save_catalog(&workspace_root, &catalog).map_err(|d| to_env(d))?;
+    source::save_catalog(&workspace_root, &catalog).map_err(to_env)?;
 
     let text = format!(
         "registered source {safe_id}\n  {content_hash}\n  {}\n",
         doc.path
     );
     let result = Value::object(vec![
-        ("id".into(), Value::string(safe_id)),
-        ("content_hash".into(), Value::string(content_hash)),
-        ("path".into(), Value::string(doc.path)),
-        ("byte_len".into(), Value::integer(byte_len as i64)),
+        ("id", Value::string(safe_id)),
+        ("content_hash", Value::string(content_hash)),
+        ("path", Value::string(doc.path)),
+        ("byte_len", Value::integer(byte_len as i64)),
     ]);
     Ok(Output::plain(text, result))
 }
 
 /// `akr source list`
 pub fn list(session: &Session, all: bool) -> Result<Output, EnvError> {
-    let catalog = source::load_catalog(&session.root).map_err(|d| to_env(d))?;
+    let catalog = source::load_catalog(&session.root).map_err(to_env)?;
     let mut text = String::new();
     if catalog.is_empty() {
         text.push_str("no sources registered\n");
@@ -132,10 +132,10 @@ pub fn list(session: &Session, all: bool) -> Result<Output, EnvError> {
     }
     let result = Value::object(vec![
         (
-            "sources".into(),
+            "sources",
             Value::array(catalog.iter().map(doc_to_json).collect()),
         ),
-        ("count".into(), Value::integer(catalog.len() as i64)),
+        ("count", Value::integer(catalog.len() as i64)),
     ]);
     Ok(Output::plain(text, result))
 }
@@ -227,12 +227,12 @@ pub fn search(
         }
     }
     let result = Value::object(vec![
-        ("standing".into(), Value::string("non_authoritative")),
+        ("standing", Value::string("non_authoritative")),
         (
-            "results".into(),
+            "results",
             Value::array(hits.iter().map(hit_to_json).collect()),
         ),
-        ("count".into(), Value::integer(hits.len() as i64)),
+        ("count", Value::integer(hits.len() as i64)),
     ]);
     Ok(Output::plain(text, result))
 }
@@ -256,9 +256,9 @@ pub fn get_chunk(session: &Session, chunk_id: &str, neighbors: usize) -> Result<
         text.push('\n');
     }
     let result = Value::object(vec![
-        ("standing".into(), Value::string("non_authoritative")),
+        ("standing", Value::string("non_authoritative")),
         (
-            "chunks".into(),
+            "chunks",
             Value::array(
                 chunks
                     .iter()
@@ -280,22 +280,19 @@ pub fn get_chunk(session: &Session, chunk_id: &str, neighbors: usize) -> Result<
 #[cfg(feature = "fts5")]
 fn hit_to_json(hit: &akr_core::store::SourceHit) -> Value {
     Value::object(vec![
-        ("document".into(), Value::string(hit.document_id.clone())),
-        ("title".into(), Value::string(hit.document_title.clone())),
-        ("path".into(), Value::string(hit.document_path.clone())),
-        ("chunk".into(), Value::string(hit.chunk_id.clone())),
-        ("heading".into(), Value::string(hit.heading.clone())),
-        ("kind".into(), Value::string(hit.kind.clone())),
-        ("start_byte".into(), Value::integer(hit.start_byte as i64)),
-        ("end_byte".into(), Value::integer(hit.end_byte as i64)),
-        (
-            "start_line".into(),
-            Value::integer(i64::from(hit.start_line)),
-        ),
-        ("end_line".into(), Value::integer(i64::from(hit.end_line))),
-        ("score".into(), Value::string(format!("{:.4}", hit.score))),
-        ("snippet".into(), Value::string(hit.snippet.clone())),
-        ("standing".into(), Value::string("non_authoritative")),
+        ("document", Value::string(hit.document_id.clone())),
+        ("title", Value::string(hit.document_title.clone())),
+        ("path", Value::string(hit.document_path.clone())),
+        ("chunk", Value::string(hit.chunk_id.clone())),
+        ("heading", Value::string(hit.heading.clone())),
+        ("kind", Value::string(hit.kind.clone())),
+        ("start_byte", Value::integer(hit.start_byte as i64)),
+        ("end_byte", Value::integer(hit.end_byte as i64)),
+        ("start_line", Value::integer(i64::from(hit.start_line))),
+        ("end_line", Value::integer(i64::from(hit.end_line))),
+        ("score", Value::string(format!("{:.4}", hit.score))),
+        ("snippet", Value::string(hit.snippet.clone())),
+        ("standing", Value::string("non_authoritative")),
     ])
 }
 
@@ -303,11 +300,14 @@ fn hit_to_json(hit: &akr_core::store::SourceHit) -> Value {
 pub fn get(
     session: &Session,
     id: &str,
-    whole: bool,
+    // `--whole` asks for the entire document, which is also what asking for neither a
+    // section nor a line range gets you. It stays in the signature because the flag is
+    // documented and a caller may pass it; it selects nothing extra.
+    _whole: bool,
     lines: Option<&str>,
     section: Option<&str>,
 ) -> Result<Output, EnvError> {
-    let catalog = source::load_catalog(&session.root).map_err(|d| to_env(d))?;
+    let catalog = source::load_catalog(&session.root).map_err(to_env)?;
     let doc = catalog
         .iter()
         .find(|d| d.id == id)
@@ -330,12 +330,12 @@ pub fn get(
         return Ok(Output::plain(
             output.clone(),
             Value::object(vec![
-                ("id".into(), Value::string(doc.id.clone())),
+                ("id", Value::string(doc.id.clone())),
                 (
-                    "availability".into(),
+                    "availability",
                     Value::string(doc.availability.as_str().to_owned()),
                 ),
-                ("text".into(), Value::string(output)),
+                ("text", Value::string(output)),
             ]),
         ));
     }
@@ -361,9 +361,9 @@ pub fn get(
             .ok_or_else(|| EnvError::new("AKR-C004", format!("section {sec:?} not found")))?
     } else if let Some(range) = lines {
         extract_lines(&text_raw, range)?
-    } else if whole || lines.is_none() && section.is_none() {
-        text_raw.clone()
     } else {
+        // Neither a section nor a line range: the whole document, which is also what
+        // `--whole` asks for. The two used to be separate arms with identical bodies.
         text_raw.clone()
     };
 
@@ -423,7 +423,7 @@ pub fn verify(session: &Session) -> Result<Output, EnvError> {
     if diags.is_empty() {
         return Ok(Output::plain(
             "all sources verified\n",
-            Value::object(vec![("ok".into(), Value::bool(true))]),
+            Value::object(vec![("ok", Value::bool(true))]),
         ));
     }
     let mut text = String::new();
@@ -431,9 +431,9 @@ pub fn verify(session: &Session) -> Result<Output, EnvError> {
         text.push_str(&format!("{d}\n\n"));
     }
     let result = Value::object(vec![
-        ("ok".into(), Value::bool(false)),
+        ("ok", Value::bool(false)),
         (
-            "diagnostics".into(),
+            "diagnostics",
             Value::array(diags.iter().map(|d| Value::string(d.to_string())).collect()),
         ),
     ]);
@@ -468,7 +468,7 @@ pub fn supersede(
     new_id: Option<&str>,
 ) -> Result<Output, EnvError> {
     let workspace_root = session.root.clone();
-    let mut catalog = source::load_catalog(&workspace_root).map_err(|d| to_env(d))?;
+    let mut catalog = source::load_catalog(&workspace_root).map_err(to_env)?;
     let old = catalog
         .iter()
         .find(|d| d.id == old_id)
@@ -525,43 +525,19 @@ pub fn supersede(
         fragments: Vec::new(),
     };
     catalog.push(doc.clone());
-    source::save_catalog(&workspace_root, &catalog).map_err(|d| to_env(d))?;
+    source::save_catalog(&workspace_root, &catalog).map_err(to_env)?;
 
     let text = format!(
         "superseded {old_id} with {safe_new_id}\n  {content_hash}\n  {}\n",
         doc.path
     );
     let result = Value::object(vec![
-        ("old_id".into(), Value::string(old_id.to_owned())),
-        ("new_id".into(), Value::string(safe_new_id)),
-        ("content_hash".into(), Value::string(content_hash)),
-        ("path".into(), Value::string(doc.path)),
+        ("old_id", Value::string(old_id.to_owned())),
+        ("new_id", Value::string(safe_new_id)),
+        ("content_hash", Value::string(content_hash)),
+        ("path", Value::string(doc.path)),
     ]);
     Ok(Output::plain(text, result))
-}
-
-fn resolve_workspace_file(root: &Path, requested: &Path) -> Result<PathBuf, EnvError> {
-    if requested.is_absolute() {
-        return Err(EnvError::new(
-            "AKR-C042",
-            format!("absolute path {} is not allowed", requested.display()),
-        ));
-    }
-    let canonical_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    let joined = root.join(requested);
-    let canonical_file = joined.canonicalize().map_err(|e| {
-        EnvError::new(
-            "AKR-C042",
-            format!("cannot resolve {}: {e}", requested.display()),
-        )
-    })?;
-    if !canonical_file.starts_with(&canonical_root) {
-        return Err(EnvError::new(
-            "AKR-C042",
-            format!("{} is outside the workspace", requested.display()),
-        ));
-    }
-    Ok(canonical_file)
 }
 
 fn sanitize_id(s: &str) -> String {
@@ -569,9 +545,8 @@ fn sanitize_id(s: &str) -> String {
     for c in s.chars() {
         if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
             out.push(c);
-        } else if c.is_whitespace() || c == '/' || c == '\\' {
-            out.push('-');
         } else {
+            // Everything else becomes a hyphen — whitespace and separators included.
             out.push('-');
         }
     }
@@ -622,19 +597,19 @@ fn is_superseded(doc: &SourceDocument, catalog: &[SourceDocument]) -> bool {
 
 fn doc_to_json(d: &SourceDocument) -> Value {
     Value::object(vec![
-        ("id".into(), Value::string(d.id.clone())),
-        ("title".into(), Value::string(d.title.clone())),
-        ("origin".into(), Value::string(d.origin.as_str().to_owned())),
-        ("path".into(), Value::string(d.path.clone())),
+        ("id", Value::string(d.id.clone())),
+        ("title", Value::string(d.title.clone())),
+        ("origin", Value::string(d.origin.as_str().to_owned())),
+        ("path", Value::string(d.path.clone())),
         (
-            "availability".into(),
+            "availability",
             Value::string(d.availability.as_str().to_owned()),
         ),
-        ("content_hash".into(), Value::string(d.content_hash.clone())),
-        ("byte_len".into(), Value::integer(d.byte_len as i64)),
-        ("added_at".into(), Value::string(d.added_at.clone())),
+        ("content_hash", Value::string(d.content_hash.clone())),
+        ("byte_len", Value::integer(d.byte_len as i64)),
+        ("added_at", Value::string(d.added_at.clone())),
         (
-            "retained_fragments".into(),
+            "retained_fragments",
             Value::integer(d.fragments.len() as i64),
         ),
     ])
@@ -646,10 +621,11 @@ fn source_references(session: &Session, id: &str) -> Vec<(String, Option<SourceR
         .records()
         .iter()
         .flat_map(|record| {
-            record.sources.iter().filter_map(|source| {
-                (source.document.as_deref() == Some(id))
-                    .then(|| (record.id.to_string(), source.range.clone()))
-            })
+            record
+                .sources
+                .iter()
+                .filter(|&source| source.document.as_deref() == Some(id))
+                .map(|source| (record.id.to_string(), source.range.clone()))
         })
         .collect()
 }
@@ -690,9 +666,9 @@ pub fn status(session: &Session, id: &str) -> Result<Output, EnvError> {
     Ok(Output::plain(
         text,
         Value::object(vec![
-            ("source".into(), doc_to_json(doc)),
-            ("exact_references".into(), Value::integer(exact as i64)),
-            ("lineage_references".into(), Value::integer(lineage as i64)),
+            ("source", doc_to_json(doc)),
+            ("exact_references", Value::integer(exact as i64)),
+            ("lineage_references", Value::integer(lineage as i64)),
         ]),
     ))
 }
@@ -724,17 +700,17 @@ pub fn dependents(session: &Session, id: &str) -> Result<Output, EnvError> {
     Ok(Output::plain(
         text,
         Value::object(vec![
-            ("source".into(), Value::string(id.to_owned())),
+            ("source", Value::string(id.to_owned())),
             (
-                "dependents".into(),
+                "dependents",
                 Value::array(
                     references
                         .iter()
                         .map(|(record, range)| {
                             Value::object(vec![
-                                ("record".into(), Value::string(record.clone())),
+                                ("record", Value::string(record.clone())),
                                 (
-                                    "mode".into(),
+                                    "mode",
                                     Value::string(if range.is_some() {
                                         "exact"
                                     } else {
@@ -845,8 +821,8 @@ pub fn finalize(
         return Ok(Output::plain(
             plan,
             Value::object(vec![
-                ("dry_run".into(), Value::bool(true)),
-                ("fragments".into(), Value::integer(fragments.len() as i64)),
+                ("dry_run", Value::bool(true)),
+                ("fragments", Value::integer(fragments.len() as i64)),
             ]),
         ));
     }
@@ -898,13 +874,13 @@ pub fn finalize(
             catalog[index].availability.as_str()
         ),
         Value::object(vec![
-            ("id".into(), Value::string(id.to_owned())),
+            ("id", Value::string(id.to_owned())),
             (
-                "availability".into(),
+                "availability",
                 Value::string(catalog[index].availability.as_str().to_owned()),
             ),
             (
-                "fragments".into(),
+                "fragments",
                 Value::integer(catalog[index].fragments.len() as i64),
             ),
         ]),
@@ -970,23 +946,23 @@ fn extract_section(text: &str, heading: &str) -> Option<String> {
     let mut start: Option<usize> = None;
     let mut level: Option<usize> = None;
     for (i, line) in lines.iter().enumerate() {
-        if let Some((lv, title)) = parse_heading(line) {
-            if title.trim() == needle {
-                start = Some(i);
-                level = Some(lv);
-                break;
-            }
+        if let Some((lv, title)) = parse_heading(line)
+            && title.trim() == needle
+        {
+            start = Some(i);
+            level = Some(lv);
+            break;
         }
     }
     let start = start?;
     let lv = level.unwrap_or(1);
     let mut end = lines.len();
     for (i, line) in lines.iter().enumerate().skip(start + 1) {
-        if let Some((l, _)) = parse_heading(line) {
-            if l <= lv {
-                end = i;
-                break;
-            }
+        if let Some((l, _)) = parse_heading(line)
+            && l <= lv
+        {
+            end = i;
+            break;
         }
     }
     Some(lines[start..end].join("\n") + "\n")

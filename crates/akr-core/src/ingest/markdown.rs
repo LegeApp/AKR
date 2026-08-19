@@ -6,18 +6,13 @@ use crate::ingest::review::{
 };
 use std::collections::BTreeMap;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TableMode {
     /// Create one candidate per table data row.
+    #[default]
     Rows,
     /// Attach the entire table as a support block.
     Support,
-}
-
-impl Default for TableMode {
-    fn default() -> Self {
-        Self::Rows
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -63,7 +58,6 @@ struct PendingCandidate {
     kind: CandidateKind,
     section_path: Vec<String>,
     parent: Option<CandidateId>,
-    list_indent: Option<usize>,
     start_byte: usize,
     end_byte: usize,
     start_line: u32,
@@ -76,7 +70,6 @@ impl PendingCandidate {
         kind: CandidateKind,
         section_path: Vec<String>,
         parent: Option<CandidateId>,
-        list_indent: Option<usize>,
         line: &Line,
     ) -> Self {
         Self {
@@ -84,7 +77,6 @@ impl PendingCandidate {
             kind,
             section_path,
             parent,
-            list_indent,
             start_byte: line.start,
             end_byte: line.end,
             start_line: line.line_no,
@@ -287,7 +279,6 @@ pub fn extract_markdown_items(source: &str, options: ExtractOptions) -> Extracti
                 CandidateKind::ListItem,
                 section_path.clone(),
                 parent,
-                Some(indent),
                 &Line {
                     line_no: line.line_no,
                     start: line.start,
@@ -303,12 +294,11 @@ pub fn extract_markdown_items(source: &str, options: ExtractOptions) -> Extracti
         }
 
         if parse_blockquote_start(trimmed).is_some() {
-            if let Some(active_item) = active.as_ref() {
-                if active_item.kind != CandidateKind::BlockQuote {
-                    if let Some(active) = active.take() {
-                        finalize_candidate(source, active, &mut candidates);
-                    }
-                }
+            if let Some(active_item) = active.as_ref()
+                && active_item.kind != CandidateKind::BlockQuote
+                && let Some(active) = active.take()
+            {
+                finalize_candidate(source, active, &mut candidates);
             }
             if active.is_none() {
                 let id = next_candidate_id(&candidates);
@@ -316,7 +306,6 @@ pub fn extract_markdown_items(source: &str, options: ExtractOptions) -> Extracti
                     id,
                     CandidateKind::BlockQuote,
                     section_path.clone(),
-                    None,
                     None,
                     line,
                 ));
@@ -366,7 +355,7 @@ pub fn extract_markdown_items(source: &str, options: ExtractOptions) -> Extracti
                 let mut end = i + 1;
                 while end < lines.len()
                     && is_indented_code(
-                        &lines[end]
+                        lines[end]
                             .text
                             .trim_end_matches('\n')
                             .trim_end_matches('\r')
@@ -400,11 +389,10 @@ pub fn extract_markdown_items(source: &str, options: ExtractOptions) -> Extracti
                 CandidateKind::Paragraph,
                 section_path.clone(),
                 None,
-                None,
                 line,
             ));
-        } else {
-            active.as_mut().expect("active exists").append_line(line);
+        } else if let Some(active) = active.as_mut() {
+            active.append_line(line);
         }
         i += 1;
     }
@@ -424,8 +412,7 @@ pub fn extract_markdown_items(source: &str, options: ExtractOptions) -> Extracti
 fn split_lines(source: &str) -> Vec<Line> {
     let mut lines = Vec::new();
     let mut start = 0usize;
-    let mut line_no = 1u32;
-    for part in source.split_inclusive('\n') {
+    for (line_no, part) in (1u32..).zip(source.split_inclusive('\n')) {
         let end = start + part.len();
         lines.push(Line {
             line_no,
@@ -434,7 +421,6 @@ fn split_lines(source: &str) -> Vec<Line> {
             text: part.to_owned(),
         });
         start = end;
-        line_no += 1;
     }
     if source.is_empty() {
         lines.push(Line {
@@ -685,18 +671,13 @@ fn should_continue_paragraph(
         }
         CandidateKind::BlockQuote => line.text.trim_start().starts_with('>'),
         CandidateKind::Paragraph | CandidateKind::TableRow => {
-            if parse_atx_heading(&line.text.trim()).is_some()
+            !(parse_atx_heading(line.text.trim()).is_some()
                 || parse_setext_heading(std::slice::from_ref(line), 0).is_some()
                 || parse_fenced_code_start(line.text.trim_end_matches('\n').trim_end_matches('\r'))
                     .is_some()
                 || parse_table_block(std::slice::from_ref(line), 0).is_some()
-                || parse_list_item_start(&line.text.trim()).is_some()
-                || is_thematic_break(line.text.trim())
-            {
-                false
-            } else {
-                true
-            }
+                || parse_list_item_start(line.text.trim()).is_some()
+                || is_thematic_break(line.text.trim()))
         }
     }
 }
@@ -734,7 +715,7 @@ fn active_item_clone(active: &PendingCandidate) -> PendingCandidate {
 }
 
 fn attach_support_to_last_candidate(
-    candidates: &mut Vec<IngestCandidate>,
+    candidates: &mut [IngestCandidate],
     support: SupportBlock,
     section_path: &[String],
 ) -> bool {

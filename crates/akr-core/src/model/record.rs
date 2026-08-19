@@ -251,6 +251,7 @@ pub enum SourceRole {
 }
 
 impl SourceRole {
+    /// The record language's spelling of this role.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -262,6 +263,11 @@ impl SourceRole {
         }
     }
 
+    /// Parses the record language's spelling; `None` for anything else.
+    // Inherent rather than `FromStr`: these parse the *record language's* spelling and return
+    // `Option`, where the trait demands an associated error type and a blanket `parse()`
+    // that would invite parsing arbitrary strings into them.
+    #[allow(clippy::should_implement_trait)]
     #[must_use]
     pub fn from_str(value: &str) -> Option<Self> {
         match value {

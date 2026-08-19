@@ -13,6 +13,39 @@ mod support;
 
 use support::Example;
 
+/// `akr source search` degrades exactly as `akr search` does.
+///
+/// CLAUDE.md has always claimed this ("`akr source search` degrades the same way") and
+/// nothing tested it. What existed instead were seven ungated tests in
+/// `tests/source_library.rs` that asserted search *hits* in this configuration, so the
+/// documented degradation read as seven failures.
+#[test]
+fn source_search_degrades_to_the_same_diagnostic() {
+    let example = Example::materialise("degraded-source-search");
+    example.write_file("advice.md", "# An audit\n\nA passage worth citing.\n");
+    assert_eq!(
+        example
+            .run(&["source", "add", "advice.md", "--id", "advice"])
+            .code,
+        0
+    );
+    assert_eq!(example.run(&["build"]).code, 0);
+
+    let searched = example.run(&["source", "search", "passage"]);
+    assert_ne!(searched.code, 0, "{}", searched.output());
+    assert!(
+        searched.output().contains("AKR-I022"),
+        "the degradation must name its code: {}",
+        searched.output()
+    );
+
+    // The second half of the claim, and the one that matters: nothing else notices.
+    let checked = example.run(&["check"]);
+    assert_eq!(checked.code, 0, "{}", checked.output());
+    let got = example.run(&["source", "get", "advice", "--lines", "1:1"]);
+    assert_eq!(got.code, 0, "{}", got.output());
+}
+
 #[test]
 fn the_cache_is_built_without_a_full_text_table() {
     let example = Example::materialise("degraded-build");

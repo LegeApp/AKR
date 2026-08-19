@@ -25,8 +25,8 @@ use crate::commands::Output;
 use crate::session::{EnvError, Exit, Session};
 use akr_core::json::Value;
 use akr_core::model::{
-    Commit, EvidenceResult, Kind, LogicalKey, Outcome as DispositionOutcome, Record, Reference,
-    State,
+    Commit, ContentSlot, EvidenceResult, Kind, LogicalKey, Outcome as DispositionOutcome, Record,
+    Reference, State,
 };
 use akr_core::ops::{
     Applied, Change, ChangeKind, DispositionRequest, Edits, Refused, ReviseMode, WriteContext,
@@ -69,11 +69,10 @@ pub fn run(session: &Session, command: &Command) -> Result<Output, EnvError> {
             kind,
             title,
             from,
-            edit,
         } => {
             let key = parse_key(key)?;
             let kind = parse_kind(kind)?;
-            let template = body_template(session, from.as_deref(), *edit, &key, kind)?;
+            let template = body_template(session, from.as_deref(), &key, kind)?;
             render(
                 session,
                 akr_core::ops::propose(
@@ -88,7 +87,6 @@ pub fn run(session: &Session, command: &Command) -> Result<Output, EnvError> {
         Command::Revise {
             key,
             from,
-            edit,
             state,
             title,
             in_place,
@@ -105,8 +103,7 @@ pub fn run(session: &Session, command: &Command) -> Result<Output, EnvError> {
                 state: state.as_deref().map(parse_state).transpose()?,
                 replace_with: None,
             };
-            if let Some(record) = body_template(session, from.as_deref(), *edit, &key, Kind::Work)?
-            {
+            if let Some(record) = body_template(session, from.as_deref(), &key, Kind::Work)? {
                 edits.replace_with = Some(Box::new(record));
             }
             let dispositions = parse_dispositions(dispositions)?;
@@ -198,38 +195,76 @@ pub fn run(session: &Session, command: &Command) -> Result<Output, EnvError> {
         } => evidence_add(
             session,
             &context,
-            key,
-            result.as_deref(),
-            method.as_deref(),
-            command.as_deref(),
-            artifact.as_deref(),
-            summary.as_deref(),
-            observed_at.as_deref(),
+            &EvidenceRequest {
+                key: key.clone(),
+                result: result.clone(),
+                method: method.clone(),
+                title: None,
+                command: command.clone(),
+                artifact: artifact.clone(),
+                summary: summary.clone(),
+                observed_at: observed_at.clone(),
+            },
         ),
+        Command::EvidenceAddMany { from } => {
+            let records = evidence_records_from_file(session, from)?;
+            evidence_add_many(session, &context, &records)
+        }
         _ => unreachable!("run is only called for write commands"),
     }
 }
 
-/// `akr evidence add`, over the P5 evidence module.
+/// One evidence record, in the surface-agnostic form both surfaces reduce to.
+///
+/// The fields are strings because that is what a command line and a JSON payload both
+/// have; turning them into a validated request is the job of [`evidence_record`], which is
+/// the *one* place it happens. It used to happen twice — once here from flags, once in
+/// `akr-mcp` from JSON — and the second copy is how `knowledge.evidence_add_many` came to
+/// exist with no command-line equivalent and with ledger logic living in the MCP crate,
+/// against both invariants in CLAUDE.md.
+#[derive(Debug, Clone, Default)]
+pub struct EvidenceRequest {
+    /// The key for the new record.
+    pub key: String,
+    /// `pass`, `fail` or `inconclusive`.
+    pub result: Option<String>,
+    /// `manual`, `command` or `observation`.
+    pub method: Option<String>,
+    /// The one-line label; defaults to the summary, then to the key.
+    pub title: Option<String>,
+    /// The exact command, where there was one.
+    pub command: Option<String>,
+    /// A recorded artefact.
+    pub artifact: Option<String>,
+    /// What was seen.
+    pub summary: Option<String>,
+    /// The commit the check was run at; defaults to HEAD.
+    pub observed_at: Option<String>,
+}
+
+/// Turns one [`EvidenceRequest`] into the record it describes, and the commit it names.
 ///
 /// Evidence is created through [`akr_core::evidence::AddEvidence`] rather than through
 /// `propose`, because an evidence record has required slots a blank template cannot
-/// invent — a result, a method, and the commit it was observed at. The record it builds
-/// is then handed to `propose`, so the write goes through the one pipeline of §4 like
-/// everything else.
-#[allow(clippy::too_many_arguments)]
-fn evidence_add(
+/// invent — a result, a method, and the commit it was observed at.
+///
+/// This does not check that the commit exists: a batch verifies its distinct commits once
+/// rather than once per record, and doing it here would make that impossible.
+///
+/// # Errors
+/// [`EnvError`] when a field is missing or not one of its accepted words.
+pub fn evidence_record(
     session: &Session,
     context: &WriteContext,
-    key: &str,
-    result: Option<&str>,
-    method: Option<&str>,
-    command: Option<&str>,
-    artifact: Option<&str>,
-    summary: Option<&str>,
-    observed_at: Option<&str>,
-) -> Result<Output, EnvError> {
-    let key = parse_key(key)?;
+    request: &EvidenceRequest,
+) -> Result<(LogicalKey, Record, Commit), EnvError> {
+    let key = parse_key(&request.key)?;
+    let result = request.result.as_deref();
+    let method = request.method.as_deref();
+    let command = request.command.as_deref();
+    let artifact = request.artifact.as_deref();
+    let summary = request.summary.as_deref();
+    let observed_at = request.observed_at.as_deref();
     let result = match result {
         Some("pass") => EvidenceResult::Pass,
         Some("fail") => EvidenceResult::Fail,
@@ -280,38 +315,186 @@ fn evidence_add(
             .clone()
             .ok_or_else(|| missing_commit(session, true))?,
     };
-    if let Some(repository) = &session.repository
-        && !repository.contains(&commit)
-    {
-        return Err(EnvError::new(
-            "AKR-G011",
-            format!("observed_at {commit} is not present in this repository"),
-        ));
-    }
-
-    let title = summary
-        .map(ToOwned::to_owned)
+    let title = request
+        .title
+        .clone()
+        .or_else(|| summary.map(ToOwned::to_owned))
         .unwrap_or_else(|| key.to_string());
-    let mut request =
-        akr_core::evidence::AddEvidence::new(key.clone(), &title, result, method, commit);
+    let mut built =
+        akr_core::evidence::AddEvidence::new(key.clone(), &title, result, method, commit.clone());
     if let Some(command) = command {
-        request = request.command(command);
+        built = built.command(command);
     }
     if let Some(artifact) = artifact {
-        request = request.artifact(artifact);
+        built = built.artifact(artifact);
     }
     if let Some(summary) = summary {
-        request = request.summary(summary);
+        built = built.summary(summary);
     }
     if let Some(author) = &context.author {
-        request.author = Some(author.clone());
+        built.author = Some(author.clone());
     }
+    Ok((key, built.to_record(), commit))
+}
 
-    let record = request.to_record();
+/// Refuses a commit the repository does not have, checking each distinct one once.
+///
+/// # Errors
+/// `AKR-G011` naming the first commit that is not present.
+pub fn ensure_commits_exist(session: &Session, commits: &[Commit]) -> Result<(), EnvError> {
+    let Some(repository) = &session.repository else {
+        return Ok(());
+    };
+    let mut seen = std::collections::BTreeSet::new();
+    for commit in commits {
+        if !seen.insert(commit.clone()) {
+            continue;
+        }
+        if !repository.contains(commit) {
+            return Err(EnvError::new(
+                "AKR-G011",
+                format!("observed_at {commit} is not present in this repository"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// `akr evidence add`: one record, through the ordinary single-write pipeline.
+///
+/// # Errors
+/// [`EnvError`] for a malformed request or an absent commit; a library refusal is an
+/// [`Output`] with exit 1 rather than an error.
+pub fn evidence_add(
+    session: &Session,
+    context: &WriteContext,
+    request: &EvidenceRequest,
+) -> Result<Output, EnvError> {
+    let (key, record, commit) = evidence_record(session, context, request)?;
+    ensure_commits_exist(session, &[commit])?;
+    let title = record.title.clone();
     render(
         session,
         akr_core::ops::propose(context, &key, Kind::Evidence, &title, Some(record)),
     )
+}
+
+/// `akr evidence add-many` / `knowledge.evidence_add_many`: one atomic pipeline pass.
+///
+/// A verification run produces several evidence records at once, and writing them one at a
+/// time re-derived the whole ledger per record — the friction behind
+/// `akr.papercut.writing-several-evidence-and-lifecycle-records`. `propose_many` validates
+/// the *resulting* ledger once, so either every record lands or none does.
+///
+/// Takes records rather than requests because the two surfaces arrive with different
+/// things in hand: the command line parses a file that already holds evidence records,
+/// while a JSON payload builds them field by field through [`evidence_record`]. They meet
+/// here, which is what keeps one write pipeline under both.
+///
+/// # Errors
+/// [`EnvError`] for an empty batch or a commit the repository does not have.
+pub fn evidence_add_many(
+    session: &Session,
+    context: &WriteContext,
+    records: &[Record],
+) -> Result<Output, EnvError> {
+    if records.is_empty() {
+        return Err(EnvError::new(
+            "AKR-C003",
+            "evidence add-many needs at least one evidence record",
+        ));
+    }
+    let commits: Vec<Commit> = records
+        .iter()
+        .filter_map(|record| match record.get(ContentSlot::ObservedAt) {
+            Some(akr_core::model::ContentValue::Commit(commit)) => Some(commit.clone()),
+            _ => None,
+        })
+        .collect();
+    ensure_commits_exist(session, &commits)?;
+    let count = records.len();
+    render(session, akr_core::ops::propose_many(context, records)).map(|mut output| {
+        output
+            .text
+            .push_str(&format!("{count} evidence records written in one pass\n"));
+        output
+    })
+}
+
+/// Reads a file of evidence records for `akr evidence add-many`.
+///
+/// The file is an ordinary AKR fragment holding one or more `evidence` records — the same
+/// syntax `akr propose --from` accepts, and the same parser, so there is no second grammar
+/// to keep honest. Anything that is not an evidence record is refused by name rather than
+/// skipped: a batch that silently wrote four of five records would be worse than one that
+/// wrote none.
+///
+/// # Errors
+/// [`EnvError`] when the file cannot be read, does not parse, or holds a record of another
+/// kind.
+pub fn evidence_records_from_file(session: &Session, path: &Path) -> Result<Vec<Record>, EnvError> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| EnvError::new("AKR-C042", format!("cannot read {}: {e}", path.display())))?;
+    let text = with_header(&text, session);
+
+    let mut sources = akr_core::diagnostics::SourceMap::new();
+    let display_path = path.to_string_lossy().into_owned();
+    let file = sources.add(&display_path, &text);
+    let parsed = akr_core::syntax::parse(&text, file);
+    let refuse = |message: String| {
+        EnvError::new(
+            "AKR-C031",
+            format!("{} does not parse as evidence: {message}", path.display()),
+        )
+        .help(
+            "the file holds one or more `record <key>/1 : evidence { ... }` blocks, each \
+             with result, method and observed_at",
+        )
+    };
+    let Some(tree) = parsed.file else {
+        let first = parsed
+            .diagnostics
+            .first()
+            .map_or_else(|| "no records".to_owned(), |d| d.message.clone());
+        return Err(refuse(first));
+    };
+    let (ledger, lowered) = akr_core::syntax::lower::lower_all(&[(display_path, tree)]);
+    if let Some(fatal) = parsed
+        .diagnostics
+        .iter()
+        .chain(lowered.iter())
+        .find(|d| d.severity == akr_core::diagnostics::Severity::Error)
+    {
+        return Err(refuse(fatal.message.clone()));
+    }
+
+    let records: Vec<Record> = ledger.records().to_vec();
+    if let Some(other) = records.iter().find(|r| r.kind != Kind::Evidence) {
+        return Err(EnvError::new(
+            "AKR-C031",
+            format!(
+                "{} holds {}, which is a {} record; evidence add-many writes evidence only",
+                path.display(),
+                other.id,
+                other.kind.name()
+            ),
+        ));
+    }
+    if records.is_empty() {
+        return Err(EnvError::new(
+            "AKR-C031",
+            format!("{} holds no records", path.display()),
+        ));
+    }
+    Ok(records)
+}
+
+/// The `akr`/`project` header a bare fragment is missing, so a caller need not repeat it.
+fn with_header(text: &str, session: &Session) -> String {
+    if text.trim_start().starts_with("akr ") {
+        return text.to_owned();
+    }
+    format!("akr 0.1\nproject {}\n\n{text}", session.ledger.project.name)
 }
 
 /// `akr papercut -m <agent> "message"`, over [`akr_core::papercut`] (D-027).
@@ -608,7 +791,13 @@ fn shell_quote(subject: &str) -> String {
 // argument conversion
 // -------------------------------------------------------------------------------------
 
-pub(crate) fn context_of(session: &Session) -> WriteContext {
+/// The write context both surfaces use, author and strictness included.
+///
+/// Public because `akr-mcp` needs the *same* one. It used to build its own, which set no
+/// author at all — so the identical record written over MCP and from the command line
+/// differed by an `author` line, and nothing noticed until the two were compared byte for
+/// byte.
+pub fn context_of(session: &Session) -> WriteContext {
     let mut context = WriteContext::new(&session.akr_dir);
     context.strict = session.global.profile == crate::args::Profile::Strict;
     // The author is whatever git thinks, because AKR is not an identity system (D-005)
@@ -722,22 +911,14 @@ fn parse_checks(raw: &[String]) -> Result<Vec<(String, Reference)>, EnvError> {
 
 /// The record body a `--from` file holds, if one was given.
 ///
-/// `--edit` is refused rather than half-implemented: opening an editor is a terminal
-/// interaction the MCP surface cannot have, and a flag that works from a shell and fails
-/// from an agent is worse than one that is honestly absent.
+/// There is deliberately no `--edit`: it is refused at parse time by `args::refuse_edit`,
+/// which carries the reasoning.
 fn body_template(
     session: &Session,
     from: Option<&Path>,
-    edit: bool,
     key: &LogicalKey,
     kind: Kind,
 ) -> Result<Option<Record>, EnvError> {
-    if edit {
-        return Err(
-            EnvError::new("AKR-C004", "--edit is not available in this build")
-                .help("write the record to a file and pass --from <file>"),
-        );
-    }
     let Some(path) = from else {
         return Ok(None);
     };

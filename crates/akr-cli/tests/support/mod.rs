@@ -324,17 +324,75 @@ impl Example {
             // `echo $?` is a transcript idiom for showing the exit status; the harness
             // asserts the status directly, so running it would only print a stray 0.
             Some("echo") => {}
-            Some("sed") => {
-                let status = Command::new("sh")
-                    .arg("-c")
-                    .arg(command)
-                    .current_dir(&self.root)
-                    .status()
-                    .expect("sh runs");
-                assert!(status.success(), "transcript directive failed: {command}");
-            }
+            Some("sed") => self.sed(command),
             _ => panic!("the transcript harness does not understand `{command}`"),
         }
+    }
+
+    /// Applies a transcript's `sed -i 's/^<from>/<to>/' <file>` line, without a shell.
+    ///
+    /// This used to be `sh -c`, which is not a thing every supported platform has: the
+    /// suite failed on Windows with "program not found" for a substitution the harness
+    /// could perfectly well do itself. The whole corpus contains one directive, of one
+    /// shape -- a `^`-anchored literal replaced on the single line that starts with it --
+    /// so that shape is what is implemented, and anything else fails loudly rather than
+    /// being approximated.
+    fn sed(&self, command: &str) {
+        let rest = command
+            .strip_prefix("sed -i ")
+            .unwrap_or_else(|| panic!("only `sed -i` is supported: {command}"));
+        let (script, file) = rest
+            .rsplit_once(' ')
+            .unwrap_or_else(|| panic!("a sed directive names a file: {command}"));
+        let script = script
+            .trim()
+            .strip_prefix('\'')
+            .and_then(|s| s.strip_suffix('\''))
+            .unwrap_or_else(|| panic!("the sed script must be single-quoted: {command}"));
+
+        let body = script
+            .strip_prefix("s/")
+            .and_then(|s| s.strip_suffix('/'))
+            .unwrap_or_else(|| panic!("only `s/from/to/` is supported: {command}"));
+        // `/` inside the pattern is backslash-escaped, as it is in the transcript. Split
+        // on the one delimiter that is not, then unescape both halves.
+        let mut halves = Vec::new();
+        let mut current = String::new();
+        let mut chars = body.chars();
+        while let Some(c) = chars.next() {
+            match c {
+                '\\' => current.push(chars.next().unwrap_or('\\')),
+                '/' => halves.push(std::mem::take(&mut current)),
+                other => current.push(other),
+            }
+        }
+        halves.push(current);
+        assert_eq!(halves.len(), 2, "expected one `s/from/to/` pair: {command}");
+        let (from, to) = (&halves[0], &halves[1]);
+        let from = from
+            .strip_prefix('^')
+            .unwrap_or_else(|| panic!("only `^`-anchored patterns are supported: {command}"));
+
+        let path = self.root.join(file.trim());
+        let text = std::fs::read_to_string(&path).expect("the file the directive names");
+        let mut replaced = 0usize;
+        let mut out = String::with_capacity(text.len());
+        for line in text.split_inclusive('\n') {
+            let (body, ending) = match line.strip_suffix('\n') {
+                Some(body) => (body, "\n"),
+                None => (line, ""),
+            };
+            if let Some(tail) = body.strip_prefix(from) {
+                replaced += 1;
+                out.push_str(to);
+                out.push_str(tail);
+            } else {
+                out.push_str(body);
+            }
+            out.push_str(ending);
+        }
+        assert!(replaced > 0, "sed directive matched nothing: {command}");
+        std::fs::write(&path, out).expect("rewrite the file the directive names");
     }
 
     /// Runs `git` in the workspace and asserts it succeeded.

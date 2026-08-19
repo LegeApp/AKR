@@ -1153,7 +1153,7 @@ pub fn command() -> Command {
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let mut command = command;
         command.creation_flags(CREATE_NO_WINDOW);
-        return command;
+        command
     }
     #[cfg(not(windows))]
     command

@@ -26,7 +26,7 @@ cargo fmt
 python tools/check-design.py             # design-set coherence checker over docs/spec/fixtures
 ```
 
-The `fts5` feature (default on, plumbed through all three crates) controls whether stage E builds the full-text index; `--no-default-features` exercises the no-FTS path that `akr search` handles with `AKR-I022`. `akr source search` degrades the same way.
+The `fts5` feature (default on, forwarded explicitly by all four crates — each takes its AKR dependencies with `default-features = false` and re-exports the feature, so that `--no-default-features` is not silently undone by cargo's feature unification) controls whether stage E builds the full-text index; `--no-default-features` exercises the no-FTS path that `akr search` handles with `AKR-I022`. `akr source search` degrades the same way. Tests that need a ranker carry `#[cfg(feature = "fts5")]`; `tests/search_degraded.rs` holds the claims for its absence.
 
 If you are in a sandbox with no Rust toolchain and `static.rust-lang.org` blocked, `scripts/fetch-rust-sandbox.sh` fetches one from the npm mirror of the official component tarballs, and `scripts/run-tests-sliced.sh` runs the test binaries a few at a time for environments that cap a command's wall clock.
 

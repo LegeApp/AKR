@@ -188,6 +188,13 @@ pub fn escape_query(query: &str) -> String {
         .join(" ")
 }
 
+fn placeholders(count: usize, first: usize) -> String {
+    (first..first + count)
+        .map(|n| format!("?{n}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::escape_query;
@@ -221,11 +228,4 @@ mod tests {
             "\"decoder\" \"optimisation\""
         );
     }
-}
-
-fn placeholders(count: usize, first: usize) -> String {
-    (first..first + count)
-        .map(|n| format!("?{n}"))
-        .collect::<Vec<_>>()
-        .join(", ")
 }

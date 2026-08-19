@@ -176,6 +176,98 @@ fn abandon_requires_a_reason_and_writes_nothing() {
 }
 
 #[test]
+fn evidence_add_many_writes_a_batch_in_one_pass() {
+    // `knowledge.evidence_add_many` existed over MCP with no command-line equivalent, and
+    // with the translation and the batch write living in the MCP crate -- against both
+    // "one implementation for CLI and MCP" and "akr-mcp contains no ledger logic". This is
+    // the command-line half of that reunion.
+    let example = Example::materialise("write-evidence-add-many");
+    let head = example.commit(5).to_owned();
+    let batch = format!(
+        "record sys.evidence.batch-one/1 : evidence {{\n    \
+             title \"First check\"\n    \
+             result pass\n    \
+             method command\n    \
+             command \"cargo test -p sim\"\n    \
+             observed_at git:{head}\n\
+         }}\n\n\
+         record sys.evidence.batch-two/1 : evidence {{\n    \
+             title \"Second check\"\n    \
+             result pass\n    \
+             method observation\n    \
+             observed_at git:{head}\n\
+         }}\n"
+    );
+    example.write_file("batch.akr", &batch);
+
+    let run = example.run(&["evidence", "add-many", "--from", "batch.akr"]);
+    assert_eq!(run.code, 0, "{}", run.output());
+    assert!(
+        run.stdout
+            .contains("2 evidence records written in one pass"),
+        "{}",
+        run.output()
+    );
+
+    let written = example.read_file(".akr/records/sys/evidence.akr");
+    assert!(written.contains("sys.evidence.batch-one"), "{written}");
+    assert!(written.contains("sys.evidence.batch-two"), "{written}");
+    assert_eq!(example.run(&["build"]).code, 0);
+    let checked = example.run(&["check"]);
+    assert_eq!(checked.code, 0, "{}", checked.output());
+}
+
+#[test]
+fn evidence_add_many_is_atomic_and_writes_nothing_on_a_bad_record() {
+    // The point of one pipeline pass: the ledger is validated as a whole, so a batch with
+    // one bad record leaves the working tree exactly as it was.
+    let example = Example::materialise("write-evidence-add-many-atomic");
+    let head = example.commit(5).to_owned();
+    let before = example.sources();
+    let batch = format!(
+        "record sys.evidence.good/1 : evidence {{\n    \
+             title \"Fine\"\n    result pass\n    method command\n    \
+             observed_at git:{head}\n\
+         }}\n\n\
+         record sys.evidence.bad/1 : evidence {{\n    \
+             title \"Missing its result\"\n    method command\n    \
+             observed_at git:{head}\n\
+         }}\n"
+    );
+    example.write_file("batch.akr", &batch);
+
+    let run = example.run(&["evidence", "add-many", "--from", "batch.akr"]);
+    assert_ne!(run.code, 0, "{}", run.output());
+    assert_eq!(before, example.sources(), "a refused batch wrote something");
+}
+
+#[test]
+fn evidence_add_many_refuses_a_file_of_other_kinds() {
+    // Named rather than skipped: a batch that silently wrote the evidence and ignored the
+    // rest would be worse than one that wrote nothing.
+    let example = Example::materialise("write-evidence-add-many-wrong-kind");
+    example.write_file(
+        "batch.akr",
+        "record sys.term.thing/1 : term {\n    statement \"A thing.\"\n}\n",
+    );
+    let run = example.run(&["evidence", "add-many", "--from", "batch.akr"]);
+    assert_ne!(run.code, 0, "{}", run.output());
+    assert!(
+        run.output().contains("term"),
+        "the refusal should name the offending kind: {}",
+        run.output()
+    );
+}
+
+#[test]
+fn evidence_add_many_requires_a_file() {
+    let example = Example::materialise("write-evidence-add-many-no-file");
+    let run = example.run(&["evidence", "add-many"]);
+    assert_ne!(run.code, 0, "{}", run.output());
+    assert!(run.output().contains("--from"), "{}", run.output());
+}
+
+#[test]
 fn evidence_add_refuses_an_incomplete_request_without_writing() {
     let example = Example::materialise("write-evidence-refuse");
     let before = example.sources();

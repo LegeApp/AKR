@@ -8,7 +8,7 @@ use super::ident::{Commit, Date, Glob, LogicalKey, Segment};
 use super::kind::{ContentSlot, Kind};
 use super::record::{
     Acceptance, Check, CheckMethod, Claim, ContentValue, Disposition, Outcome, Record, Source,
-    SourceKind, SourceRole,
+    SourceKind,
 };
 use super::refs::{Reference, RevisionId};
 use super::relation::Relation;

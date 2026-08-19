@@ -425,12 +425,11 @@ fn symbols_of(raw: &str) -> Vec<String> {
         // An *interior* capital, not merely a capital: "The" starts a sentence, whereas
         // "DecodeRequest" is a name. Treating every capitalised word as an identifier
         // would fill the symbol column with the first word of every sentence.
-        let camel_case = token
-            .chars()
-            .skip(1)
-            .any(char::is_uppercase)
-            .then(|| token.chars().any(char::is_lowercase))
-            .unwrap_or(false);
+        let camel_case = if token.chars().skip(1).any(char::is_uppercase) {
+            token.chars().any(char::is_lowercase)
+        } else {
+            false
+        };
         let technical = token.contains("::")
             || token.contains('_')
             || token.contains('/')
@@ -441,7 +440,7 @@ fn symbols_of(raw: &str) -> Vec<String> {
         }
         push(token.to_owned());
         let split: Vec<String> = token
-            .split(|c: char| matches!(c, ':' | '_' | '/' | '.' | '-'))
+            .split([':', '_', '/', '.', '-'])
             .filter(|part| !part.is_empty())
             .flat_map(split_camel)
             .collect();

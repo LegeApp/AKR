@@ -5,6 +5,13 @@
 //! These assertions run the commands rather than the functions, because the properties
 //! under test are about the *workflow* — what a build does to a catalog, what a search
 //! result says about its own standing — and a unit test cannot see either.
+//!
+//! The tests that query the chunk index carry `#[cfg(feature = "fts5")]`, the same gate
+//! `tests/search.rs` puts on the whole file. Without it they asserted hits against a
+//! binary that had honestly reported `AKR-I022`, so `--no-default-features` failed seven
+//! tests for doing exactly what it is documented to do — and the failure was mistaken for
+//! a defect rather than a missing gate. `tests/search_degraded.rs` makes the positive
+//! claim for that configuration: `akr source search` degrades like `akr search` does.
 
 mod support;
 
@@ -132,6 +139,7 @@ fn a_source_can_be_finalized_without_changing_records() {
 }
 
 #[test]
+#[cfg(feature = "fts5")]
 fn a_search_finds_the_section_and_says_it_is_not_authoritative() {
     let example = Example::materialise("source-search");
     register(&example);
@@ -150,6 +158,7 @@ fn a_search_finds_the_section_and_says_it_is_not_authoritative() {
 }
 
 #[test]
+#[cfg(feature = "fts5")]
 fn the_golden_queries_of_the_plan_all_land() {
     let example = Example::materialise("source-golden-queries");
     register(&example);
@@ -170,6 +179,7 @@ fn the_golden_queries_of_the_plan_all_land() {
 }
 
 #[test]
+#[cfg(feature = "fts5")]
 fn a_punctuated_query_is_not_a_syntax_error() {
     let example = Example::materialise("source-search-punctuation");
     register(&example);
@@ -184,6 +194,7 @@ fn a_punctuated_query_is_not_a_syntax_error() {
 }
 
 #[test]
+#[cfg(feature = "fts5")]
 fn a_literal_query_matches_exact_bytes_only() {
     let example = Example::materialise("source-search-literal");
     register(&example);
@@ -236,6 +247,7 @@ fn getting_lines_hands_back_the_byte_locator_to_cite_them_by() {
 }
 
 #[test]
+#[cfg(feature = "fts5")]
 fn a_chunk_can_be_retrieved_with_its_neighbours() {
     let example = Example::materialise("source-get-chunk");
     register(&example);
@@ -260,6 +272,7 @@ fn a_chunk_can_be_retrieved_with_its_neighbours() {
 }
 
 #[test]
+#[cfg(feature = "fts5")]
 fn a_second_build_leaves_the_source_index_alone() {
     let example = Example::materialise("source-index-stable");
     register(&example);
@@ -273,6 +286,7 @@ fn a_second_build_leaves_the_source_index_alone() {
 }
 
 #[test]
+#[cfg(feature = "fts5")]
 fn a_record_write_does_not_rechunk_the_corpus() {
     let example = Example::materialise("source-index-generations");
     register(&example);

@@ -258,13 +258,12 @@ fn search_page(
 
 fn search_continuation(tool: &str, arguments: &Value, offset: usize) -> Value {
     let mut continuation = narrowing_arguments(tool, arguments);
-    if let Value::Object(fields) = &mut continuation {
-        if let Some((_, Value::Object(args))) =
+    if let Value::Object(fields) = &mut continuation
+        && let Some((_, Value::Object(args))) =
             fields.iter_mut().find(|(name, _)| name == "arguments")
-        {
-            args.retain(|(name, _)| name != "offset");
-            args.push(("offset".to_owned(), usize_value(offset)));
-        }
+    {
+        args.retain(|(name, _)| name != "offset");
+        args.push(("offset".to_owned(), usize_value(offset)));
     }
     continuation
 }

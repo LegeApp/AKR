@@ -5,7 +5,6 @@
 //! until the last moment.
 
 use crate::args::Command;
-use crate::ingest;
 use crate::session::{
     EnvError, Exit, GRAMMAR_VERSION, Session, TOOL_VERSION, VOCABULARY_VERSION, diagnostic_json,
     is_fatal, report,
@@ -320,7 +319,8 @@ fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError
         | Command::Abandon { .. }
         | Command::Papercut { .. }
         | Command::PapercutCollate { .. }
-        | Command::EvidenceAdd { .. } => crate::write::run(session, command),
+        | Command::EvidenceAdd { .. }
+        | Command::EvidenceAddMany { .. } => crate::write::run(session, command),
         Command::Help
         | Command::HelpFor { .. }
         | Command::Version
@@ -1237,6 +1237,18 @@ fn get(
                 revision.state.name(),
                 revision.title
             ));
+        }
+    }
+
+    // `--detail canonical` used to add the source text to the JSON result and nothing
+    // else, so asking for it at a terminal printed exactly what the default already did.
+    // A flag named for a thing has to show that thing in the form it was asked in.
+    if detail == Detail::Canonical
+        && let Some(source) = session.inputs.canonical_text.get(&record.id)
+    {
+        text.push_str("\n  canonical source\n");
+        for line in source.lines() {
+            text.push_str(&format!("    {line}\n"));
         }
     }
 
@@ -2341,15 +2353,15 @@ fn finish_start(
             fields.push((
                 "coverage".into(),
                 Value::object(vec![
-                    ("status".into(), Value::string("no_planning_match")),
+                    ("status", Value::string("no_planning_match")),
                     (
-                        "message".into(),
+                        "message",
                         Value::string(
                             "No live AKR planning record matched this task; this is a ledger-coverage result, not proof that no plan exists.",
                         ),
                     ),
                     (
-                        "next_steps".into(),
+                        "next_steps",
                         Value::array(vec![
                             Value::string("Read any user-supplied plan or path before broadening the query."),
                             Value::string("Inspect relevant Git history and the current worktree."),
@@ -2393,8 +2405,8 @@ fn finish_start(
             fields.push((
                 "recommended_context".into(),
                 Value::object(vec![
-                    ("command".into(), Value::string("akr context")),
-                    ("arguments".into(), Value::Object(arguments)),
+                    ("command", Value::string("akr context")),
+                    ("arguments", Value::Object(arguments)),
                 ]),
             ));
         }
@@ -2598,24 +2610,24 @@ fn workspace_fallback(root: &Path, task: &str) -> (Value, usize) {
     (
         Value::object(vec![
             (
-                "provenance".into(),
+                "provenance",
                 Value::string("workspace text scan; non-authoritative and not AKR knowledge"),
             ),
-            ("scanned_files".into(), Value::integer(scanned as i64)),
+            ("scanned_files", Value::integer(scanned as i64)),
             (
-                "terms".into(),
+                "terms",
                 Value::array(terms.into_iter().map(Value::string).collect()),
             ),
             (
-                "hits".into(),
+                "hits",
                 Value::array(
                     hits.into_iter()
                         .map(|(score, path, line, excerpt)| {
                             Value::object(vec![
-                                ("path".into(), Value::string(path)),
-                                ("line".into(), Value::integer(line as i64)),
-                                ("excerpt".into(), Value::string(excerpt)),
-                                ("matched_terms".into(), Value::integer(score as i64)),
+                                ("path", Value::string(path)),
+                                ("line", Value::integer(line as i64)),
+                                ("excerpt", Value::string(excerpt)),
+                                ("matched_terms", Value::integer(score as i64)),
                             ])
                         })
                         .collect(),

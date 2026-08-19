@@ -41,6 +41,7 @@ pub enum SourceAvailability {
 }
 
 impl SourceAvailability {
+    /// The catalog's spelling of this availability.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -50,6 +51,11 @@ impl SourceAvailability {
         }
     }
 
+    /// Parses the catalog's spelling; `None` for anything else.
+    // Inherent rather than `FromStr`: these parse the *catalog's* spelling and return
+    // `Option`, where the trait demands an associated error type and a blanket `parse()`
+    // that would invite parsing arbitrary strings into them.
+    #[allow(clippy::should_implement_trait)]
     #[must_use]
     pub fn from_str(value: &str) -> Option<Self> {
         match value {
@@ -62,6 +68,7 @@ impl SourceAvailability {
 }
 
 impl SourceOrigin {
+    /// The catalog's spelling of this origin.
     #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -70,6 +77,12 @@ impl SourceOrigin {
         }
     }
 
+    /// Parses the catalog's spelling, accepting `internal` for
+    /// [`Self::InternalReference`]; `None` for anything else.
+    // Inherent rather than `FromStr`: these parse the *catalog's* spelling and return
+    // `Option`, where the trait demands an associated error type and a blanket `parse()`
+    // that would invite parsing arbitrary strings into them.
+    #[allow(clippy::should_implement_trait)]
     #[must_use]
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
@@ -129,22 +142,43 @@ pub struct RetainedFragment {
 pub enum SourceDiagnostic {
     /// Stored bytes do not match their hash.
     HashMismatch {
+        /// The registered document's id.
         id: String,
+        /// Its path, as the catalog records it.
         path: String,
+        /// The hash the catalog registered.
         expected: String,
+        /// The hash the bytes on disk actually have.
         found: String,
     },
     /// Catalog references a missing file.
-    MissingFile { id: String, path: String },
+    MissingFile {
+        /// The registered document's id.
+        id: String,
+        /// The path that is not there.
+        path: String,
+    },
     /// Catalog itself unreadable.
-    CatalogError(String),
+    CatalogError(
+        /// Why it could not be read or parsed.
+        String,
+    ),
     /// A cited-only catalog entry has lost a retained fragment.
-    MissingFragment { id: String, blob: String },
+    MissingFragment {
+        /// The registered document's id.
+        id: String,
+        /// The content-addressed blob that is missing.
+        blob: String,
+    },
     /// A retained fragment no longer matches its content hash.
     FragmentHashMismatch {
+        /// The registered document's id.
         id: String,
+        /// The content-addressed blob that drifted.
         blob: String,
+        /// The hash the fragment was retained under.
         expected: String,
+        /// The hash its bytes now have.
         found: String,
     },
 }
@@ -783,33 +817,53 @@ pub fn resolve_citation(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CitationProblem {
     /// The named document is not in the catalog.
-    UnknownDocument { document: String },
+    UnknownDocument {
+        /// The document id the citation named.
+        document: String,
+    },
     /// The byte range runs past the end of the document.
     RangeOutOfBounds {
+        /// The document id the citation named.
         document: String,
+        /// The end the citation asked for.
         end_byte: u64,
+        /// How many bytes the document actually has.
         byte_len: u64,
     },
     /// The range does not begin and end on character boundaries.
     RangeNotOnBoundary {
+        /// The document id the citation named.
         document: String,
+        /// The first byte, which may be mid-character.
         start: u64,
+        /// One past the last byte, which may be mid-character.
         end: u64,
     },
     /// The recorded excerpt hash disagrees with the bytes in that range.
     ExcerptHashMismatch {
+        /// The document id the citation named.
         document: String,
+        /// The hash the record carries.
         expected: String,
+        /// The hash the cited bytes actually have.
         found: String,
     },
     /// The line range does not describe the same passage as the byte range.
     LinesDisagree {
+        /// The document id the citation named.
         document: String,
+        /// The `(start, end)` lines the record carries.
         recorded: (u32, u32),
+        /// The `(start, end)` lines the byte range really covers.
         actual: (u32, u32),
     },
     /// The catalog retains metadata or fragments that do not cover this citation.
-    TextUnavailable { document: String, reason: String },
+    TextUnavailable {
+        /// The document id the citation named.
+        document: String,
+        /// What the catalog retains instead, and why that is not enough.
+        reason: String,
+    },
 }
 
 impl std::fmt::Display for CitationProblem {

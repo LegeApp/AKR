@@ -2,6 +2,21 @@
 //!
 //! This module intentionally runs alongside legacy [`crate::import`] and does not
 //! alter its behavior.
+//!
+//! # Why `missing_docs` is allowed here, and only here
+//!
+//! The workspace warns on `missing_docs` and every other module earns it. This one does
+//! not yet: it has no entry in `docs/` or `spec/`, its types are still moving, and its 196
+//! undocumented fields and variants were drowning the lint for the whole workspace — over
+//! 200 warnings, which is how a real one in a *different* crate went unread until somebody
+//! logged a papercut about it.
+//!
+//! Silencing it here is the honest trade. A doc comment on a field whose meaning is still
+//! being decided is a comment that will be wrong before it is read, and the alternative —
+//! leaving the noise in place — costs the lint everywhere else. Delete this attribute when
+//! the module gets a normative document; the warnings it uncovers are then real work, not
+//! a wall.
+#![allow(missing_docs)]
 
 pub mod apply;
 pub mod manifest;

@@ -35,10 +35,12 @@ pub fn is_write(name: &str) -> bool {
 }
 
 fn missing_commit(session: &Session, suggest_observed_at: bool) -> ToolError {
+    // The flag decides whether `observed_at` is worth suggesting: both branches used to
+    // say it does, so a caller with no such argument was told to pass one.
     let hint = if suggest_observed_at {
         "; make an initial commit, or pass `observed_at`"
     } else {
-        "; make an initial commit, or pass `observed_at`"
+        "; make an initial commit"
     };
     if session.repository.is_some() {
         ToolError::new(
@@ -884,13 +886,21 @@ fn complete(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
 ///
 /// The schema deliberately has no field for what the evidence verifies (D-016): the link
 /// is authored on the check (`verified_by`) or supplied to `knowledge.complete`.
+/// One evidence record.
+///
+/// The translation from JSON to an [`akr_cli::write::EvidenceRequest`] is argument
+/// mapping, which is this crate's job; everything after it — parsing the key, defaulting
+/// the commit, building the record, checking the commit exists, writing — belongs to
+/// `akr-cli` and is reached through it, so the command line and this tool cannot drift.
 fn evidence_add(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let session = open(root, true)?;
-    let (parsed, record, commit) = evidence_record(&session, arguments)?;
-    ensure_commits_exist(&session, &[commit])?;
-    let title = record.title.clone();
-
+    let request = evidence_request(arguments)?;
+    let parsed = key_of(&request.key)?;
     let context = write_context(&session);
+    let (_, record, commit) =
+        akr_cli::write::evidence_record(&session, &context, &request).map_err(environment)?;
+    akr_cli::write::ensure_commits_exist(&session, &[commit]).map_err(environment)?;
+    let title = record.title.clone();
     Ok(ToolResult::Structured(write_result(
         &session,
         &parsed,
@@ -905,6 +915,10 @@ fn evidence_add(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError>
 }
 
 /// Adds several evidence records through one parse/apply/validate/fsync transaction.
+///
+/// The batch itself lives in `akr-cli` alongside `akr evidence add-many`, which reads the
+/// same records from a file. This tool had its own copy, which is how it came to be
+/// reachable here and nowhere else.
 fn evidence_add_many(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let session = open(root, true)?;
     let items = arguments
@@ -924,122 +938,49 @@ fn evidence_add_many(root: &Path, arguments: &Value) -> Result<ToolResult, ToolE
         ));
     }
 
-    let mut records = Vec::with_capacity(items.len());
-    let mut commits = Vec::with_capacity(items.len());
-    for item in items {
-        let (_, record, commit) = evidence_record(&session, item)?;
-        records.push(record);
-        commits.push(commit);
-    }
-    ensure_commits_exist(&session, &commits)?;
-
-    let target = records[0].id.key.clone();
     let context = write_context(&session);
+    let mut records = Vec::with_capacity(items.len());
+    for item in items {
+        let request = evidence_request(item)?;
+        let (_, record, _) =
+            akr_cli::write::evidence_record(&session, &context, &request).map_err(environment)?;
+        records.push(record);
+    }
+    let target = records[0].id.key.clone();
     let result = akr_core::ops::propose_many(&context, &records);
+    akr_cli::write::ensure_commits_exist(
+        &session,
+        &records
+            .iter()
+            .filter_map(
+                |record| match record.get(akr_core::model::ContentSlot::ObservedAt) {
+                    Some(akr_core::model::ContentValue::Commit(commit)) => Some(commit.clone()),
+                    _ => None,
+                },
+            )
+            .collect::<Vec<_>>(),
+    )
+    .map_err(environment)?;
     Ok(ToolResult::Structured(write_many_result(
         &session, &target, result,
     )?))
 }
 
-fn evidence_record(
-    session: &Session,
-    arguments: &Value,
-) -> Result<(LogicalKey, akr_core::model::Record, akr_core::model::Commit), ToolError> {
-    let key = required_str(arguments, "key")?;
-    let parsed = key_of(key)?;
-
-    let result = match required_str(arguments, "result")? {
-        "pass" => akr_core::model::EvidenceResult::Pass,
-        "fail" => akr_core::model::EvidenceResult::Fail,
-        "inconclusive" => akr_core::model::EvidenceResult::Inconclusive,
-        other => {
-            return Err(ToolError::new(
-                "AKR-C004",
-                format!("`result`: {other:?} is not `pass`, `fail` or `inconclusive`"),
-            ));
-        }
-    };
-    let method = match required_str(arguments, "method")? {
-        "manual" => akr_core::model::CheckMethod::Manual,
-        "command" => akr_core::model::CheckMethod::Command,
-        "observation" => akr_core::model::CheckMethod::Observation,
-        other => {
-            return Err(ToolError::new(
-                "AKR-C004",
-                format!("`method`: {other:?} is not `manual`, `command` or `observation`"),
-            ));
-        }
-    };
-
-    // `observed_at` defaults to HEAD, as on the command line. An evidence record with no
-    // commit could never satisfy D-016's descendancy rule.
-    let commit = match arguments.get("observed_at").and_then(Value::as_str) {
-        Some(text) => {
-            let bare = text.strip_prefix("git:").unwrap_or(text);
-            akr_core::model::Commit::new(bare).map_err(|_| {
-                ToolError::new(
-                    "AKR-C004",
-                    format!(
-                        "`observed_at`: {text:?} is not 40 lowercase hex digits; AKR takes \
-                         full commit hashes, never abbreviations (D-008)"
-                    ),
-                )
-            })?
-        }
-        None => session
-            .commit
-            .clone()
-            .ok_or_else(|| missing_commit(&session, true))?,
-    };
-    let summary = arguments.get("summary").and_then(Value::as_str);
-    let title = arguments
-        .get("title")
-        .and_then(Value::as_str)
-        .or(summary)
-        .map_or_else(|| parsed.to_string(), ToOwned::to_owned);
-    let mut request = akr_core::evidence::AddEvidence::new(
-        parsed.clone(),
-        &title,
-        result,
-        method,
-        commit.clone(),
-    );
-    if let Some(command) = arguments.get("command").and_then(Value::as_str) {
-        request = request.command(command);
-    }
-    if let Some(artifact) = arguments.get("artifact").and_then(Value::as_str) {
-        request = request.artifact(artifact);
-    }
-    if let Some(summary) = summary {
-        request = request.summary(summary);
-    }
-
-    Ok((parsed, request.to_record(), commit))
-}
-
-fn ensure_commits_exist(
-    session: &Session,
-    commits: &[akr_core::model::Commit],
-) -> Result<(), ToolError> {
-    let Some(repository) = &session.repository else {
-        return Ok(());
-    };
-    let distinct: Vec<_> = commits
-        .iter()
-        .cloned()
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect();
-    let present = repository
-        .contains_all(&distinct)
-        .map_err(|error| ToolError::new("AKR-G002", error.to_string()))?;
-    if let Some(missing) = distinct.iter().find(|commit| !present.contains(*commit)) {
-        return Err(ToolError::new(
-            "AKR-G011",
-            format!("observed_at {missing} is not present in this repository"),
-        ));
-    }
-    Ok(())
+/// One evidence payload, translated to the surface-agnostic request `akr-cli` takes.
+fn evidence_request(arguments: &Value) -> Result<akr_cli::write::EvidenceRequest, ToolError> {
+    Ok(akr_cli::write::EvidenceRequest {
+        key: required_str(arguments, "key")?.to_owned(),
+        result: optional_str(arguments, "result"),
+        method: optional_str(arguments, "method"),
+        title: optional_str(arguments, "title"),
+        command: optional_str(arguments, "command"),
+        artifact: optional_str(arguments, "artifact"),
+        summary: optional_str(arguments, "summary"),
+        // `git:` is the reference spelling in a record; the request takes the bare hash,
+        // as the command line does.
+        observed_at: optional_str(arguments, "observed_at")
+            .map(|text| text.strip_prefix("git:").unwrap_or(&text).to_owned()),
+    })
 }
 
 /// `knowledge.papercut`, over the same [`akr_core::papercut`] request `akr papercut`
@@ -1336,12 +1277,7 @@ fn search_recommended_context(
         ("tool".to_owned(), Value::string("knowledge.context")),
         (
             "arguments".to_owned(),
-            Value::Object(
-                arguments
-                    .into_iter()
-                    .map(|(name, value)| (name, value))
-                    .collect(),
-            ),
+            Value::Object(arguments.into_iter().collect()),
         ),
     ]))
 }
@@ -1392,8 +1328,14 @@ fn finish(sources: &akr_core::diagnostics::SourceMap, output: Output) -> Result<
     })
 }
 
+/// The write context, from `akr-cli` so that it is the same one the command line uses.
+///
+/// Building a bare `WriteContext` here left every record written over MCP without an
+/// `author`, while the identical command-line write recorded one from `git config
+/// user.name` (D-005). Two surfaces, two answers, for as long as nothing compared the
+/// bytes they produced.
 fn write_context(session: &Session) -> akr_core::ops::WriteContext {
-    akr_core::ops::WriteContext::new(&session.akr_dir)
+    akr_cli::write::context_of(session)
 }
 
 /// Renders an `ops` outcome as §4's payload, or as §5's refusal.

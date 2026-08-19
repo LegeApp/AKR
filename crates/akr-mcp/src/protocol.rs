@@ -486,16 +486,16 @@ fn read_frame(input: &mut impl BufRead) -> std::io::Result<Option<(FrameBody, Fr
             if line == "\n" || line == "\r\n" {
                 break;
             }
-            if let Some((name, value)) = line.split_once(':') {
-                if name.eq_ignore_ascii_case("content-length") {
-                    match value.trim().parse() {
-                        Ok(length) => content_length = Some(length),
-                        Err(_) => {
-                            return Ok(Some((
-                                FrameBody::Invalid("invalid Content-Length header".to_owned()),
-                                Framing::ContentLength,
-                            )));
-                        }
+            if let Some((name, value)) = line.split_once(':')
+                && name.eq_ignore_ascii_case("content-length")
+            {
+                match value.trim().parse() {
+                    Ok(length) => content_length = Some(length),
+                    Err(_) => {
+                        return Ok(Some((
+                            FrameBody::Invalid("invalid Content-Length header".to_owned()),
+                            Framing::ContentLength,
+                        )));
                     }
                 }
             }

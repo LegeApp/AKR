@@ -88,9 +88,22 @@ impl ChangeKind {
         }
     }
 
-    /// Parses a kind name.
+    /// Parses a kind name, accepting the unabbreviated spelling of one.
+    ///
+    /// The stored name is the Conventional Commit abbreviation, because that is what a
+    /// commit subject carries. But `feat`, `docs` and `perf` are abbreviations, and the
+    /// word somebody reaches for first is the whole one: `--kind feature` was refused by a
+    /// tool that had already understood it. Nothing is guessed here — these are the long
+    /// forms of the eight kinds, not a fuzzy match.
     #[must_use]
     pub fn from_name(name: &str) -> Option<Self> {
+        let name = match name {
+            "feature" => "feat",
+            "documentation" => "docs",
+            "performance" => "perf",
+            "bugfix" => "fix",
+            other => other,
+        };
         Self::ALL.iter().copied().find(|k| k.as_str() == name)
     }
 }
@@ -617,6 +630,30 @@ pub fn resolve_within(root: &Path, requested: &Path) -> Result<std::path::PathBu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_kind_is_accepted_by_its_whole_word_as_well_as_its_abbreviation() {
+        for (given, expected) in [
+            ("feat", ChangeKind::Feat),
+            ("feature", ChangeKind::Feat),
+            ("docs", ChangeKind::Docs),
+            ("documentation", ChangeKind::Docs),
+            ("perf", ChangeKind::Perf),
+            ("performance", ChangeKind::Perf),
+            ("fix", ChangeKind::Fix),
+            ("bugfix", ChangeKind::Fix),
+        ] {
+            assert_eq!(ChangeKind::from_name(given), Some(expected), "{given}");
+        }
+        // The stored spelling stays the abbreviation, whichever word was typed.
+        assert_eq!(
+            ChangeKind::from_name("feature").expect("a kind").as_str(),
+            "feat"
+        );
+        // Nothing is guessed: this is a fixed alias list, not a fuzzy match.
+        assert_eq!(ChangeKind::from_name("feet"), None);
+        assert_eq!(ChangeKind::from_name("features"), None);
+    }
 
     fn entry(path: &str, blob: &str) -> IndexEntry {
         IndexEntry {

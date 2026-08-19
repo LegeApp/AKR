@@ -184,6 +184,57 @@ fn knowledge_start_names_a_ledger_coverage_miss_and_the_recovery_path() {
     );
 }
 
+/// Bulk evidence lands identically whichever surface asked for it.
+///
+/// This file exists to stop the two surfaces drifting, and `knowledge.evidence_add_many`
+/// is what happens when a tool is added without a case here: it grew a whole
+/// implementation inside `akr-mcp`, and no command-line equivalent at all, for as long as
+/// nothing compared them. The comparison is the ledger bytes, which is the only equality
+/// that matters -- the two calls take different input shapes on purpose.
+#[test]
+fn bulk_evidence_writes_the_same_ledger_from_either_surface() {
+    let head = {
+        let probe = Example::materialise("differential-evidence-head-probe");
+        probe.commit(5).to_owned()
+    };
+
+    // Over MCP: a JSON array of evidence payloads.
+    let over_mcp = Example::materialise("differential-evidence-mcp");
+    let payload = format!(
+        r#"{{"evidence":[{{"key":"sys.evidence.dual-one","title":"First check","result":"pass","method":"command","command":"cargo test -p sim","observed_at":"git:{head}"}},{{"key":"sys.evidence.dual-two","title":"Second check","result":"pass","method":"observation","observed_at":"git:{head}"}}]}}"#
+    );
+    let tool = call(&over_mcp, "knowledge.evidence_add_many", &payload);
+    assert_eq!(
+        tool.get("written").and_then(Value::as_integer),
+        Some(2),
+        "{}",
+        tool.to_pretty()
+    );
+    let from_mcp = over_mcp.read_file(".akr/records/sys/evidence.akr");
+
+    // From the command line: the same two records, as an AKR fragment.
+    let over_cli = Example::materialise("differential-evidence-cli");
+    let batch = format!(
+        "record sys.evidence.dual-one/1 : evidence {{\n    \
+             title \"First check\"\n    result pass\n    method command\n    \
+             command \"cargo test -p sim\"\n    observed_at git:{head}\n\
+         }}\n\n\
+         record sys.evidence.dual-two/1 : evidence {{\n    \
+             title \"Second check\"\n    result pass\n    method observation\n    \
+             observed_at git:{head}\n\
+         }}\n"
+    );
+    over_cli.write_file("batch.akr", &batch);
+    let run = over_cli.run(&["evidence", "add-many", "--from", "batch.akr"]);
+    assert_eq!(run.code, 0, "{}", run.output());
+    let from_cli = over_cli.read_file(".akr/records/sys/evidence.akr");
+
+    assert_eq!(
+        from_mcp, from_cli,
+        "the two surfaces must write byte-identical records"
+    );
+}
+
 #[test]
 fn knowledge_start_can_locate_a_user_supplied_plan_by_its_path() {
     let example = Example::materialise("differential-start-plan-path");

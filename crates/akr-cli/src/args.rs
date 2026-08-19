@@ -448,8 +448,6 @@ pub enum Command {
         title: Option<String>,
         /// A file holding the record body.
         from: Option<PathBuf>,
-        /// Open `$EDITOR` on a template.
-        edit: bool,
     },
     /// `akr revise <key>`.
     Revise {
@@ -457,8 +455,6 @@ pub enum Command {
         key: String,
         /// A file holding the replacement body.
         from: Option<PathBuf>,
-        /// Open `$EDITOR` on the head.
-        edit: bool,
         /// A new state for the revision.
         state: Option<String>,
         /// A new title.
@@ -540,6 +536,11 @@ pub enum Command {
         /// The commit it was observed at. Defaults to HEAD.
         observed_at: Option<String>,
     },
+    /// `akr evidence add-many --from <file>`.
+    EvidenceAddMany {
+        /// A file holding one or more `evidence` records in AKR syntax.
+        from: PathBuf,
+    },
 }
 
 impl Command {
@@ -607,6 +608,7 @@ impl Command {
             Self::Papercut { .. } => "papercut".to_owned(),
             Self::PapercutCollate { .. } => "papercut collate".to_owned(),
             Self::EvidenceAdd { .. } => "evidence add".to_owned(),
+            Self::EvidenceAddMany { .. } => "evidence add-many".to_owned(),
         }
     }
 
@@ -1066,20 +1068,20 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
                 .ok_or_else(|| UsageError::new("AKR-C003", "git-hook requires a hook name"))?,
         },
         "propose" => {
-            known_flags(&["--kind", "--title", "--from", "--edit"])?;
+            refuse_edit(tail)?;
+            known_flags(&["--kind", "--title", "--from"])?;
             Command::Propose {
                 key: need(0, "a key")?,
                 kind: option_value(tail, "--kind")
                     .ok_or_else(|| UsageError::new("AKR-C003", "propose requires --kind <kind>"))?,
                 title: option_value(tail, "--title"),
                 from: option_value(tail, "--from").map(PathBuf::from),
-                edit: flag_set("--edit"),
             }
         }
         "revise" => {
+            refuse_edit(tail)?;
             known_flags(&[
                 "--from",
-                "--edit",
                 "--state",
                 "--title",
                 "--in-place",
@@ -1088,7 +1090,6 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
             Command::Revise {
                 key: need(0, "a key")?,
                 from: option_value(tail, "--from").map(PathBuf::from),
-                edit: flag_set("--edit"),
                 state: option_value(tail, "--state"),
                 title: option_value(tail, "--title"),
                 in_place: flag_set("--in-place"),
@@ -1237,25 +1238,44 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
                 "--artifact",
                 "--summary",
                 "--observed-at",
+                "--from",
             ])?;
-            // `evidence` has one subcommand and always will: evidence is created, never
-            // edited, because a revision of an observation is a new observation (D-015).
-            let sub = need(0, "the `add` subcommand")?;
-            if sub != "add" {
-                return Err(UsageError::new(
-                    "AKR-C001",
-                    format!("unknown subcommand {sub:?} for command \"evidence\""),
-                )
-                .with_help("the only subcommand is `akr evidence add`"));
-            }
-            Command::EvidenceAdd {
-                key: need(1, "a key")?,
-                result: option_value(tail, "--result"),
-                method: option_value(tail, "--method"),
-                command: option_value(tail, "--command"),
-                artifact: option_value(tail, "--artifact"),
-                summary: option_value(tail, "--summary"),
-                observed_at: option_value(tail, "--observed-at"),
+            // Evidence is created, never edited: a revision of an observation is a new
+            // observation (D-015). `add-many` is the same creation in one pipeline pass,
+            // not a different operation.
+            let sub = need(0, "the `add` or `add-many` subcommand")?;
+            match sub.as_str() {
+                "add" => Command::EvidenceAdd {
+                    key: need(1, "a key")?,
+                    result: option_value(tail, "--result"),
+                    method: option_value(tail, "--method"),
+                    command: option_value(tail, "--command"),
+                    artifact: option_value(tail, "--artifact"),
+                    summary: option_value(tail, "--summary"),
+                    observed_at: option_value(tail, "--observed-at"),
+                },
+                "add-many" => Command::EvidenceAddMany {
+                    from: option_value(tail, "--from")
+                        .map(PathBuf::from)
+                        .ok_or_else(|| {
+                            UsageError::new(
+                            "AKR-C003",
+                            "evidence add-many requires --from <file>",
+                        )
+                        .with_help(
+                            "the file holds one or more `record <key>/1 : evidence { ... }` blocks",
+                        )
+                        })?,
+                },
+                other => {
+                    return Err(UsageError::new(
+                        "AKR-C001",
+                        format!("unknown subcommand {other:?} for command \"evidence\""),
+                    )
+                    .with_help(
+                        "the subcommands are `akr evidence add` and `akr evidence add-many`",
+                    ));
+                }
             }
         }
         other => {
@@ -1471,7 +1491,7 @@ fn parse_source(
             }
         }
         "add" => {
-            let allowed = vec!["--id", "--title", "--origin", "--observed-at", "--scope"];
+            let allowed = ["--id", "--title", "--origin", "--observed-at", "--scope"];
             for arg in tail.iter().filter(|a| a.starts_with("--")) {
                 let base = arg.split('=').next().unwrap_or(arg);
                 if !allowed.contains(&base) {
@@ -1550,7 +1570,7 @@ fn parse_source(
             }
         }
         "verify" => {
-            for arg in tail.iter().filter(|a| a.starts_with("--")) {
+            if let Some(arg) = tail.iter().find(|a| a.starts_with("--")) {
                 return Err(UsageError::new(
                     "AKR-C002",
                     format!("unknown flag {arg:?} for command \"source verify\""),
@@ -1727,6 +1747,27 @@ fn parse_git(name: &str, positional: &[&String], _tail: &[String]) -> Result<Com
     })
 }
 
+/// Refuses `--edit` before anything is loaded, parsed or written.
+///
+/// `--edit` is not missing by accident and is not coming: opening an editor is a terminal
+/// interaction the MCP surface cannot have, and a flag that works from a shell and fails
+/// from an agent is worse than one that is honestly absent. It used to be accepted by the
+/// parser and refused later, at the point of building the record — far enough in that the
+/// documented path looked supported right up until it was not. Refusing it here says so
+/// immediately, and says what to do instead.
+fn refuse_edit(tail: &[String]) -> Result<(), UsageError> {
+    if tail.iter().any(|a| a == "--edit") {
+        return Err(UsageError::new(
+            "AKR-C002",
+            "`--edit` is not available: opening an editor is a terminal \
+             interaction the MCP surface cannot have, so the flag is absent \
+             from both rather than working in one",
+        )
+        .with_help("write the record body to a file and pass `--from <file>`"));
+    }
+    Ok(())
+}
+
 fn option_value(tail: &[String], flag: &str) -> Option<String> {
     let mut args = tail.iter();
     while let Some(arg) = args.next() {
@@ -1840,14 +1881,21 @@ pub fn help_for(name: &str) -> Option<String> {
              open-questions, decision-history.\n"
         }
         "get" => {
-            "akr get <ref> [--history] [--relations]\n\
+            "akr get <ref> [--history] [--relations] [--detail <level>]\n\
              \n\
              Retrieves one record. <ref> is any of the four D-009 forms: @key (head),\n\
              @key/2 (pinned), @key#anchor, @key/2#anchor. The @ is optional here.\n\
              \n\
+             To read a record as it is actually written — which slots it has and\n\
+             what they contain — use --detail canonical, which appends the\n\
+             canonically formatted AKR source. `akr explain <kind>` is the faster\n\
+             answer to \"which slots may this kind have\", and does not need a record\n\
+             to exist yet.\n\
+             \n\
              FLAGS\n\
-             \x20   --history      list every revision with state and supersession edges\n\
-             \x20   --relations    include inbound edges, invisible in the source text\n"
+             \x20   --history        list every revision with state and supersession edges\n\
+             \x20   --relations      include inbound edges, invisible in the source text\n\
+             \x20   --detail <level> summary, body (default), or canonical\n"
         }
         "search" => {
             "akr search <query> [--query <query>] [--kind <kind> ...] [--state <state> ...] [--limit <n>]\n\
@@ -2180,13 +2228,24 @@ pub fn help_for(name: &str) -> Option<String> {
              \x20                   --method manual|command|observation\n\
              \x20                   [--command <text>] [--artifact <path>]\n\
              \x20                   [--summary <text>] [--observed-at <commit>]\n\
+             akr evidence add-many --from <file>\n\
              \n\
              Creates an evidence record. --observed-at defaults to HEAD and must be a\n\
              full 40-hex commit in the repository.\n\
              \n\
              There is deliberately no flag for what the evidence verifies (D-016): the\n\
              link is authored on the check (verified_by [ @key/n ]) or supplied to\n\
-             `akr complete --check <id>=@key/n`.\n"
+             `akr complete --check <id>=@key/n`.\n\
+             \n\
+             add-many writes several records in one pipeline pass: the ledger is\n\
+             parsed, validated and formatted once, so a verification run that\n\
+             produced six results costs one pass rather than six. Either all of them\n\
+             land or none does. The file is an ordinary AKR fragment holding\n\
+             `record <key>/1 : evidence { ... }` blocks — the same syntax and the\n\
+             same parser as --from elsewhere, and the header may be omitted.\n\
+             \n\
+             FLAGS\n\
+             \x20   --from <file>    add-many: the evidence records to write\n"
         }
         _ => return None,
     };

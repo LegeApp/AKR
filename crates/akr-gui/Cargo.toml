@@ -18,8 +18,18 @@ path = "src/lib.rs"
 name = "akr-gui"
 path = "src/main.rs"
 
+# `fts5` is forwarded, not inherited. Every other crate takes akr-cli/akr-core with
+# `default-features = false` and re-exports the feature explicitly; this one took the
+# defaults, and because cargo unifies features across a workspace build that quietly
+# switched FTS5 back on for `cargo test --no-default-features` at the workspace root. The
+# no-FTS path then went untested for as long as this crate has existed, and the one place
+# it was exercised (`-p akr-cli -p akr-mcp`) looked broken instead.
+[features]
+default = ["fts5"]
+fts5 = ["akr-cli/fts5"]
+
 [dependencies]
-akr-cli = { path = "../akr-cli" }
+akr-cli = { path = "../akr-cli", default-features = false }
 font8x8 = "0.3"
 softbuffer = "0.4"
 winit = "0.30"

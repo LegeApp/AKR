@@ -113,7 +113,7 @@ fn action_for_candidate(candidate: &IngestCandidate) -> Option<ApplyAction> {
                             .review
                             .relations
                             .iter()
-                            .filter_map(|r| Some(r.target.clone()))
+                            .map(|r| r.target.clone())
                             .collect(),
                     }),
                     PromotionPlan::Revise { target } => Some(ApplyAction::ReviseRecord {

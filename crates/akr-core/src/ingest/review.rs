@@ -51,7 +51,7 @@ impl fmt::Display for CandidateId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct CandidateFingerprint(String);
 
 impl CandidateFingerprint {
@@ -64,12 +64,6 @@ impl CandidateFingerprint {
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
-    }
-}
-
-impl Default for CandidateFingerprint {
-    fn default() -> Self {
-        Self(String::new())
     }
 }
 
