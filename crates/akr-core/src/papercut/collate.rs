@@ -40,8 +40,13 @@ pub struct CollatedPapercut {
 /// Which of the sisters' papercuts a collation absorbs.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Subject {
-    /// Only those whose `about` names this subject.
-    Named(String),
+    /// Only those whose `about` names one of these subjects.
+    ///
+    /// Several, because one tool is not one name. A papercut is written wherever the
+    /// agent was working, by whichever agent was working, and the subject is free text:
+    /// the same tool arrives as `akr`, `AKR`, `akr-mcp` and `akr CLI`. A filter that
+    /// accepted exactly one spelling left the rest in the pile it was supposed to clear.
+    Named(Vec<String>),
     /// Only those with no `about` at all — the sister project's own frictions.
     ///
     /// Not the default, because the interesting case is the opposite one: a papercut
@@ -55,11 +60,45 @@ pub enum Subject {
 impl Subject {
     fn accepts(&self, about: Option<&str>) -> bool {
         match self {
-            Self::Named(name) => about == Some(name.as_str()),
+            Self::Named(names) => about.is_some_and(|about| {
+                let about = fold(about);
+                names.iter().any(|name| fold(name) == about)
+            }),
             Self::Untagged => about.is_none(),
             Self::Any => true,
         }
     }
+}
+
+/// A subject reduced to what two spellings of the same name have in common.
+///
+/// Case and punctuation are how a free-text subject varies between the agents that write
+/// it — `akr-mcp`, `AKR MCP`, `akr_mcp` are one subject and three strings — so they are
+/// what the comparison drops. Nothing else is folded: `akr` and `akr-mcp` stay two
+/// subjects, because they are, and merging them would be the same silent over-reach in
+/// the other direction.
+fn fold(subject: &str) -> String {
+    subject
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// One `about` subject seen in a scan, and how much of it was left behind.
+///
+/// The count is the point. "155 left behind" tells a reader they have missed something
+/// and nothing about what to do next; the same 155 broken down as `ripgrep 30, cargo 18,
+/// AKR 2` turns the leftovers into a decision — the two are this project's under another
+/// spelling, and the rest belong to whoever owns ripgrep.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SubjectTally {
+    /// The subject as written, or `None` for papercuts with no `about` at all.
+    pub subject: Option<String>,
+    /// How many live, uncollated papercuts carried it.
+    pub total: usize,
+    /// How many of those the subject filter refused.
+    pub left_behind: usize,
 }
 
 /// What a scan of one directory found, and what remains to be collated.
@@ -78,8 +117,8 @@ pub struct Collate {
     /// Counted rather than silently dropped: a collation that quietly ignored two thirds
     /// of what it read would be worse than no collation, because it would look complete.
     pub filtered_out: usize,
-    /// The distinct `about` subjects seen while scanning, sorted.
-    pub subjects_seen: Vec<String>,
+    /// Every `about` subject seen while scanning, sorted, with its tally.
+    pub subjects_seen: Vec<SubjectTally>,
 }
 
 /// The keys a ledger has already absorbed, from the `collated` slot of its live
@@ -118,7 +157,7 @@ pub fn collect(
     let mut skipped = Vec::new();
     let mut entries = Vec::new();
     let mut filtered_out = 0usize;
-    let mut subjects: BTreeSet<String> = BTreeSet::new();
+    let mut subjects: BTreeMap<Option<String>, (usize, usize)> = BTreeMap::new();
 
     let Ok(read) = std::fs::read_dir(scan_dir) else {
         return Collate {
@@ -173,10 +212,10 @@ pub fn collect(
             let title = head.map_or_else(String::new, |record| record.title.clone());
             let about = head.and_then(about_of);
             let statement = head.and_then(statement_of).unwrap_or_default();
-            if let Some(about) = &about {
-                subjects.insert(about.clone());
-            }
+            let tally = subjects.entry(about.clone()).or_insert((0, 0));
+            tally.0 += 1;
             if !subject.accepts(about.as_deref()) {
+                tally.1 += 1;
                 filtered_out += 1;
                 continue;
             }
@@ -196,7 +235,14 @@ pub fn collect(
         skipped,
         entries,
         filtered_out,
-        subjects_seen: subjects.into_iter().collect(),
+        subjects_seen: subjects
+            .into_iter()
+            .map(|(subject, (total, left_behind))| SubjectTally {
+                subject,
+                total,
+                left_behind,
+            })
+            .collect(),
     }
 }
 

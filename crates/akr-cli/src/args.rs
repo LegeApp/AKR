@@ -504,7 +504,8 @@ pub enum Command {
         /// What the friction was with, when that is not this project (D-033).
         about: Option<String>,
     },
-    /// `akr papercut collate [--projects <dir>] [--about <subject>] [--namespace <ns>]`.
+    /// `akr papercut collate [--projects <dir>] [--about <subject>]... [--namespace <ns>]
+    /// [--dry-run]`.
     PapercutCollate {
         /// A directory of sibling workspaces to scan; defaults to the siblings of the
         /// workspace root.
@@ -512,10 +513,15 @@ pub enum Command {
         /// The namespace for the master record's key; needed only when the project
         /// declares several.
         namespace: Option<String>,
-        /// Absorb only the sisters' papercuts whose `about` names this subject.
-        about: Option<String>,
+        /// Absorb only the sisters' papercuts whose `about` names one of these subjects.
+        ///
+        /// Repeatable: one tool is not one name, and the spelling a papercut carries is
+        /// whatever the agent that logged it typed.
+        about: Vec<String>,
         /// Absorb every live sister papercut, whatever its subject.
         all: bool,
+        /// Report what would be absorbed and write nothing.
+        dry_run: bool,
     },
     /// `akr evidence add <key>`.
     EvidenceAdd {
@@ -1113,20 +1119,34 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
             }
         }
         "papercut" => {
-            // `collate` as the sole positional is the collation subcommand (D-030). A
-            // message logged with `-m` may legitimately be the word "collate", so a flag
-            // that supplies the agent keeps this on the logging path.
-            let collate_subcommand = tail
+            // `collate` as the sole positional is the collation subcommand (D-030).
+            //
+            // It used to be that, *and* the absence of `-m`. The reasoning was that a
+            // logged message may legitimately be the word "collate" — but plain
+            // `akr papercut` requires `-m`, so supplying it is the natural thing to do,
+            // and doing so silently steered the call onto the logging path and recorded a
+            // one-word papercut instead of collating. It cost a revert. The positional
+            // decides now; `--` is the escape for the message that really is that word,
+            // which is the convention every other tool already uses for this.
+            let escaped = tail.iter().position(|a| a == "--");
+            let first_positional = tail
                 .iter()
+                .take(escaped.unwrap_or(tail.len()))
                 .find(|a| !a.starts_with('-'))
-                .map(String::as_str)
-                == Some("collate")
-                && !tail.iter().any(|a| a == "-m" || a == "--agent");
-            if collate_subcommand {
-                known_flags(&["--projects", "--namespace", "--about", "--all"])?;
-                let about = option_value(tail, "--about");
+                .map(String::as_str);
+            if first_positional == Some("collate") {
+                known_flags(&[
+                    "--projects",
+                    "--namespace",
+                    "--about",
+                    "--all",
+                    "--dry-run",
+                    "-m",
+                    "--agent",
+                ])?;
+                let about = repeated(tail, "--about");
                 let all = tail.iter().any(|a| a == "--all");
-                if about.is_some() && all {
+                if !about.is_empty() && all {
                     return Err(UsageError::new(
                         "AKR-C005",
                         "--about and --all are mutually exclusive",
@@ -1137,6 +1157,7 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
                     namespace: option_value(tail, "--namespace"),
                     about,
                     all,
+                    dry_run: tail.iter().any(|a| a == "--dry-run"),
                 });
             }
             // Parsed by hand: `-m` takes a value, and the generic positional filter
@@ -1146,8 +1167,24 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
             let mut namespace: Option<String> = None;
             let mut about: Option<String> = None;
             let mut args = tail.iter();
+            let mut only_positionals = false;
             while let Some(arg) = args.next() {
+                if only_positionals {
+                    if message.is_some() {
+                        return Err(UsageError::new(
+                            "AKR-C004",
+                            format!("papercut takes one message; {arg:?} is a second"),
+                        )
+                        .with_help("quote the whole message"));
+                    }
+                    message = Some(arg.clone());
+                    continue;
+                }
                 match arg.as_str() {
+                    // Everything after `--` is the message, whatever it spells. This is
+                    // the only way to log the literal word "collate", which is otherwise
+                    // read as the subcommand.
+                    "--" => only_positionals = true,
                     "-m" | "--agent" => {
                         agent = Some(args.next().cloned().ok_or_else(|| {
                             UsageError::new("AKR-C003", "-m requires a value: who hit it")
@@ -2089,7 +2126,8 @@ pub fn help_for(name: &str) -> Option<String> {
         }
         "papercut" => {
             "akr papercut -m <agent> \"message\" [--about <subject>] [--namespace <ns>]\n\
-             akr papercut collate [--projects <dir>] [--about <subject>|--all] [--namespace <ns>]\n\
+             akr papercut collate [--projects <dir>] [--about <subject>]... [--all]\n\
+             \x20                    [--namespace <ns>] [--dry-run]\n\
              \n\
              Logs a small friction hit while working — a tool call that missed and had\n\
              to be retried, a confusing setup step, a flaky command, a stale cache, a\n\
@@ -2111,14 +2149,30 @@ pub fn help_for(name: &str) -> Option<String> {
              not already absorbed into one master papercut record, whose collated slot\n\
              is the dedup set for the next run (D-030). Sister projects are read, never\n\
              written. It absorbs the ones aimed at this project by default; --about\n\
-             narrows to one subject and --all takes everything. Whatever is left behind\n\
-             is counted in the output, so nothing goes missing silently.\n\
+             narrows to the subjects you name and --all takes everything.\n\
+             \n\
+             --about is repeatable and ignores case and punctuation, because one tool\n\
+             is not one name: the subject on a papercut is whatever the agent that\n\
+             logged it typed, so `akr`, `AKR` and `akr-mcp` are three strings for work\n\
+             you own. Whatever the filter leaves behind is reported broken down by\n\
+             subject, with the count for each — that is the list to read your own\n\
+             tool's other names out of. Nothing is ever dropped silently.\n\
+             \n\
+             --dry-run prints what would be absorbed and writes nothing. Worth doing\n\
+             before --all: the scan is global and the record it produces is one big\n\
+             one.\n\
+             \n\
+             The word `collate` alone is the subcommand, whatever other flags are\n\
+             present. To log a papercut whose message really is that word, use `--`:\n\
+             akr papercut -m claude -- collate\n\
              \n\
              FLAGS\n\
              \x20   -m, --agent <name>    required to log; who hit it (a model or harness name)\n\
-             \x20   --about <subject>     what the friction was with, if not this project\n\
+             \x20   --about <subject>     what the friction was with, if not this project;\n\
+             \x20                         repeatable, and the collate filter\n\
              \x20   --projects <dir>      collate: a directory of sibling workspaces to scan\n\
              \x20   --all                 collate: absorb every subject, not just this project's\n\
+             \x20   --dry-run             collate: report what would be absorbed, write nothing\n\
              \x20   --namespace <ns>      only needed when the project declares several\n"
         }
         "evidence" | "evidence add" => {

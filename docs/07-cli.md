@@ -763,7 +763,8 @@ outside this tool (D-020): a harness command reads the transcript and calls
 #### `akr papercut collate`
 
 ```
-akr papercut collate [--projects <dir>] [--namespace <ns>]
+akr papercut collate [--projects <dir>] [--about <subject>]... [--all]
+                     [--namespace <ns>] [--dry-run]
 ```
 
 Collates the live papercut heads of the sister projects around the AKR workspace into
@@ -775,6 +776,34 @@ Each absorbed key lands in the master record's `collated` slot — the dedup set
 run checks, so a source papercut is processed once and a second run with nothing new
 exits 0 and writes nothing. A broken sister workspace is skipped, not fatal. `--namespace`
 is needed only when the project declares several.
+
+**The scan is global; the decision is local.** Every sister ledger is read, but only the
+papercuts aimed at *this* project should land here, and what marks one is the free-text
+`about` subject that whichever agent hit the friction happened to type. Three things
+follow, and together they are what makes a global scan usable from one workspace:
+
+- `--about` is **repeatable** and compares subjects with case and punctuation folded away,
+  because one tool is not one name: `akr`, `AKR` and `akr-mcp` are three strings for work
+  the same person owns. Nothing else is folded — `akr` and `akr-mcp` stay distinct, since
+  merging them would be the same silent over-reach in the other direction.
+- Whatever the filter leaves behind is reported **broken down by subject, with a count
+  each**, and the largest is offered as a copyable `--about`. A bare total tells a reader
+  they have missed something and nothing about what to do next; `FFF 10, fff 8, ripgrep
+  30` tells them the first two are theirs under two spellings and the third is not.
+- `--dry-run` prints what would be absorbed, entry by entry, and writes nothing.
+
+`--about` and `--all` are mutually exclusive. Absent both, the filter is this project's
+namespace.
+
+`collate` as the sole positional is the subcommand **whatever other flags are present**,
+including `-m`. It did not use to be: `-m` marked the logging path, so
+`akr papercut collate -m <agent>` — the natural spelling, since plain `akr papercut`
+requires `-m` — silently logged a one-word papercut instead of collating. `--` is the
+escape for a message that really is that word:
+
+```
+akr papercut -m claude -- collate
+```
 
 ---
 

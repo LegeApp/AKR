@@ -177,13 +177,15 @@ pub fn run(session: &Session, command: &Command) -> Result<Output, EnvError> {
             namespace,
             about,
             all,
+            dry_run,
         } => papercut_collate(
             session,
             &context,
             projects.as_deref(),
             namespace.as_deref(),
-            about.as_deref(),
+            about,
             *all,
+            *dry_run,
         ),
         Command::EvidenceAdd {
             key,
@@ -368,13 +370,15 @@ pub fn papercut(
 /// record for every key not already listed in a live collation's `collated` slot. The
 /// sisters are read, never written. Nothing new is not a refusal: the command exits 0
 /// and writes nothing.
+#[allow(clippy::too_many_arguments)]
 fn papercut_collate(
     session: &Session,
     context: &WriteContext,
     projects: Option<&Path>,
     namespace: Option<&str>,
-    about: Option<&str>,
+    about: &[String],
     all: bool,
+    dry_run: bool,
 ) -> Result<Output, EnvError> {
     let scan_dir = match projects {
         Some(path) => path.to_path_buf(),
@@ -396,19 +400,26 @@ fn papercut_collate(
     // With no filter, collate reports aimed at the namespace this master record belongs
     // to. Taking unrelated sister-project friction requires the explicit `--all`; this is
     // the distinction promised by the CLI help and D-033.
-    let default_subject = if about.is_none() && !all {
-        Some(
+    let subjects: Vec<String> = if about.is_empty() && !all {
+        vec![
             akr_core::papercut::select_namespace(&session.ledger, namespace)
                 .map_err(|e| EnvError::new("AKR-C004", e.to_string()))?,
-        )
+        ]
     } else {
-        None
+        about.to_vec()
     };
-    let effective_about = about.or(default_subject.as_deref());
-    let subject = match (effective_about, all) {
-        (Some(name), _) => akr_core::papercut::collate::Subject::Named(name.to_owned()),
-        (None, true) => akr_core::papercut::collate::Subject::Any,
-        (None, false) => unreachable!("a default subject was resolved above"),
+    let subject = if all {
+        akr_core::papercut::collate::Subject::Any
+    } else {
+        akr_core::papercut::collate::Subject::Named(subjects.clone())
+    };
+    // The record's own `about` names one subject (D-033). Several were asked for only
+    // because one tool answers to several names, so the first is the one it is filed
+    // under and the rest are spellings of it.
+    let effective_about = if all {
+        None
+    } else {
+        subjects.first().map(String::as_str)
     };
     let already = akr_core::papercut::collate::already_collated(&session.ledger);
     let collate =
@@ -420,15 +431,36 @@ fn papercut_collate(
     let mut trailer = String::new();
     if collate.filtered_out > 0 {
         trailer.push_str(&format!(
-            "  {} left behind by the subject filter\n",
+            "  {} left behind by the subject filter:\n",
             collate.filtered_out
         ));
-    }
-    if !collate.subjects_seen.is_empty() {
-        trailer.push_str(&format!(
-            "  subjects seen: {}\n",
-            collate.subjects_seen.join(", ")
-        ));
+        // Broken down, not totalled. A bare count tells a reader they have missed
+        // something and nothing about what to do next; the breakdown is what turns the
+        // leftovers into a decision — which of these spellings are also this project, and
+        // which belong to whoever owns that tool.
+        let mut left: Vec<&akr_core::papercut::collate::SubjectTally> = collate
+            .subjects_seen
+            .iter()
+            .filter(|tally| tally.left_behind > 0)
+            .collect();
+        left.sort_by(|a, b| {
+            b.left_behind
+                .cmp(&a.left_behind)
+                .then(a.subject.cmp(&b.subject))
+        });
+        for tally in &left {
+            trailer.push_str(&format!(
+                "    {:>4}  {}\n",
+                tally.left_behind,
+                tally.subject.as_deref().unwrap_or("(no subject)")
+            ));
+        }
+        if let Some(first) = left.first().and_then(|t| t.subject.as_deref()) {
+            trailer.push_str(&format!(
+                "  add one with `--about {}`, or take everything with `--all`\n",
+                shell_quote(first)
+            ));
+        }
     }
     if !collate.skipped.is_empty() {
         trailer.push_str(&format!(
@@ -447,16 +479,54 @@ fn papercut_collate(
                 ("scanned", Value::integer(collate.projects.len() as i64)),
                 ("collated", Value::integer(0)),
                 ("filtered_out", Value::integer(collate.filtered_out as i64)),
+                ("subjects_seen", subjects_value(&collate.subjects_seen)),
+            ]),
+        ));
+    }
+
+    let mut entry_projects: Vec<String> = collate
+        .entries
+        .iter()
+        .map(|entry| entry.project.clone())
+        .collect();
+    entry_projects.sort();
+    entry_projects.dedup();
+
+    // A collation is a write whose shape you cannot see until it has happened: the scan
+    // is global, the filter is a guess at how other people spelled a subject, and the
+    // result is one record holding everything it matched. Getting that wrong means a
+    // revert, which is how the `--all` run that swept in 155 unrelated papercuts ended.
+    // So there is a way to look first.
+    if dry_run {
+        let mut text = format!(
+            "would collate {} papercut{} from {} into this ledger — nothing written\n",
+            collate.entries.len(),
+            if collate.entries.len() == 1 { "" } else { "s" },
+            entry_projects.join(", ")
+        );
+        for entry in &collate.entries {
+            text.push_str(&format!(
+                "  {} @{}{}\n",
+                entry.project,
+                entry.key,
+                entry
+                    .about
+                    .as_deref()
+                    .map_or_else(String::new, |about| format!(" [about {about}]"))
+            ));
+        }
+        text.push_str(&trailer);
+        return Ok(Output::plain(
+            text,
+            Value::object(vec![
+                ("scanned", Value::integer(collate.projects.len() as i64)),
                 (
-                    "subjects_seen",
-                    Value::array(
-                        collate
-                            .subjects_seen
-                            .iter()
-                            .map(|s| Value::string(s.clone()))
-                            .collect(),
-                    ),
+                    "would_collate",
+                    Value::integer(collate.entries.len() as i64),
                 ),
+                ("written", Value::bool(false)),
+                ("filtered_out", Value::integer(collate.filtered_out as i64)),
+                ("subjects_seen", subjects_value(&collate.subjects_seen)),
             ]),
         ));
     }
@@ -465,13 +535,6 @@ fn papercut_collate(
         .commit
         .clone()
         .ok_or_else(|| missing_commit(session, false))?;
-    let mut entry_projects: Vec<String> = collate
-        .entries
-        .iter()
-        .map(|entry| entry.project.clone())
-        .collect();
-    entry_projects.sort();
-    entry_projects.dedup();
     let message = format!(
         "collated {} papercuts from {}",
         collate.entries.len(),
@@ -505,6 +568,40 @@ fn papercut_collate(
     // matters, because it is the one a reader will take as complete.
     output.text.push_str(&trailer);
     Ok(output)
+}
+
+/// The `subjects_seen` tallies, for the machine-readable result.
+fn subjects_value(tallies: &[akr_core::papercut::collate::SubjectTally]) -> Value {
+    Value::array(
+        tallies
+            .iter()
+            .map(|tally| {
+                Value::object(vec![
+                    (
+                        "subject",
+                        tally
+                            .subject
+                            .as_ref()
+                            .map_or(Value::Null, |s| Value::string(s.clone())),
+                    ),
+                    ("total", Value::integer(tally.total as i64)),
+                    ("left_behind", Value::integer(tally.left_behind as i64)),
+                ])
+            })
+            .collect(),
+    )
+}
+
+/// Quotes a subject for the copyable `--about` hint, when it needs it.
+fn shell_quote(subject: &str) -> String {
+    if subject
+        .chars()
+        .all(|c| c.is_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    {
+        subject.to_owned()
+    } else {
+        format!("\"{}\"", subject.replace('"', "\\\""))
+    }
 }
 
 // -------------------------------------------------------------------------------------

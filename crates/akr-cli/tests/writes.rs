@@ -634,12 +634,141 @@ fn collate_defaults_to_its_namespace_and_says_what_it_left() {
         "{}",
         run.output()
     );
+    // Broken down by subject, not totalled: the two left behind are the siblings' own
+    // untagged frictions, and saying so is what makes the number readable.
     assert!(
-        run.stdout.contains("subjects seen: sys"),
-        "{}",
+        run.stdout.contains("(no subject)"),
+        "the leftovers should be itemised:\n{}",
         run.output()
     );
     assert!(source.contains("about \"sys\""), "{source}");
+
+    let _ = std::fs::remove_dir_all(&scan);
+}
+
+#[test]
+fn collate_is_the_subcommand_even_when_an_agent_is_named() {
+    // The bug this pins down cost a revert. `collate` used to be the subcommand only if
+    // -m was *absent* -- but plain `akr papercut` requires -m, so supplying it is the
+    // natural thing to do, and doing so silently logged a papercut whose entire message
+    // was the word "collate" instead of collating anything.
+    let example = Example::materialise("write-collate-dash-m");
+    let scan = sibling_workspaces(&example);
+    let projects = scan.to_str().expect("utf-8 scan dir");
+
+    let run = example.run(&[
+        "papercut",
+        "collate",
+        "-m",
+        "tester",
+        "--projects",
+        projects,
+        "--all",
+        "--namespace",
+        "sys",
+    ]);
+    assert_eq!(run.code, 0, "{}", run.output());
+    assert!(
+        run.stdout.contains("collated-4-papercuts"),
+        "-m must not steer this onto the logging path:\n{}",
+        run.output()
+    );
+    let source = example.read_file(".akr/records/sys/papercuts.akr");
+    assert!(
+        !source.contains("\"collate\""),
+        "the word `collate` was logged as a message:\n{source}"
+    );
+
+    let _ = std::fs::remove_dir_all(&scan);
+}
+
+#[test]
+fn a_papercut_message_can_still_be_the_word_collate() {
+    // The escape the disambiguation leaves open. Without it the subcommand would have
+    // swallowed a legitimate, if unlikely, message.
+    let example = Example::materialise("write-papercut-literal-collate");
+    let run = example.run(&[
+        "papercut",
+        "-m",
+        "tester",
+        "--namespace",
+        "sys",
+        "--",
+        "collate",
+    ]);
+    assert_eq!(run.code, 0, "{}", run.output());
+    let source = example.read_file(".akr/records/sys/papercuts.akr");
+    assert!(source.contains("collate"), "{source}");
+    assert!(
+        !source.contains("collated ["),
+        "this should have logged, not collated:\n{source}"
+    );
+}
+
+#[test]
+fn collate_matches_a_subject_across_the_spellings_agents_use() {
+    // One tool is not one name. The subject is free text written by whichever agent hit
+    // the friction, so the same tool arrives as `sys`, `SYS` and `Sys`; a filter that
+    // accepted one spelling left the rest in the pile it existed to clear.
+    let example = Example::materialise("write-collate-spellings");
+    let scan = sibling_workspaces(&example);
+    let projects = scan.to_str().expect("utf-8 scan dir");
+
+    let run = example.run(&[
+        "papercut",
+        "collate",
+        "--projects",
+        projects,
+        "--about",
+        "SYS",
+        "--namespace",
+        "sys",
+        "--dry-run",
+    ]);
+    assert_eq!(run.code, 0, "{}", run.output());
+    assert!(
+        run.stdout.contains("would collate 2 papercuts"),
+        "`SYS` must match the `sys` subject:\n{}",
+        run.output()
+    );
+
+    let _ = std::fs::remove_dir_all(&scan);
+}
+
+#[test]
+fn collate_dry_run_reports_without_writing() {
+    // The scan is global and the record it produces is one big one, so there is a way to
+    // look before committing to it -- the missing step behind an --all run that swept in
+    // 155 unrelated papercuts and had to be reverted.
+    let example = Example::materialise("write-collate-dry-run");
+    let scan = sibling_workspaces(&example);
+    let projects = scan.to_str().expect("utf-8 scan dir");
+    let before = example.sources();
+
+    let run = example.run(&[
+        "papercut",
+        "collate",
+        "--projects",
+        projects,
+        "--all",
+        "--namespace",
+        "sys",
+        "--dry-run",
+    ]);
+    assert_eq!(run.code, 0, "{}", run.output());
+    assert!(
+        run.stdout.contains("would collate 4 papercuts"),
+        "{}",
+        run.output()
+    );
+    assert!(run.stdout.contains("nothing written"), "{}", run.output());
+    // Each entry is named, so the reader can see what they would be taking on.
+    assert!(
+        run.stdout.contains("@alpha.papercut.alpha-annoyance"),
+        "{}",
+        run.output()
+    );
+    assert_eq!(before, example.sources(), "a dry run wrote something");
 
     let _ = std::fs::remove_dir_all(&scan);
 }
