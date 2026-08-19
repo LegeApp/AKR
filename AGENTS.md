@@ -10,6 +10,28 @@ AKR records (`akr source add` registers them, `akr source verify` and
 `akr check` enforce immutability). `docs/generated/` is build output. Follow
 this protocol.
 
+**`knowledge.*` names are MCP tools, not CLI commands.** There is no
+`akr knowledge ...`; the binary has no such subcommand and never will. Each tool
+is a thin wrapper over a command that has its own name, and the mapping is
+one-to-one because a behaviour reachable over MCP must be reproducible from a
+shell:
+
+| MCP tool | Command line |
+| --- | --- |
+| `knowledge.context` | `akr context --goal <key> [--paths <glob>...]` |
+| `knowledge.start` | `akr start "<task>" [--paths <glob>...]` |
+| `knowledge.get` / `knowledge.search` | `akr get <ref>` / `akr search <query>` |
+| `knowledge.explain` / `knowledge.impact` | `akr explain <subject>` / `akr impact <ref>` |
+| `knowledge.propose` / `knowledge.revise` | `akr propose <key> --from <file>` / `akr revise <key> --from <file>` |
+| `knowledge.supersede` / `knowledge.complete` | `akr supersede <key>` / `akr complete <key>` |
+| `knowledge.evidence_add` / `knowledge.evidence_add_many` | `akr evidence add <key>` / `akr evidence add-many --from <file>` |
+| `knowledge.papercut` | `akr papercut -m <agent> "<message>"` |
+| `knowledge.validate` | `akr check` |
+| `knowledge.source_*` | `akr source add|list|get|search|verify|supersede` |
+
+If the MCP server is unavailable, every step below is still reachable through
+the column on the right.
+
 **Before starting any task**
 
 When you already know the exact planning key:

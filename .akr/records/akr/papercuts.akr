@@ -15,7 +15,7 @@ record akr.papercut.a-subagent-spawned-with-worktree-isolation-into/1 : papercut
 
 record akr.papercut.after-an-immediate-akr-check-akr-77-records-88/1 : papercut {
     title "After , an immediate akr check — akr"
-    state verified
+    state superseded
     statement """
         After , an immediate akr check — akr
           77 records, 88 revisions, 6 files
@@ -76,6 +76,78 @@ record akr.papercut.after-an-immediate-akr-check-akr-77-records-88/1 : papercut 
         8 errors rejected all generated views because they embedded commit '(none)' while the clean workspace now resolves the new commit hash. Committing the regenerated headers would create another hash, so the documented atomic path needs commit-stable view metadata or a post-commit strategy that converges.
         """
     observed_at git:03e4af3c2e62cb07ab00436e512bedc41cd88436
+    author "codex"
+    created_at 2026-08-11
+}
+
+record akr.papercut.after-an-immediate-akr-check-akr-77-records-88/2 : papercut {
+    title "After , an immediate akr check — akr"
+    state withdrawn
+    statement """
+        After , an immediate akr check — akr
+          77 records, 88 revisions, 6 files
+          commit (none), grammar 0.1, vocabulary 0.2, today 2026-08-11
+
+          stages A-D                                 ok
+          stage F  emit (in memory)   7 views        FAILED
+            ROADMAP.md               DIFFERS
+            CURRENT-STATE.md         DIFFERS
+            ACTIVE-WORK.md           DIFFERS
+            REVIEW-REQUIRED.md       DIFFERS
+            OPEN-QUESTIONS.md        DIFFERS
+            DECISION-HISTORY.md      DIFFERS
+            PAPERCUTS.md             DIFFERS
+
+        error[AKR-E011]: docs/generated/ACTIVE-WORK.md differs from the view this build would emit (2 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-E011]: docs/generated/CURRENT-STATE.md differs from the view this build would emit (2 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-E011]: docs/generated/DECISION-HISTORY.md differs from the view this build would emit (2 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-E011]: docs/generated/OPEN-QUESTIONS.md differs from the view this build would emit (2 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-E011]: docs/generated/PAPERCUTS.md differs from the view this build would emit (7 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-E011]: docs/generated/REVIEW-REQUIRED.md differs from the view this build would emit (2 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-E011]: docs/generated/ROADMAP.md differs from the view this build would emit (2 differing lines)
+        note: line 2 committed: "     source-graph: sha256:c82e0f48261e88c773f1b5577fc28749741b8ddae08d16870c52ff7926c37bd3"
+        note: line 2 emitted:   "     source-graph: sha256:ea9d81f6f7a5605360578f777296de18812136734cb1d05e1db19b5f19ccffdc"
+        help: run `akr build` and commit the result; see @sys.policy.no-hand-edited-views (see V-112)
+
+        error[AKR-R052]: akr.lock has no hash for akr.papercut.collated-18-papercuts-from-evidence-intake/1
+          --> .akr/records/akr/papercuts.akr:180:1
+            |
+        180 | record akr.papercut.collated-18-papercuts-from-evidence-intake/1 : papercut {
+            | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            |
+
+        8 errors rejected all generated views because they embedded commit '(none)' while the clean workspace now resolves the new commit hash. Committing the regenerated headers would create another hash, so the documented atomic path needs commit-stable view metadata or a post-commit strategy that converges.
+
+        RESOLVED: generated view headers no longer embed a commit, only the source-graph hash
+        and the tool version, so committing regenerated views converges instead of producing
+        another hash. `akr check` immediately after a commit is clean.
+        """
+    observed_at git:03e4af3c2e62cb07ab00436e512bedc41cd88436
+    supersedes [ @akr.papercut.after-an-immediate-akr-check-akr-77-records-88/1 ]
     author "codex"
     created_at 2026-08-11
 }
@@ -698,7 +770,7 @@ record akr.papercut.collated-9-papercuts-from-lege-ecosystem/1 : papercut {
 
 record akr.papercut.completing-a-milestone-failed-because-a/1 : papercut {
     title "Completing a milestone failed because a downstream depends_on edge…"
-    state verified
+    state superseded
     statement """
         Completing a milestone failed because a downstream depends_on edge treated completed work like abandonment, forcing agents to remove the satisfied dependency and manufacture lifecycle revisions. Completion should satisfy depends_on while preserving the edge as provenance.
         """
@@ -707,9 +779,26 @@ record akr.papercut.completing-a-milestone-failed-because-a/1 : papercut {
     created_at 2026-08-09
 }
 
+record akr.papercut.completing-a-milestone-failed-because-a/2 : papercut {
+    title "Completing a milestone failed because a downstream depends_on edge…"
+    state withdrawn
+    statement """
+        Completing a milestone failed because a downstream depends_on edge treated completed work like abandonment, forcing agents to remove the satisfied dependency and manufacture lifecycle revisions. Completion should satisfy depends_on while preserving the edge as provenance.
+
+        RESOLVED: a completed `depends_on` target is now exempt from the terminal-reference
+        rule, so completion satisfies a prerequisite and the edge survives as provenance.
+        Abandonment and supersession still invalidate it. crates/akr-core/src/validate/rules.rs;
+        docs/05-validation-rules.md §AKR-L021.
+        """
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    supersedes [ @akr.papercut.completing-a-milestone-failed-because-a/1 ]
+    author "codex"
+    created_at 2026-08-09
+}
+
 record akr.papercut.crates-akr-cli-tests-commands-rs-is-the-only/1 : papercut {
     title "crates/akr-cli/tests/commands.rs is the only file in the repo committed…"
-    state verified
+    state superseded
     statement """
         crates/akr-cli/tests/commands.rs is the only file in the repo committed with CRLF endings (git ls-files --eol: 1 of N) and there is no .gitattributes. Running the documented `cargo fmt` rewrites it LF-only, so git reports every one of its ~400 lines as delete+re-add — a ~900-line phantom diff around a small change. `cargo fmt --check` does NOT flag it, so the verify-distribution.sh fmt gate stays green and nothing warns you. This cost two agents real review time on one papercut fix, both of whom had to diagnose it independently. Either commit that file as LF like every other file, or add a .gitattributes that pins the convention.
         """
@@ -718,13 +807,47 @@ record akr.papercut.crates-akr-cli-tests-commands-rs-is-the-only/1 : papercut {
     created_at 2026-08-18
 }
 
+record akr.papercut.crates-akr-cli-tests-commands-rs-is-the-only/2 : papercut {
+    title "crates/akr-cli/tests/commands.rs is the only file in the repo committed…"
+    state withdrawn
+    statement """
+        crates/akr-cli/tests/commands.rs is the only file in the repo committed with CRLF endings (git ls-files --eol: 1 of N) and there is no .gitattributes. Running the documented `cargo fmt` rewrites it LF-only, so git reports every one of its ~400 lines as delete+re-add — a ~900-line phantom diff around a small change. `cargo fmt --check` does NOT flag it, so the verify-distribution.sh fmt gate stays green and nothing warns you. This cost two agents real review time on one papercut fix, both of whom had to diagnose it independently. Either commit that file as LF like every other file, or add a .gitattributes that pins the convention.
+
+        RESOLVED in af11eae. .gitattributes pins `* text=auto eol=lf` for the whole tree and the
+        file was renormalised in a commit of its own, so the rewrite never has to be read as
+        part of a change with content in it.
+        """
+    observed_at git:9b534026ceff084e33ac987b959f3824eabaa409
+    supersedes [ @akr.papercut.crates-akr-cli-tests-commands-rs-is-the-only/1 ]
+    author "claude-opus-5"
+    created_at 2026-08-18
+}
+
 record akr.papercut.evidence-recorded-after-tests-but-before/1 : papercut {
     title "Evidence recorded after tests but before  pointed at the parent commit,…"
-    state verified
+    state superseded
     statement """
         Evidence recorded after tests but before  pointed at the parent commit, so the newly committed completed work immediately failed AKR-R022 as evidence predating its content. The change protocol needs a supported two-phase completion flow or evidence tied to the prepared implementation tree instead of an unknowable future commit.
         """
     observed_at git:03e4af3c2e62cb07ab00436e512bedc41cd88436
+    author "codex"
+    created_at 2026-08-11
+}
+
+record akr.papercut.evidence-recorded-after-tests-but-before/2 : papercut {
+    title "Evidence recorded after tests but before  pointed at the parent commit,…"
+    state withdrawn
+    statement """
+        Evidence recorded after tests but before  pointed at the parent commit, so the newly committed completed work immediately failed AKR-R022 as evidence predating its content. The change protocol needs a supported two-phase completion flow or evidence tied to the prepared implementation tree instead of an unknowable future commit.
+
+        RESOLVED: the change protocol grew the two-phase flow this asked for — `akr change
+        prepare --staged` and `akr change verify --staged` bind evidence to the staged tree
+        rather than to an unknowable future commit, and AKR-R022's registry entry records that
+        evidence co-committed with the content it verifies is current.
+        docs/16-change-protocol.md.
+        """
+    observed_at git:03e4af3c2e62cb07ab00436e512bedc41cd88436
+    supersedes [ @akr.papercut.evidence-recorded-after-tests-but-before/1 ]
     author "codex"
     created_at 2026-08-11
 }
@@ -754,7 +877,7 @@ record akr.papercut.historical-port-design-gap-recovered-from-a/2 : papercut {
 
 record akr.papercut.i-tried-assuming-get-supported-a-source/1 : papercut {
     title "I tried , assuming get supported a source rendering mode; --format is…"
-    state verified
+    state superseded
     statement """
         I tried , assuming get supported a source rendering mode; --format is only the global text/json selector. The get help could make raw-record inspection guidance explicit for agents closing acceptance checks.
         """
@@ -763,9 +886,26 @@ record akr.papercut.i-tried-assuming-get-supported-a-source/1 : papercut {
     created_at 2026-08-09
 }
 
+record akr.papercut.i-tried-assuming-get-supported-a-source/2 : papercut {
+    title "I tried , assuming get supported a source rendering mode; --format is…"
+    state withdrawn
+    statement """
+        I tried , assuming get supported a source rendering mode; --format is only the global text/json selector. The get help could make raw-record inspection guidance explicit for agents closing acceptance checks.
+
+        RESOLVED in fb3bb92. `akr get --detail canonical` prints the record's canonical AKR
+        source in text output — it previously added it to the JSON result only, so asking at a
+        terminal showed nothing extra. `--detail` is now in `akr get --help`, which also points
+        at `akr explain <kind>` for a kind's slots.
+        """
+    observed_at git:911c29573461ba912cc141f49f4d8c05c61ec5e1
+    supersedes [ @akr.papercut.i-tried-assuming-get-supported-a-source/1 ]
+    author "codex"
+    created_at 2026-08-09
+}
+
 record akr.papercut.knowledge-context-guidance-suggests-reading-a/1 : papercut {
     title "knowledge.context guidance suggests reading a task record by goal, but…"
-    state verified
+    state superseded
     statement """
         knowledge.context guidance suggests reading a task record by goal, but it rejects papercut records and only then tells the caller to use knowledge.get. The context API documentation should state its planning-record restriction up front.
         """
@@ -775,9 +915,27 @@ record akr.papercut.knowledge-context-guidance-suggests-reading-a/1 : papercut {
     created_at 2026-08-13
 }
 
+record akr.papercut.knowledge-context-guidance-suggests-reading-a/2 : papercut {
+    title "knowledge.context guidance suggests reading a task record by goal, but…"
+    state withdrawn
+    statement """
+        knowledge.context guidance suggests reading a task record by goal, but it rejects papercut records and only then tells the caller to use knowledge.get. The context API documentation should state its planning-record restriction up front.
+
+        RESOLVED: the `goal` parameter states the restriction up front — "A live milestone, work
+        item or track... historical pins, anchors, and terminal records are retrieval-only" — so
+        the caller learns it before the call, not from the refusal.
+        crates/akr-mcp/src/schema.rs.
+        """
+    observed_at git:94498f67d73d18323a5b06a3e5e59e307286947b
+    about "akr"
+    supersedes [ @akr.papercut.knowledge-context-guidance-suggests-reading-a/1 ]
+    author "codex"
+    created_at 2026-08-13
+}
+
 record akr.papercut.knowledge-context-rejects-completed-work-goals/1 : papercut {
     title "knowledge.context rejects completed work goals with AKR-X002 even when…"
-    state verified
+    state superseded
     statement """
         knowledge.context rejects completed work goals with AKR-X002 even when the repository protocol says to call context with the exact planning key; corrective follow-up needs a new work record before the prior bundle can be inspected.
         """
@@ -787,9 +945,28 @@ record akr.papercut.knowledge-context-rejects-completed-work-goals/1 : papercut 
     created_at 2026-08-09
 }
 
+record akr.papercut.knowledge-context-rejects-completed-work-goals/2 : papercut {
+    title "knowledge.context rejects completed work goals with AKR-X002 even when…"
+    state withdrawn
+    statement """
+        knowledge.context rejects completed work goals with AKR-X002 even when the repository protocol says to call context with the exact planning key; corrective follow-up needs a new work record before the prior bundle can be inspected.
+
+        CLOSED as working as designed. A bundle anchors on *intent*, so a terminal goal is
+        retrieval-only by design (AKR-X002, docs/09-context-assembly.md §70) and the refusal
+        returns a ready-made next command. Corrective follow-up genuinely is new work and wants
+        its own record; `akr get` still retrieves the finished one. If the ergonomics still
+        bite, that is a design question for a `question` record rather than a defect here.
+        """
+    observed_at git:911c29573461ba912cc141f49f4d8c05c61ec5e1
+    about "akr"
+    supersedes [ @akr.papercut.knowledge-context-rejects-completed-work-goals/1 ]
+    author "codex"
+    created_at 2026-08-09
+}
+
 record akr.papercut.knowledge-search-detects-a-stale-index-but/1 : papercut {
     title "knowledge.search detects a stale index but continues serving it, so…"
-    state verified
+    state superseded
     statement """
         knowledge.search detects a stale index but continues serving it, so agents repeatedly receive known-old planning results until a human runs `akr build`. Search should safely refresh or fall back to current source data before returning results.
         """
@@ -798,13 +975,47 @@ record akr.papercut.knowledge-search-detects-a-stale-index-but/1 : papercut {
     created_at 2026-08-09
 }
 
+record akr.papercut.knowledge-search-detects-a-stale-index-but/2 : papercut {
+    title "knowledge.search detects a stale index but continues serving it, so…"
+    state withdrawn
+    statement """
+        knowledge.search detects a stale index but continues serving it, so agents repeatedly receive known-old planning results until a human runs `akr build`. Search should safely refresh or fall back to current source data before returning results.
+
+        RESOLVED: `ensure_search_index` rebuilds the disposable cache before serving rather than
+        serving a known-stale one, and `--no-rebuild` fails with AKR-I031 instead of returning
+        old results. crates/akr-cli/src/commands.rs.
+        """
+    observed_at git:f001cde97b054e587f14ab849fe754ed1e14ebf0
+    supersedes [ @akr.papercut.knowledge-search-detects-a-stale-index-but/1 ]
+    author "codex"
+    created_at 2026-08-09
+}
+
 record akr.papercut.revising-a-sealed-record-through-the-supported/1 : papercut {
     title "Revising a sealed record through the supported knowledge.revise path…"
-    state verified
+    state superseded
     statement """
         Revising a sealed record through the supported knowledge.revise path changes its old revision to superseded and causes knowledge.validate to report AKR-R051 until rebuild, while ops documentation says lifecycle writes should produce AKR-R052. This makes an authorized lifecycle transition look like sealed-content tampering; distinguish it or document the exact rebuild boundary.
         """
     observed_at git:911c29573461ba912cc141f49f4d8c05c61ec5e1
+    author "codex"
+    created_at 2026-08-09
+}
+
+record akr.papercut.revising-a-sealed-record-through-the-supported/2 : papercut {
+    title "Revising a sealed record through the supported knowledge.revise path…"
+    state withdrawn
+    statement """
+        Revising a sealed record through the supported knowledge.revise path changes its old revision to superseded and causes knowledge.validate to report AKR-R051 until rebuild, while ops documentation says lifecycle writes should produce AKR-R052. This makes an authorized lifecycle transition look like sealed-content tampering; distinguish it or document the exact rebuild boundary.
+
+        RESOLVED: `v024_seals_match` now distinguishes the two cases.
+        `lifecycle_only_seal_drift` re-renders the record in the state the lock recorded; if
+        nothing else changed, the drift is a lifecycle move and reports AKR-R052 (lock stale),
+        not AKR-R051 (sealed content modified). crates/akr-core/src/validate/rules.rs; docs/04
+        §494 documents the distinction.
+        """
+    observed_at git:911c29573461ba912cc141f49f4d8c05c61ec5e1
+    supersedes [ @akr.papercut.revising-a-sealed-record-through-the-supported/1 ]
     author "codex"
     created_at 2026-08-09
 }
@@ -834,11 +1045,27 @@ record akr.papercut.root-cause-of-the-discoverability-miss-the-cli/2 : papercut 
 
 record akr.papercut.running-akr-papercut-collate-m-agent-silently/1 : papercut {
     title "Running `akr papercut collate -m <agent>` silently logged a new…"
-    state verified
+    state superseded
     statement """
         Running `akr papercut collate -m <agent>` silently logged a new papercut whose whole message was the word "collate" instead of collating: args.rs disambiguates the subcommand by the ABSENCE of -m/--agent, so supplying an agent name (natural, since plain `akr papercut` requires it) steers the call onto the logging path. The tradeoff is deliberate — a message may legitimately be the word "collate" — but it fails silently and cost a revert. Warn when the sole positional is exactly "collate" and -m is present, or let collate accept -m and ignore it.
         """
     observed_at git:9b534026ceff084e33ac987b959f3824eabaa409
+    author "claude-opus-5"
+    created_at 2026-08-18
+}
+
+record akr.papercut.running-akr-papercut-collate-m-agent-silently/2 : papercut {
+    title "Running `akr papercut collate -m <agent>` silently logged a new…"
+    state withdrawn
+    statement """
+        Running `akr papercut collate -m <agent>` silently logged a new papercut whose whole message was the word "collate" instead of collating: args.rs disambiguates the subcommand by the ABSENCE of -m/--agent, so supplying an agent name (natural, since plain `akr papercut` requires it) steers the call onto the logging path. The tradeoff is deliberate — a message may legitimately be the word "collate" — but it fails silently and cost a revert. Warn when the sole positional is exactly "collate" and -m is present, or let collate accept -m and ignore it.
+
+        RESOLVED in 8d41ae9. The sole positional decides: `collate` is the subcommand whatever
+        other flags are present. `--` is the escape for a message that really is that word. A
+        regression test pins it.
+        """
+    observed_at git:9b534026ceff084e33ac987b959f3824eabaa409
+    supersedes [ @akr.papercut.running-akr-papercut-collate-m-agent-silently/1 ]
     author "claude-opus-5"
     created_at 2026-08-18
 }
@@ -857,11 +1084,28 @@ record akr.papercut.running-rustfmt-directly-on-akr-s-rust-2024/1 : papercut {
 
 record akr.papercut.strict-clippy-for-the-new-gui-crate-promoted/1 : papercut {
     title "Strict clippy for the new GUI crate promoted more than 200 existing…"
-    state verified
+    state superseded
     statement """
         Strict clippy for the new GUI crate promoted more than 200 existing missing-docs warnings from the in-progress ingest APIs and obscured the one GUI lint. A target-scoped lint profile or temporary ingest-specific allowance would keep unrelated dependency warnings from swamping focused checks.
         """
     observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    author "codex"
+    created_at 2026-08-09
+}
+
+record akr.papercut.strict-clippy-for-the-new-gui-crate-promoted/2 : papercut {
+    title "Strict clippy for the new GUI crate promoted more than 200 existing…"
+    state withdrawn
+    statement """
+        Strict clippy for the new GUI crate promoted more than 200 existing missing-docs warnings from the in-progress ingest APIs and obscured the one GUI lint. A target-scoped lint profile or temporary ingest-specific allowance would keep unrelated dependency warnings from swamping focused checks.
+
+        RESOLVED in fb3bb92. `cargo clippy --all-targets` is at zero warnings, from 344. The
+        in-progress ingest module carries a justified `#![allow(missing_docs)]` for its 196 (it
+        has no normative document yet, so those types are still moving); the 33 in shipped
+        surfaces are documented properly and the rest are fixed.
+        """
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    supersedes [ @akr.papercut.strict-clippy-for-the-new-gui-crate-promoted/1 ]
     author "codex"
     created_at 2026-08-09
 }
@@ -891,7 +1135,7 @@ record akr.papercut.the-akr-mcp-knowledge-tools-failed-with-akr/2 : papercut {
 
 record akr.papercut.the-akr-mcp-transport-closed-on-explain-and/1 : papercut {
     title "The AKR MCP transport closed on explain and propose calls, forcing a…"
-    state verified
+    state superseded
     statement """
         The AKR MCP transport closed on explain and propose calls, forcing a CLI fallback. The CLI described --from as a record body but rejected plain prose because a required slot declaration was still needed; the help should name the accepted slot-list shape explicitly.
         """
@@ -901,9 +1145,28 @@ record akr.papercut.the-akr-mcp-transport-closed-on-explain-and/1 : papercut {
     created_at 2026-08-11
 }
 
+record akr.papercut.the-akr-mcp-transport-closed-on-explain-and/2 : papercut {
+    title "The AKR MCP transport closed on explain and propose calls, forcing a…"
+    state withdrawn
+    statement """
+        The AKR MCP transport closed on explain and propose calls, forcing a CLI fallback. The CLI described --from as a record body but rejected plain prose because a required slot declaration was still needed; the help should name the accepted slot-list shape explicitly.
+
+        RESOLVED (the documentation half): `akr propose --help` now names the accepted shape
+        explicitly — an AKR slot-list fragment, not YAML or Markdown — with a worked example and
+        a pointer to `akr explain <kind>` for a kind's required slots. The transport crash is
+        contained separately and reported as AKR-X099, now registered in
+        spec/diagnostics/codes-runtime.md.
+        """
+    observed_at git:05fea30a52f59775917cf5a1d1ac1241c0392b44
+    about "akr"
+    supersedes [ @akr.papercut.the-akr-mcp-transport-closed-on-explain-and/1 ]
+    author "codex"
+    created_at 2026-08-11
+}
+
 record akr.papercut.the-cli-help-advertises-edit-for-propose-and/1 : papercut {
     title "The CLI help advertises --edit for propose and revise, but this build…"
-    state verified
+    state superseded
     statement """
         The CLI help advertises --edit for propose and revise, but this build rejects it as unavailable; the documented path caused an avoidable failed write before falling back to --from.
         """
@@ -912,9 +1175,26 @@ record akr.papercut.the-cli-help-advertises-edit-for-propose-and/1 : papercut {
     created_at 2026-08-09
 }
 
+record akr.papercut.the-cli-help-advertises-edit-for-propose-and/2 : papercut {
+    title "The CLI help advertises --edit for propose and revise, but this build…"
+    state withdrawn
+    statement """
+        The CLI help advertises --edit for propose and revise, but this build rejects it as unavailable; the documented path caused an avoidable failed write before falling back to --from.
+
+        RESOLVED in fb3bb92. `--edit` is refused at parse time now, carrying the reason it does
+        not exist — an editor is a terminal interaction the MCP surface cannot have, and a flag
+        that works from a shell and fails from an agent is worse than one honestly absent. The
+        help stopped advertising it earlier; the parser had not.
+        """
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    supersedes [ @akr.papercut.the-cli-help-advertises-edit-for-propose-and/1 ]
+    author "codex"
+    created_at 2026-08-09
+}
+
 record akr.papercut.the-repository-instructions-direct-agents-to/1 : papercut {
     title "The repository instructions direct agents to use…"
-    state verified
+    state superseded
     statement """
         The repository instructions direct agents to use `knowledge.start`/`knowledge.context`, but the installed `akr.exe` has no `knowledge` CLI command; the MCP ledger tools were required instead. The documented CLI and installed binary are out of sync.
         """
@@ -924,9 +1204,28 @@ record akr.papercut.the-repository-instructions-direct-agents-to/1 : papercut {
     created_at 2026-08-09
 }
 
+record akr.papercut.the-repository-instructions-direct-agents-to/2 : papercut {
+    title "The repository instructions direct agents to use…"
+    state withdrawn
+    statement """
+        The repository instructions direct agents to use `knowledge.start`/`knowledge.context`, but the installed `akr.exe` has no `knowledge` CLI command; the MCP ledger tools were required instead. The documented CLI and installed binary are out of sync.
+
+        RESOLVED: the report was right that the mapping was undocumented and wrong that the
+        binary was out of sync. `knowledge.*` are MCP tool names; each is a thin wrapper over a
+        CLI command with its own name, and the correspondence is one-to-one because a behaviour
+        reachable over MCP must be reproducible from a shell. AGENTS.md now carries the table,
+        and says explicitly that there is no `akr knowledge` subcommand and never will be.
+        """
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    about "akr"
+    supersedes [ @akr.papercut.the-repository-instructions-direct-agents-to/1 ]
+    author "Codex"
+    created_at 2026-08-09
+}
+
 record akr.papercut.while-beginning-a-change-transaction-the/1 : papercut {
     title "While beginning a change transaction, the natural kind 'feature' was…"
-    state verified
+    state superseded
     statement """
         While beginning a change transaction, the natural kind 'feature' was rejected because the accepted spelling is the undocumented Conventional Commit abbreviation 'feat'; the error recovers well, but help or aliasing would avoid the retry.
         """
@@ -935,14 +1234,53 @@ record akr.papercut.while-beginning-a-change-transaction-the/1 : papercut {
     created_at 2026-08-11
 }
 
+record akr.papercut.while-beginning-a-change-transaction-the/2 : papercut {
+    title "While beginning a change transaction, the natural kind 'feature' was…"
+    state withdrawn
+    statement """
+        While beginning a change transaction, the natural kind 'feature' was rejected because the accepted spelling is the undocumented Conventional Commit abbreviation 'feat'; the error recovers well, but help or aliasing would avoid the retry.
+
+        RESOLVED in fb3bb92. `ChangeKind::from_name` accepts the unabbreviated spellings
+        (feature, documentation, performance, bugfix); the stored name stays the Conventional
+        Commit abbreviation. The help lists the kinds as well.
+        """
+    observed_at git:05fea30a52f59775917cf5a1d1ac1241c0392b44
+    supersedes [ @akr.papercut.while-beginning-a-change-transaction-the/1 ]
+    author "codex"
+    created_at 2026-08-11
+}
+
 record akr.papercut.while-checking-akr-mcp-without-default-features/1 : papercut {
     title "While checking akr-mcp without default features, the differential…"
-    state verified
+    state superseded
     statement """
         While checking akr-mcp without default features, the differential harness first used a stale default-feature target/debug/akr unless that CLI binary was rebuilt explicitly; after rebuilding correctly, two knowledge.start fallback tests still fail because the non-FTS validated-head path omits coverage and workspace_fallback metadata. The budget/pagination tests themselves pass in that configuration.
         """
     observed_at git:2dd07efa746065e627b1445587e3bb0ca0af553b
     about "akr"
+    author "codex"
+    created_at 2026-08-12
+}
+
+record akr.papercut.while-checking-akr-mcp-without-default-features/2 : papercut {
+    title "While checking akr-mcp without default features, the differential…"
+    state withdrawn
+    statement """
+        While checking akr-mcp without default features, the differential harness first used a stale default-feature target/debug/akr unless that CLI binary was rebuilt explicitly; after rebuilding correctly, two knowledge.start fallback tests still fail because the non-FTS validated-head path omits coverage and workspace_fallback metadata. The budget/pagination tests themselves pass in that configuration.
+
+        RESOLVED in fb3bb92, and the report's diagnosis was inverted. `knowledge.start` loses no
+        metadata without FTS5 — the non-FTS `start` calls `finish_start` like the other. What
+        was real is why nobody could tell: akr-gui took akr-cli with default features while
+        every other crate takes its AKR dependencies with `default-features = false`, and
+        cargo's feature unification then kept FTS5 on for workspace-level
+        `--no-default-features`. Per-package, seven source_library tests failed by asserting
+        search hits against a binary that had correctly reported AKR-I022. akr-gui forwards the
+        feature now, those tests carry `#[cfg(feature = "fts5")]`, and search_degraded.rs
+        asserts the documented degradation. Both configurations pass.
+        """
+    observed_at git:2dd07efa746065e627b1445587e3bb0ca0af553b
+    about "akr"
+    supersedes [ @akr.papercut.while-checking-akr-mcp-without-default-features/1 ]
     author "codex"
     created_at 2026-08-12
 }
@@ -961,7 +1299,7 @@ record akr.papercut.while-locating-the-non-fts-start-and/1 : papercut {
 
 record akr.papercut.while-running-the-workspace-suite-on-windows/1 : papercut {
     title "While running the workspace suite on Windows, `akr-cli`'s transcript…"
-    state verified
+    state superseded
     statement """
         While running the workspace suite on Windows, `akr-cli`'s transcript harness unconditionally spawned `sh` for its limited `sed` directives and failed with program not found. Implement those fixture rewrites in Rust/PowerShell-independent code or skip them with an explicit platform diagnostic.
         """
@@ -970,13 +1308,49 @@ record akr.papercut.while-running-the-workspace-suite-on-windows/1 : papercut {
     created_at 2026-08-14
 }
 
+record akr.papercut.while-running-the-workspace-suite-on-windows/2 : papercut {
+    title "While running the workspace suite on Windows, `akr-cli`'s transcript…"
+    state withdrawn
+    statement """
+        While running the workspace suite on Windows, `akr-cli`'s transcript harness unconditionally spawned `sh` for its limited `sed` directives and failed with program not found. Implement those fixture rewrites in Rust/PowerShell-independent code or skip them with an explicit platform diagnostic.
+
+        RESOLVED in fb3bb92. The transcript harness implements its one `sed` directive in Rust
+        and no longer spawns `sh`. An unrecognised directive fails loudly rather than being
+        approximated. crates/akr-cli/tests/support/mod.rs.
+        """
+    observed_at git:a72ffa4be531adbf3e9abcac9d8fa1717819b2ca
+    supersedes [ @akr.papercut.while-running-the-workspace-suite-on-windows/1 ]
+    author "codex"
+    created_at 2026-08-14
+}
+
 record akr.papercut.writing-several-evidence-and-lifecycle-records/1 : papercut {
     title "Writing several evidence and lifecycle records repeated full…"
-    state verified
+    state superseded
     statement """
         Writing several evidence and lifecycle records repeated full Git-history work and a post-write session reload, turning small ledger mutations into minute-scale operations. Batch Git facts by ledger file, avoid the redundant reload, and provide atomic bulk evidence.
         """
     observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    author "codex"
+    created_at 2026-08-09
+}
+
+record akr.papercut.writing-several-evidence-and-lifecycle-records/2 : papercut {
+    title "Writing several evidence and lifecycle records repeated full…"
+    state withdrawn
+    statement """
+        Writing several evidence and lifecycle records repeated full Git-history work and a post-write session reload, turning small ledger mutations into minute-scale operations. Batch Git facts by ledger file, avoid the redundant reload, and provide atomic bulk evidence.
+
+        PARTLY RESOLVED in fb3bb92. Atomic bulk evidence exists on both surfaces: `akr evidence
+        add-many --from <file>` and `knowledge.evidence_add_many` share one implementation in
+        akr-cli and validate the resulting ledger once, so a verification run costs one pipeline
+        pass rather than one per record. The other half of this papercut — batching git facts by
+        ledger file and dropping the post-write session reload — is a performance claim that has
+        not been measured since `Repository::shared` began memoising across handles. Left open
+        as a measurement task, not a fix.
+        """
+    observed_at git:de899cd260ab7b8f303a53ed5051118f211c2eb9
+    supersedes [ @akr.papercut.writing-several-evidence-and-lifecycle-records/1 ]
     author "codex"
     created_at 2026-08-09
 }
