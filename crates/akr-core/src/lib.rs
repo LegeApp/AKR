@@ -47,6 +47,7 @@ pub mod ops;
 pub mod papercut;
 pub mod render;
 pub mod resolve;
+pub mod scratch;
 pub mod source;
 pub mod store;
 pub mod syntax;

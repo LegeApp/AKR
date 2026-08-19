@@ -73,7 +73,7 @@ load-bearing one in the whole design:
 
 | Layer | Contents | Canonical | Written by |
 | --- | --- | --- | --- |
-| Scratch | `.agent/scratch/` — disposable working notes | No | Agents, freely, with no ceremony |
+| Scratch | `.agent/scratch/` — disposable working notes | No | Agents, freely, with no ceremony — and cleaned up by them, since nothing else does (D-036) |
 | Ledger | `.akr/**` — typed records | **Yes** | Humans and agents, through validated operations |
 | Views | `docs/generated/**` | No | `akr build`, never by hand |
 

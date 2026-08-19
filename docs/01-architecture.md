@@ -317,6 +317,7 @@ my-project/
             DECISION-HISTORY.md
         legacy/                   pre-AKR Markdown, being migrated
     .agent/
+        plans/                    agent plans and handoffs      committed
         scratch/                  disposable agent notes        GITIGNORED
     AGENTS.md                     the protocol statement        committed
     src/ ...                      the actual project
@@ -334,6 +335,11 @@ Three rules about this layout:
   `DECISION-HISTORY.md`. What makes a record terminal is its *state*, not its path.
 - **`.gitignore` must contain `.akr/cache/` and `.agent/scratch/`.** `akr init` writes
   both.
+- **`.agent/scratch/` is the one disposable location nothing empties on its own.** The OS
+  clears its temp directory and `target/` is deleted without ceremony; this is gitignored
+  but lives inside the repository, so it survives every session. `akr scratch prune` is how
+  it goes, `akr scratch keep` is how one entry stays, and `akr check` reports the total as a
+  build fact (D-036).
 
 ## 7. Trust model
 

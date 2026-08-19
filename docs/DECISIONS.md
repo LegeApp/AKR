@@ -1266,3 +1266,73 @@ turns a sort into a fork bomb.
 `crates/akr-core/src/git/mod.rs` (`contains_all`, `topological_order`, `ancestry_over`),
 `crates/akr-cli/src/session.rs` (`is_fatal`), `crates/akr-cli/src/args.rs` (`--fts`),
 `crates/akr-cli/tests/search.rs`.
+
+---
+
+## D-036 — Scratch is the one directory nothing empties, so the tool has to say so
+
+*Amendment, 2026-08-19.*
+
+**Question.** The protocol tells agents to put working files in `.agent/scratch/`, and
+nothing ever removes them. Every other disposable location in a developer's life is
+emptied by something: the OS clears its temp directory, `target/` is understood to be
+throwaway and gets deleted without ceremony, `.akr/cache/` is rebuilt from source whenever
+its inputs move. Scratch is none of those. It lives inside the repository, it is gitignored
+rather than transient, and it survives every session — so it grows until a person notices
+and deletes it by hand, reportedly past 30 GB across a set of sibling projects.
+
+The guidance made it worse rather than better. `AGENTS.md` said scratch notes go there and
+that "nobody reviews them and nothing depends on them", which reads as permission to forget
+them. `scripts/agent-section.md` — the brief actually installed into every agent's global
+instruction file, and therefore the only thing an agent working in a *different* project
+ever reads — did not mention scratch at all.
+
+**Question behind the question.** Is what is in scratch project knowledge? If it were, it
+would want records, and the ledger would grow a row per temporary file. It is not: a
+session's working files are not project conclusions, and the ledger exists precisely to
+keep that sort of thing out. But one fact about scratch *is* durable and does get lost
+between sessions — "this one is still needed, and here is why".
+
+**Resolution.**
+
+**Scratch is measured, reported, and never a ledger diagnostic.** `akr check` prints what
+is there as a build fact, beside the stale-record counts it already prints. That is the
+same standing staleness has under D-024: a fact about the workspace, not a contradiction in
+the ledger, and so never a reason for the compiler to fail by itself.
+
+**Failing is opt-in, and looks exactly like the review queue.** `akr check --scratch-clean`
+raises `AKR-G042`, precisely as `--review-clean` raises `AKR-G041`. CI decides whether it
+cares; the exit code keeps meaning what `docs/07` §5 says it means. Making it fail by
+default would have put disk usage and ledger incoherence behind the same exit code, which
+is the distinction the whole diagnostic scheme is built on.
+
+**The keep marker lives in the scratch directory, not the ledger.**
+`.agent/scratch/KEEP` is a plain list of `<name> <reason>` lines with `#` comments. It is
+read by people at least as often as by the tool, so it is hand-editable, needs no parser to
+understand, and survives the directory being moved or copied. An entry it names is never
+pruned, whatever its age — an agent tidying up at the end of a session must not be able to
+delete the thing the next session was told to expect.
+
+**Pruning is by age, and by default the agent does it.** `akr scratch prune` removes unkept
+entries untouched for fourteen days; `--older-than` and `--dry-run` adjust and rehearse it.
+Fourteen days is long enough that a directory in use across several sessions survives, and
+short enough that last month's never does. Age is measured from the *newest* file beneath an
+entry, not the oldest: something touched yesterday is a day old however long ago it began.
+
+**One directory, not two.** Handoffs and plans move from `.agents/` to `.agent/`, so there
+is a single agent directory with exactly one ignored subtree inside it. Two names one letter
+apart, one tracked and one ignored, produced workspaces containing both.
+
+**And the guidance says all of this.** `scripts/agent-section.md` gains the paragraph it was
+missing, which is the half of this that helps a project with no AKR in it at all.
+
+**Consequences.** `akr check` gains a line of output in every workspace, including ones with
+no scratch at all — deliberately, because an agent that never sees the directory named has
+no reason to believe it persists. `akr scratch` is housekeeping rather than knowledge
+compilation, which is a widening of what this tool does; it earns the place because the
+directory is one the protocol itself creates.
+
+**Honored by.** `crates/akr-core/src/scratch/mod.rs`, `crates/akr-cli/src/commands.rs`
+(`scratch_list`, `scratch_prune`, `scratch_keep`, `scratch_fact`,
+`scratch_clean_diagnostic`), `crates/akr-cli/src/args.rs` (`--scratch-clean`),
+`crates/akr-cli/tests/scratch.rs`, `AGENTS.md`, `scripts/agent-section.md`.

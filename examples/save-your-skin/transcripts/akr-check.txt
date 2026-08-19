@@ -23,6 +23,7 @@ akr check — save-your-skin
 
   build facts (not diagnostics):
     2 records stale, 4 at risk — see `akr review-queue`
+    no .agent/scratch — nothing to prune
 
 no diagnostics
 
@@ -35,7 +36,7 @@ $ echo $?
 $ akr check --format json
 {
   "akr": "0.1",
-  "tool_version": "0.3.1",
+  "tool_version": "0.3.3",
   "command": "check",
   "commit": null,
   "source_graph_hash": "sha256:5159d2714f688627a85906b161def17b0358155fbfc2a3fc00b681d29a305f55",
@@ -94,6 +95,7 @@ akr check — save-your-skin
 
   build facts (not diagnostics):
     2 records stale, 4 at risk — see `akr review-queue`
+    no .agent/scratch — nothing to prune
 
 error[AKR-G041]: review queue holds 2 stale and 4 at-risk records
   --> .akr/records/sim/observations.akr:4:1

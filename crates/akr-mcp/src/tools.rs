@@ -653,6 +653,7 @@ fn impact(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
 fn validate(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let mut session = open(root, false)?;
     let command = Command::Check {
+        scratch_clean: flag(arguments, "scratch_clean"),
         review_clean: flag(arguments, "review_clean"),
         views_current: false,
     };

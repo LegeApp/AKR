@@ -70,7 +70,8 @@ Consult AKR at task and state-transition boundaries, not after every edit.
   passage and `knowledge.source_get` reads it. Every result is labelled
   **non-authoritative**, and it means it: a report may be excellent and still not be the
   plan of record. Say "the audit recommends" and not "the plan is" until a record says so.
-- Scratch notes go in `.agent/scratch/`. Nobody reviews them and nothing depends on them.
+- Scratch notes go in `.agent/scratch/`. Nobody reviews them and nothing depends on them
+  — but **nothing empties it either**, so they are still yours. See "Scratch" below.
 
 **When something becomes durable**
 - New knowledge: `knowledge.propose`. Observations need `observed_at` and, if they can
@@ -92,7 +93,31 @@ Consult AKR at task and state-transition boundaries, not after every edit.
   what got in the way (a guess at the cause/fix is a bonus). Do this proactively, in
   the moment, even though none of these are blocking — logged together they show where
   the project needs sanding down. This is distinct from durable records (knowledge) and
-  from `.agent/scratch/` (working notes).
+  from `.agent/scratch/` (working notes, see below).
+
+**Scratch**
+
+`.agent/` holds everything an agent writes that is not a record: handoffs and plans are
+committed, and `.agent/scratch/` is gitignored working space. One directory, one ignored
+subtree — there is no `.agents/`.
+
+Scratch persists. The OS clears its temp directory and everybody deletes `target/` without
+a thought, but this is a gitignored directory *inside the repository* that survives every
+session, so what you leave is still there next month. Left alone it reaches tens of
+gigabytes and somebody deletes it by hand.
+
+Before handing work back:
+
+- `akr scratch prune` — removes unkept entries untouched for fourteen days.
+- `akr scratch keep <name> --reason "<why>"` — protects one the next session needs. Kept
+  entries are never pruned, at any age; the reason is required because a marker with no
+  reason outlives whatever made it necessary.
+- `akr scratch list` — what is there, largest first, with ages.
+
+`akr check` reports the total as a build fact, and `akr check --scratch-clean` fails when
+anything prunable remains (`AKR-G042`) — the same opt-in shape `--review-clean` has for the
+review queue (D-036). The keep list lives at `.agent/scratch/KEEP`, one `<name> <reason>`
+per line; edit it by hand whenever that is easier.
 
 **Committing (the AKR ↔ git protocol)**
 

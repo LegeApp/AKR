@@ -941,6 +941,50 @@ record akr.work.runtime-hardening/1 : work {
     part_of [ @akr.milestone.human-record-review/1 ]
 }
 
+record akr.work.scratch-lifecycle/1 : work {
+    title "Give the agent scratch directory a lifecycle"
+    state proposed
+    intent """
+        Give `.agent/scratch/` a lifecycle, so the one disposable directory nothing empties
+        on its own stops growing until a person clears it by hand.
+
+        Measurement and reporting, not deletion by default: `akr check` prints what is there
+        as a build fact, `knowledge.start` says the same at orientation, and
+        `akr check --scratch-clean` is the opt-in gate. `akr scratch prune` removes unkept
+        entries by age and `akr scratch keep` protects one with a reason, so an agent can
+        tidy up at the end of a session without being able to delete what the next session
+        was told to expect. See D-036.
+        """
+    acceptance {
+        check gate-is-opt-in {
+            statement """
+                `akr check --scratch-clean` exits 1 on prunable scratch; plain `akr check`
+                exits 0.
+                """
+            method command
+        }
+        check guidance-names-the-directory {
+            statement """
+                scripts/agent-section.md tells agents scratch persists and is theirs to clear.
+                """
+            method manual
+        }
+        check keep-survives-prune {
+            statement """
+                An entry named in KEEP survives `akr scratch prune --older-than 0`.
+                """
+            method command
+        }
+        check reports-as-a-build-fact {
+            statement """
+                `akr check` prints the scratch total and never fails on it by itself.
+                """
+            method command
+        }
+    }
+    author "GitHub Uploader"
+}
+
 record akr.work.sealed-lifecycle-lock-validation/1 : work {
     title "Distinguish authorized sealed lifecycle transitions"
     state completed

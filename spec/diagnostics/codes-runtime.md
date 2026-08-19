@@ -19,9 +19,10 @@ Two standing rules from `README.md` §6 govern the tables below:
   both directions.
 
 Staleness and `at_risk` are **not** diagnostics (D-024). No code below reports that a
-record is stale. `AKR-G041` is the single, opt-in exception: it reports that the
-operator asked for a clean review queue with `akr check --review-clean` and did not get
-one, which is a fact about the invocation, not about the ledger.
+record is stale. `AKR-G041` and `AKR-G042` are the opt-in exceptions: they report that the
+operator asked for a clean review queue with `akr check --review-clean`, or for clean
+scratch with `akr check --scratch-clean`, and did not get one. Both are facts about the
+invocation, not about the ledger.
 
 ## Rule identifiers used by this registry
 
@@ -148,6 +149,7 @@ Reserved groups: `G001`–`G009` repository access; `G011`–`G019` commit refer
 | `AKR-G023` | scope glob matches nothing | warning | V-102 | `{key}/{revision}: scope path {glob} matches no tracked path at {head}` | Usually a copied rendered `path ` prefix, typo, or moved path. Intentionally gitignored targets are exempt. It is visible but does not make an in-progress strict check fail. |
 | `AKR-G031` | `review_after` precedes `created_at` | warning | V-103 | `{key}/{revision}: review_after {date} precedes created_at {date}` | Almost always a typo; the record is stale from the moment it is written. |
 | `AKR-G041` | review queue is not empty | error | V-104 | `review queue holds {stale} stale and {at_risk} at-risk records` | Raised **only** under `akr check --review-clean`. Staleness itself is a build fact and never a diagnostic (D-024); this code reports an unmet request made on the command line. |
+| `AKR-G042` | scratch is not clean | error | — | `scratch holds {bytes} in {n} prunable entries` | Raised **only** under `akr check --scratch-clean`. What is in `.agent/scratch/` is a fact about the working tree and never a ledger diagnostic, exactly as staleness is not (D-024, D-036); this code reports an unmet request made on the command line. An entry named in `.agent/scratch/KEEP` is never counted, whatever its age. |
 
 ---
 

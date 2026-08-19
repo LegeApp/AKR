@@ -807,6 +807,43 @@ akr papercut -m claude -- collate
 
 ---
 
+### `akr scratch`
+
+```
+akr scratch list
+akr scratch prune [--older-than <days>] [--dry-run]
+akr scratch keep <name> --reason <text> | --forget
+```
+
+`.agent/scratch/` is where the protocol tells agents to put working files, and it is the
+one disposable location in a workspace that nothing empties on its own. The OS clears its
+own temp directory; `target/` is deleted without a second thought; `.akr/cache/` is rebuilt
+whenever its inputs move. Scratch is gitignored but lives *inside* the repository and
+survives every session, so it accumulates until a person clears it by hand (D-036).
+
+`list` shows every top-level entry, largest first, with its size, its age in days, and
+whether it is kept or prunable.
+
+`prune` removes entries that are unkept **and** untouched for at least `--older-than` days,
+default 14. Age is taken from the newest file beneath an entry, not the oldest: a directory
+touched yesterday is a day old however long ago it was created, and pruning by start date
+would throw away live work. `--dry-run` prints what would go and removes nothing. A file
+that cannot be removed is reported and the rest still go, so the command is worth running
+again rather than being all-or-nothing.
+
+`keep` records that an entry is still needed, in `.agent/scratch/KEEP` — one
+`<name> <reason>` per line, `#` for comments, editable by hand. **A kept entry is never
+pruned, at any age.** That is the point: an agent tidying up at the end of a session must
+not be able to delete what the next session was told to expect. `--reason` is required,
+because a marker with no reason outlives whatever made it necessary. `--forget` releases it.
+
+`akr check` prints the total as a build fact beside the stale-record counts, and
+`akr check --scratch-clean` turns anything prunable into `AKR-G042` and exit 1 — the same
+opt-in shape `--review-clean` has for the review queue. Neither command ever deletes
+anything; removal is always explicit.
+
+---
+
 ### `akr evidence add`
 
 ```

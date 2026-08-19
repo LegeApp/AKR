@@ -33,7 +33,13 @@ Durable project knowledge lives in `.akr/` as typed records, not in Markdown.
 - Look things up with `knowledge.get`; find them with `knowledge.search`.
   Search ranks results; it never grants authority. A record's standing comes from its
   state, its scope, and its relations.
-- Scratch notes go in `.agent/scratch/`. Nobody reviews them and nothing depends on them.
+- Scratch notes go in `.agent/scratch/`. Nobody reviews them and nothing depends on them
+  — but **nothing empties it either**. It is a gitignored directory inside the repository,
+  not the OS temp directory and not `target/`, so it survives every session and grows
+  until somebody deletes it by hand. Before handing work back, run `akr scratch prune`,
+  and `akr scratch keep <name> --reason "<why>"` for anything the next session needs.
+  `akr check` reports the total; `akr check --scratch-clean` fails when anything prunable
+  is left.
 
 **When something becomes durable**
 - New knowledge: `knowledge.propose`. Observations need `observed_at` and, if they can

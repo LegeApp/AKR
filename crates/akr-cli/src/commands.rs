@@ -113,9 +113,20 @@ pub fn run(session: &mut Session, command: &Command) -> Result<Output, EnvError>
 fn dispatch(session: &mut Session, command: &Command) -> Result<Output, EnvError> {
     match command {
         Command::Check {
+            scratch_clean,
             review_clean,
             views_current,
-        } => check(session, *review_clean, *views_current),
+        } => check(session, *scratch_clean, *review_clean, *views_current),
+        Command::ScratchList => scratch_list(session),
+        Command::ScratchPrune {
+            older_than,
+            dry_run,
+        } => scratch_prune(session, *older_than, *dry_run),
+        Command::ScratchKeep {
+            name,
+            reason,
+            forget,
+        } => scratch_keep(session, name, reason.as_deref(), *forget),
         Command::Build { check } => build(session, *check),
         Command::Fmt { check, paths } => crate::fmt::run(session, *check, paths),
         Command::View { name } => view(session, name),
@@ -360,8 +371,344 @@ fn normalize_query_paths(
 // check
 // -------------------------------------------------------------------------------------
 
+// -------------------------------------------------------------------------------------
+// `akr scratch` (D-036): the one directory nothing else empties
+// -------------------------------------------------------------------------------------
+
+/// The default age, in days, at which an unkept scratch entry may go.
+const SCRATCH_DEFAULT_AGE: u64 = 14;
+
+/// The build-fact line `akr check` prints for scratch.
+///
+/// A line rather than a diagnostic, and printed even when there is nothing to say, because
+/// the whole problem is that scratch is invisible: an agent that never sees the directory
+/// mentioned has no reason to believe it persists.
+fn scratch_fact(scratch: &akr_core::scratch::Scratch) -> String {
+    use akr_core::scratch::human_bytes;
+    if !scratch.present {
+        return "    no .agent/scratch — nothing to prune\n".to_owned();
+    }
+    let prunable: Vec<_> = scratch.prunable(SCRATCH_DEFAULT_AGE).collect();
+    let kept = scratch.kept().count();
+    let mut line = format!(
+        "    {} of scratch in {} entries",
+        human_bytes(scratch.total_bytes()),
+        scratch.entries.len()
+    );
+    if kept > 0 {
+        line.push_str(&format!(", {kept} kept"));
+    }
+    if prunable.is_empty() {
+        line.push_str(" — nothing prunable\n");
+    } else {
+        line.push_str(&format!(
+            " — {} in {} prunable, see `akr scratch prune`\n",
+            human_bytes(prunable.iter().map(|entry| entry.bytes).sum()),
+            prunable.len()
+        ));
+    }
+    line
+}
+
+/// `AKR-G042`, raised only under `akr check --scratch-clean`.
+fn scratch_clean_diagnostic(
+    scratch: &akr_core::scratch::Scratch,
+) -> Option<akr_core::diagnostics::Diagnostic> {
+    use akr_core::scratch::human_bytes;
+    let prunable: Vec<_> = scratch.prunable(SCRATCH_DEFAULT_AGE).collect();
+    if prunable.is_empty() {
+        return None;
+    }
+    Some(
+        akr_core::diagnostics::Diagnostic {
+            code: akr_core::diagnostics::Code::new("AKR-G042"),
+            severity: akr_core::diagnostics::Severity::Error,
+            rule: None,
+            message: format!(
+                "scratch holds {} in {} prunable {}",
+                human_bytes(prunable.iter().map(|entry| entry.bytes).sum()),
+                prunable.len(),
+                if prunable.len() == 1 {
+                    "entry"
+                } else {
+                    "entries"
+                }
+            ),
+            primary: akr_core::diagnostics::Label::new(akr_core::diagnostics::Subject::Ledger),
+            notes: Vec::new(),
+            help: None,
+        }
+        .help(
+            "run `akr scratch prune`, or `akr scratch keep <name> --reason <why>` for the \
+             ones the next session needs",
+        ),
+    )
+}
+
+/// `akr scratch list`
+fn scratch_list(session: &mut Session) -> Result<Output, EnvError> {
+    use akr_core::scratch::human_bytes;
+    let scratch = akr_core::scratch::scan(&session.root, std::time::SystemTime::now());
+    if !scratch.present {
+        return Ok(Output::plain(
+            "no .agent/scratch in this workspace\n",
+            Value::object(vec![
+                ("present", Value::bool(false)),
+                ("entries", Value::array(Vec::new())),
+                ("total_bytes", Value::integer(0)),
+            ]),
+        ));
+    }
+
+    let mut text = format!(
+        "{} in {} entries under .agent/scratch\n",
+        human_bytes(scratch.total_bytes()),
+        scratch.entries.len()
+    );
+    for entry in &scratch.entries {
+        let mark = match &entry.kept {
+            Some(reason) if reason.is_empty() => "  keep".to_owned(),
+            Some(reason) => format!("  keep: {reason}"),
+            None if entry.is_prunable(SCRATCH_DEFAULT_AGE) => "  prunable".to_owned(),
+            None => String::new(),
+        };
+        text.push_str(&format!(
+            "  {:>9}  {:>4}d  {}{}\n",
+            human_bytes(entry.bytes),
+            entry.age_days,
+            entry.name,
+            mark
+        ));
+    }
+    for name in &scratch.stale_keeps {
+        text.push_str(&format!(
+            "  KEEP names {name:?}, which is no longer there\n"
+        ));
+    }
+
+    let entries = Value::array(
+        scratch
+            .entries
+            .iter()
+            .map(|entry| {
+                Value::object(vec![
+                    ("name", Value::string(entry.name.clone())),
+                    (
+                        "bytes",
+                        Value::integer(i64::try_from(entry.bytes).unwrap_or(i64::MAX)),
+                    ),
+                    (
+                        "age_days",
+                        Value::integer(i64::try_from(entry.age_days).unwrap_or(i64::MAX)),
+                    ),
+                    (
+                        "kept",
+                        entry
+                            .kept
+                            .as_ref()
+                            .map_or(Value::Null, |reason| Value::string(reason.clone())),
+                    ),
+                    (
+                        "prunable",
+                        Value::bool(entry.is_prunable(SCRATCH_DEFAULT_AGE)),
+                    ),
+                ])
+            })
+            .collect(),
+    );
+    Ok(Output::plain(
+        text,
+        Value::object(vec![
+            ("present", Value::bool(true)),
+            ("entries", entries),
+            (
+                "total_bytes",
+                Value::integer(i64::try_from(scratch.total_bytes()).unwrap_or(i64::MAX)),
+            ),
+            (
+                "prunable_bytes",
+                Value::integer(
+                    i64::try_from(scratch.prunable_bytes(SCRATCH_DEFAULT_AGE)).unwrap_or(i64::MAX),
+                ),
+            ),
+        ]),
+    ))
+}
+
+/// `akr scratch prune [--older-than <days>] [--dry-run]`
+///
+/// Removes only what the scan called prunable: unkept, and untouched for at least the
+/// threshold. Everything named in `KEEP` survives regardless, which is the whole point of
+/// the marker — an agent running this at the end of a session must not be able to delete
+/// the thing the next session was told to expect.
+fn scratch_prune(
+    session: &mut Session,
+    older_than: u64,
+    dry_run: bool,
+) -> Result<Output, EnvError> {
+    use akr_core::scratch::human_bytes;
+    let scratch = akr_core::scratch::scan(&session.root, std::time::SystemTime::now());
+    let doomed: Vec<_> = scratch.prunable(older_than).cloned().collect();
+    if doomed.is_empty() {
+        return Ok(Output::plain(
+            format!("nothing to prune: no unkept entry is {older_than} days old or more\n"),
+            Value::object(vec![
+                ("pruned", Value::integer(0)),
+                ("bytes", Value::integer(0)),
+                ("dry_run", Value::bool(dry_run)),
+            ]),
+        ));
+    }
+
+    let root = akr_core::scratch::dir(&session.root);
+    let mut text = String::new();
+    let mut removed = 0usize;
+    let mut bytes = 0u64;
+    for entry in &doomed {
+        let path = root.join(&entry.name);
+        if dry_run {
+            text.push_str(&format!(
+                "would remove  {:>9}  {:>4}d  {}\n",
+                human_bytes(entry.bytes),
+                entry.age_days,
+                entry.name
+            ));
+            removed += 1;
+            bytes += entry.bytes;
+            continue;
+        }
+        let outcome = if entry.is_dir {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        match outcome {
+            Ok(()) => {
+                text.push_str(&format!(
+                    "removed  {:>9}  {}\n",
+                    human_bytes(entry.bytes),
+                    entry.name
+                ));
+                removed += 1;
+                bytes += entry.bytes;
+            }
+            // One locked file must not abandon the rest: report it and carry on, so the
+            // command is worth running again rather than being all-or-nothing.
+            Err(error) => text.push_str(&format!("kept  {}: {error}\n", entry.name)),
+        }
+    }
+    text.push_str(&format!(
+        "{} {} in {} entries\n",
+        if dry_run { "would free" } else { "freed" },
+        human_bytes(bytes),
+        removed
+    ));
+
+    Ok(Output::plain(
+        text,
+        Value::object(vec![
+            (
+                "pruned",
+                Value::integer(i64::try_from(removed).unwrap_or(0)),
+            ),
+            ("bytes", Value::integer(i64::try_from(bytes).unwrap_or(0))),
+            ("dry_run", Value::bool(dry_run)),
+        ]),
+    ))
+}
+
+/// `akr scratch keep <name> --reason <text>` / `--forget`
+fn scratch_keep(
+    session: &mut Session,
+    name: &str,
+    reason: Option<&str>,
+    forget: bool,
+) -> Result<Output, EnvError> {
+    let root = akr_core::scratch::dir(&session.root);
+    let keep_path = akr_core::scratch::keep_path(&session.root);
+    if !forget && !root.join(name).exists() {
+        return Err(EnvError::new(
+            "AKR-C042",
+            format!("there is no {name:?} in .agent/scratch"),
+        )
+        .help("run `akr scratch list` to see what is there"));
+    }
+    let reason = match (forget, reason) {
+        (true, _) => None,
+        (false, Some(reason)) if !reason.trim().is_empty() => Some(reason.trim()),
+        // A marker with no reason outlives whatever made it necessary, and the next person
+        // has no way to judge it. This is the one piece of ceremony worth insisting on.
+        (false, _) => {
+            return Err(EnvError::new(
+                "AKR-C003",
+                "scratch keep requires --reason <text>: why the next session needs it",
+            ));
+        }
+    };
+
+    let existing = std::fs::read_to_string(&keep_path).unwrap_or_default();
+    let mut lines: Vec<String> = Vec::new();
+    let mut replaced = false;
+    for line in existing.lines() {
+        let trimmed = line.trim();
+        let this = trimmed
+            .split_once(char::is_whitespace)
+            .map_or(trimmed, |(name, _)| name);
+        if !trimmed.starts_with('#') && this == name {
+            replaced = true;
+            if let Some(reason) = reason {
+                lines.push(format!("{name} {reason}"));
+            }
+            continue;
+        }
+        lines.push(line.to_owned());
+    }
+    if !replaced {
+        if forget {
+            return Err(EnvError::new(
+                "AKR-C042",
+                format!("KEEP does not name {name:?}"),
+            ));
+        }
+        if lines.is_empty() {
+            lines.push(
+                "# Scratch entries the next session still needs, and why (D-036).".to_owned(),
+            );
+            lines.push("# One `<name> <reason>` per line. Anything not listed here is".to_owned());
+            lines.push("# prunable once it goes untouched. Edit by hand freely.".to_owned());
+        }
+        lines.push(format!(
+            "{name} {}",
+            reason.expect("a reason was required above")
+        ));
+    }
+
+    if let Some(parent) = keep_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| EnvError::new("AKR-C042", format!("cannot create .agent/scratch: {e}")))?;
+    }
+    let mut text = lines.join("\n");
+    text.push('\n');
+    std::fs::write(&keep_path, &text)
+        .map_err(|e| EnvError::new("AKR-C042", format!("cannot write KEEP: {e}")))?;
+
+    let message = if forget {
+        format!("{name} is no longer kept; it prunes with everything else\n")
+    } else {
+        format!("{name} will survive `akr scratch prune`\n")
+    };
+    Ok(Output::plain(
+        message,
+        Value::object(vec![
+            ("name", Value::string(name.to_owned())),
+            ("kept", Value::bool(!forget)),
+        ]),
+    ))
+}
+
 fn check(
     session: &mut Session,
+    scratch_clean: bool,
     review_clean: bool,
     views_current: bool,
 ) -> Result<Output, EnvError> {
@@ -369,6 +716,7 @@ fn check(
     let model = session.resolve();
     let mut diagnostics = session.diagnostics(&model);
     let queue = session.review_queue();
+    let scratch = akr_core::scratch::scan(&session.root, std::time::SystemTime::now());
     diagnostics.extend(queue.diagnostics.clone());
 
     // Immutable source library verification (AKR-S021).
@@ -429,6 +777,14 @@ fn check(
             queue.stale.len(),
             queue.at_risk.len()
         ));
+        text.push_str(&scratch_fact(&scratch));
+    }
+
+    // Scratch is a fact about the working tree, never a ledger contradiction, so it is
+    // reported always and fails only when asked — exactly the shape `--review-clean` has
+    // for staleness (D-024, D-036).
+    if scratch_clean && let Some(diagnostic) = scratch_clean_diagnostic(&scratch) {
+        diagnostics.push(diagnostic);
     }
 
     if review_clean && let Some(diagnostic) = queue.review_clean_diagnostic() {

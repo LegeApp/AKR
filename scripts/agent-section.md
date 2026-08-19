@@ -49,6 +49,29 @@ Consult at task and state-transition boundaries, not after every edit.
 - Friction you hit on the way: `knowledge.papercut`.
 - Before handing work back: `knowledge.validate`.
 
+### Scratch persists — it is yours to clean up
+
+Working files go in `.agent/scratch/`. **Nothing ever empties it.** This is not the
+system temp directory, which the OS clears, and it is not `target/`, which everyone
+deletes without thinking. It is a gitignored directory inside the repository that
+survives every session, so whatever you leave behind is still there next month, and the
+month after. Left alone across a set of projects it reaches tens of gigabytes, and a
+person ends up deleting it by hand.
+
+So, before you hand work back:
+
+- `akr scratch prune` removes unkept entries untouched for a fortnight. Run it.
+- `akr scratch keep <name> --reason "<why the next session needs it>"` protects one that
+  should survive. A kept entry is never pruned, at any age.
+- `akr scratch list` shows what is there, largest first, with ages.
+
+`akr check` prints the total as a build fact, and `akr check --scratch-clean` fails when
+anything prunable is left — the same shape as `--review-clean`. Neither deletes anything;
+that is always your call, and always explicit.
+
+If the workspace has no AKR, the point still stands: whatever scratch directory you were
+told to use is persistent, and clearing it is part of finishing.
+
 ### What a call costs
 
 The first `knowledge.*` call against a workspace derives git freshness for the whole

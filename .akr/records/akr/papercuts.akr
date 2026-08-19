@@ -152,6 +152,17 @@ record akr.papercut.after-an-immediate-akr-check-akr-77-records-88/2 : papercut 
     created_at 2026-08-11
 }
 
+record akr.papercut.agents-write-working-files-to-agent-scratch/1 : papercut {
+    title "Agents write working files to .agent/scratch/ because the protocol…"
+    state verified
+    statement """
+        Agents write working files to .agent/scratch/ because the protocol tells them to, and nothing ever removes them. Unlike the OS temp directory or target/, that path is inside the repository, is gitignored rather than transient, and no tool, harness or convention prunes it -- so it accumulates across every session until a human hunts it down by hand, reportedly reaching 30GB+ across projects. The guidance makes it worse rather than better: AGENTS.md says scratch notes go there and that 'nobody reviews them and nothing depends on them', which reads as permission to forget them, and scripts/agent-section.md -- the brief actually installed into every agent's global instructions -- does not mention scratch at all, so agents working in other projects never learn the directory is persistent. Spelling has drifted too: the guidance says .agent/scratch/ while this repo tracks a separate .agents/, and several sibling projects now have both.
+        """
+    observed_at git:f923ecd03ba64429d775c518ca4a8aede1ca0dad
+    author "claude-opus-5"
+    created_at 2026-08-19
+}
+
 record akr.papercut.bug-needs-a-decision-d-028-is-incomplete/1 : papercut {
     title "BUG (needs a decision, D-028 is incomplete): completing a COMMITTED…"
     state superseded

@@ -141,6 +141,8 @@ pub enum Command {
     },
     /// Run stages A–D.
     Check {
+        /// Also fail if scratch holds prunable entries.
+        scratch_clean: bool,
         /// Also fail if the review queue is non-empty.
         review_clean: bool,
         /// Also compare the committed views against a fresh render.
@@ -536,6 +538,24 @@ pub enum Command {
         /// The commit it was observed at. Defaults to HEAD.
         observed_at: Option<String>,
     },
+    /// `akr scratch list`.
+    ScratchList,
+    /// `akr scratch prune [--older-than <days>] [--dry-run]`.
+    ScratchPrune {
+        /// Only remove entries untouched for at least this many days.
+        older_than: u64,
+        /// Report what would go and remove nothing.
+        dry_run: bool,
+    },
+    /// `akr scratch keep <name> --reason <text>`.
+    ScratchKeep {
+        /// The top-level scratch entry to protect.
+        name: String,
+        /// Why it is still needed. Required: an unexplained marker outlives its reason.
+        reason: Option<String>,
+        /// Drop the marker instead of adding one.
+        forget: bool,
+    },
     /// `akr evidence add-many --from <file>`.
     EvidenceAddMany {
         /// A file holding one or more `evidence` records in AKR syntax.
@@ -609,6 +629,9 @@ impl Command {
             Self::PapercutCollate { .. } => "papercut collate".to_owned(),
             Self::EvidenceAdd { .. } => "evidence add".to_owned(),
             Self::EvidenceAddMany { .. } => "evidence add-many".to_owned(),
+            Self::ScratchList => "scratch list".to_owned(),
+            Self::ScratchPrune { .. } => "scratch prune".to_owned(),
+            Self::ScratchKeep { .. } => "scratch keep".to_owned(),
         }
     }
 
@@ -682,6 +705,7 @@ pub const COMMANDS: &[&str] = &[
     "abandon",
     "papercut",
     "evidence",
+    "scratch",
 ];
 
 /// Parses an argument list, excluding the program name.
@@ -858,10 +882,45 @@ fn parse_command(name: &str, tail: &[String], at_seen: bool) -> Result<Command, 
             }
         }
         "check" => {
-            known_flags(&["--review-clean", "--views-current"])?;
+            known_flags(&["--review-clean", "--views-current", "--scratch-clean"])?;
             Command::Check {
+                scratch_clean: flag_set("--scratch-clean"),
                 review_clean: flag_set("--review-clean"),
                 views_current: flag_set("--views-current"),
+            }
+        }
+        "scratch" => {
+            known_flags(&["--older-than", "--dry-run", "--reason", "--forget"])?;
+            let sub = need(0, "the `list`, `prune` or `keep` subcommand")?;
+            match sub.as_str() {
+                "list" => Command::ScratchList,
+                "prune" => Command::ScratchPrune {
+                    older_than: match option_value(tail, "--older-than") {
+                        Some(text) => text.parse().map_err(|_| {
+                            UsageError::new(
+                                "AKR-C004",
+                                format!("--older-than: {text:?} is not a number of days"),
+                            )
+                        })?,
+                        // Two weeks: long enough that a scratch directory in active use
+                        // across a few sessions survives, short enough that last month's
+                        // never does.
+                        None => 14,
+                    },
+                    dry_run: flag_set("--dry-run"),
+                },
+                "keep" => Command::ScratchKeep {
+                    name: need(1, "the scratch entry to keep")?,
+                    reason: option_value(tail, "--reason"),
+                    forget: flag_set("--forget"),
+                },
+                other => {
+                    return Err(UsageError::new(
+                        "AKR-C001",
+                        format!("unknown subcommand {other:?} for command \"scratch\""),
+                    )
+                    .with_help("the subcommands are `list`, `prune` and `keep`"));
+                }
             }
         }
         "build" => {
@@ -1855,15 +1914,48 @@ pub fn help_for(name: &str) -> Option<String> {
              \x20   --check    write nothing; report differences as AKR-F diagnostics, exit 1\n"
         }
         "check" => {
-            "akr check [--review-clean] [--views-current]\n\
+            "akr check [--review-clean] [--views-current] [--scratch-clean]\n\
              \n\
              Runs stages A-D and reports every diagnostic. The command CI runs.\n\
-             Staleness never changes the exit code (D-024).\n\
+             Staleness never changes the exit code (D-024), and neither does what\n\
+             is sitting in .agent/scratch (D-036); both are reported as build facts.\n\
              \n\
              FLAGS\n\
              \x20   --review-clean     also fail when the review queue is non-empty (AKR-G041)\n\
              \x20   --views-current    also render stage F in memory and diff the committed\n\
-             \x20                      views (AKR-E011..E014) — the D-025 gate\n"
+             \x20                      views (AKR-E011..E014) — the D-025 gate\n\
+             \x20   --scratch-clean    also fail when .agent/scratch holds prunable\n\
+             \x20                      entries (AKR-G042)\n"
+        }
+        "scratch" => {
+            "akr scratch list\n\
+             akr scratch prune [--older-than <days>] [--dry-run]\n\
+             akr scratch keep <name> --reason <text> | --forget\n\
+             \n\
+             .agent/scratch is where working files go, and the one disposable\n\
+             directory nothing empties on its own: not the OS, which clears its own\n\
+             temp directory, and not the habit that deletes target/ without a\n\
+             thought. It is gitignored but it is inside the repository, so it\n\
+             survives every session and grows until somebody clears it (D-036).\n\
+             \n\
+             prune removes top-level entries that are unkept and untouched for at\n\
+             least --older-than days, default 14. Age is the newest file beneath an\n\
+             entry, so something touched yesterday is a day old however long ago it\n\
+             began. --dry-run rehearses it.\n\
+             \n\
+             keep protects one entry with a reason, in .agent/scratch/KEEP -- one\n\
+             `<name> <reason>` per line, editable by hand. A kept entry is never\n\
+             pruned at any age, so an agent tidying up cannot delete what the next\n\
+             session was told to expect. --forget drops the marker.\n\
+             \n\
+             `akr check` reports the total as a build fact; --scratch-clean makes it\n\
+             an error.\n\
+             \n\
+             FLAGS\n\
+             \x20   --older-than <days>  prune: the age at which an unkept entry may go\n\
+             \x20   --dry-run            prune: report what would go, remove nothing\n\
+             \x20   --reason <text>      keep: why the next session needs it (required)\n\
+             \x20   --forget             keep: remove the marker instead\n"
         }
         "build" => {
             "akr build [--check]\n\
@@ -2334,6 +2426,10 @@ pub fn help() -> String {
         (
             "evidence add",
             "record what was observed; --result, --method",
+        ),
+        (
+            "scratch",
+            "the working directory nothing else empties; list, prune, keep",
         ),
     ] {
         out.push_str(&format!("    {name:<16}{summary}\n"));

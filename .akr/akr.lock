@@ -2,10 +2,10 @@ akr-lock 0.1
 project akr
 
 build {
-    tool "akr 0.3.1"
+    tool "akr 0.3.3"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:e11d9f5275869d8d24bcaeb074b5d2d10308d900880206c055603db7e6c1ab89"
+    source_graph "sha256:bbde24b153ab1441614e3bcf8011150f000a5287a47dcc3998606fd51bb4f953"
 }
 
 source ".akr/project.akr" {
@@ -34,13 +34,13 @@ source ".akr/records/akr/milestones.akr" {
 }
 
 source ".akr/records/akr/papercuts.akr" {
-    hash "sha256:733caede3c6cf0c6bc14c536384ae279ffc58efb159e52dfbb6877d4f11c05e6"
-    records 63
+    hash "sha256:1a3209633fddb05dfb20994bf5d0b1d38ce6b7535b8200d8d735f242d9adc9c2"
+    records 64
 }
 
 source ".akr/records/akr/work.akr" {
-    hash "sha256:8db5e783a974e67140be0b2cb5aaff51f5a109495be9905e42ae77d22160ff4b"
-    records 28
+    hash "sha256:400065529f36e77bd71f3c9e47b299cc449d9416ca2cfc5fd8096dc4e15885e0"
+    records 29
 }
 
 resolution @akr.decision.completed-planning-work-satisfies-dependency/1 {
@@ -488,6 +488,11 @@ seal @akr.papercut.after-an-immediate-akr-check-akr-77-records-88/1 {
 seal @akr.papercut.after-an-immediate-akr-check-akr-77-records-88/2 {
     state withdrawn
     hash "sha256:4a84b17e28dd6cb1e20e44626a2481b8f1421f9e5e6ef66de359d1ba102f3b3f"
+}
+
+seal @akr.papercut.agents-write-working-files-to-agent-scratch/1 {
+    state verified
+    hash "sha256:74d41ea1f07e71a5eb77b146442bd5117a07e73f8792e4fb5aeacd0bc732ee27"
 }
 
 seal @akr.papercut.bug-needs-a-decision-d-028-is-incomplete/1 {

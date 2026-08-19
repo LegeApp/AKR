@@ -36,6 +36,12 @@ struct Snapshot {
     overlay: SemanticDelta,
 }
 
+/// The age at which an unkept scratch entry is worth mentioning, in days.
+///
+/// The same fourteen `akr scratch prune` defaults to: a session head that flagged entries
+/// the command would not remove would be pointing at work nobody can act on.
+const SCRATCH_AGE_DAYS: u64 = 14;
+
 /// Assemble the handoff from a validated working ledger or a separately parsed HEAD.
 ///
 /// # Errors
@@ -238,6 +244,25 @@ pub fn assemble(session: &Session, budget: Option<usize>) -> Result<Handoff, Env
                 }
             ));
         }
+    }
+
+    // Scratch, at orientation. `knowledge.start` is the one call an agent always makes
+    // before working, so it is where "this directory persists and it is yours" has to be
+    // said — a line in `akr check` alone is read at the end, if at all (D-036).
+    let scratch = akr_core::scratch::scan(&session.root, std::time::SystemTime::now());
+    let scratch_prunable: Vec<_> = scratch.prunable(SCRATCH_AGE_DAYS).collect();
+    if !scratch_prunable.is_empty() {
+        text.push_str(&format!(
+            "scratch      {} in {} prunable {} — `akr scratch prune`, or keep what the \
+             next session needs\n",
+            akr_core::scratch::human_bytes(scratch_prunable.iter().map(|entry| entry.bytes).sum()),
+            scratch_prunable.len(),
+            if scratch_prunable.len() == 1 {
+                "entry"
+            } else {
+                "entries"
+            }
+        ));
     }
     text.push('\n');
 
