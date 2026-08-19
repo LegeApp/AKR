@@ -367,7 +367,7 @@ pub fn get(
         text_raw.clone()
     };
 
-    let result = Value::object(vec![
+    let mut fields = vec![
         ("id".into(), Value::string(doc.id.clone())),
         ("path".into(), Value::string(doc.path.clone())),
         (
@@ -375,8 +375,46 @@ pub fn get(
             Value::string(doc.content_hash.clone()),
         ),
         ("text".into(), Value::string(output.clone())),
-    ]);
-    Ok(Output::plain(output, result))
+    ];
+
+    // A record cites bytes, but a reader asks for lines, and the gap between the two was
+    // left to the caller to close by hand. When the lines were named, hand back the exact
+    // locator for them so the citation can be written straight from what was read.
+    let mut text = output.clone();
+    if let Some(range) = lines {
+        let (start, end) = parse_range(range)?;
+        let cited = source::locate_lines(&session.root, &doc.id, start, end)
+            .map_err(|e| EnvError::new("AKR-S022", e))?;
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        text.push_str(&format!(
+            "\ncite {}: start_byte {} end_byte {} start_line {} end_line {}\n",
+            doc.id, cited.start_byte, cited.end_byte, cited.start_line, cited.end_line
+        ));
+        let mut locator = vec![
+            (
+                "start_byte".into(),
+                Value::integer(i64::try_from(cited.start_byte).unwrap_or(i64::MAX)),
+            ),
+            (
+                "end_byte".into(),
+                Value::integer(i64::try_from(cited.end_byte).unwrap_or(i64::MAX)),
+            ),
+            (
+                "start_line".into(),
+                Value::integer(i64::from(cited.start_line)),
+            ),
+            ("end_line".into(), Value::integer(i64::from(cited.end_line))),
+        ];
+        if let Some(hash) = &cited.excerpt_hash {
+            text.push_str(&format!("      excerpt_hash {hash}\n"));
+            locator.push(("excerpt_hash".into(), Value::string(hash.clone())));
+        }
+        fields.push(("citation".into(), Value::Object(locator)));
+    }
+
+    Ok(Output::plain(text, Value::Object(fields)))
 }
 
 /// `akr source verify`

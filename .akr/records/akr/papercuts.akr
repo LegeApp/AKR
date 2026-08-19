@@ -166,6 +166,22 @@ record akr.papercut.collated-1-papercuts-from-evidence-intake/1 : papercut {
     created_at 2026-08-09
 }
 
+record akr.papercut.collated-1-papercuts-from-evidence-intake-2/1 : papercut {
+    title "Collated 1 papercut from Evidence-intake-project"
+    state verified
+    statement """
+        Collated 1 papercut from .. on 2026-08-19 (D-030). Each source key is also in the collated slot, which is the dedup set for the next run; the sisters were read and never written.
+
+        ## Evidence-intake-project @evidence-intake-project.papercut.knowledge-revise-on-a-proposed-decision-in [about akr]
+        knowledge.revise on a proposed decision (in-place, rev stays 1) silently dropped the record's source attributions when `sources` was omitted, and passing `sources` explicitly on a later revise did not write them back (content hash unchanged, no `source` block in the file); knowledge.propose with the same payload had persisted them. Also, propose rejects a source with start_line/end_line alone (needs start_byte/end_byte too) which forces callers to compute byte offsets by hand.
+        """
+    observed_at git:daad9b2500fec8acbb1b684e03de4a497bc21af4
+    about "akr"
+    collated [ "evidence-intake-project.papercut.knowledge-revise-on-a-proposed-decision-in" ]
+    author "GitHub Uploader"
+    created_at 2026-08-19
+}
+
 record akr.papercut.collated-10-papercuts-from-evidence-intake/1 : papercut {
     title "Collated 10 papercuts from Evidence-intake-project, Kitchen-Concept, Lege-ecosystem, SaveYourSkin and 5 more"
     state superseded

@@ -722,12 +722,15 @@ fn propose(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
     let parsed = key_of(key)?;
 
     let source = record::to_source(
-        &session.ledger.project.name,
-        &parsed,
-        1,
-        kind,
-        title,
-        arguments.get("state").and_then(Value::as_str),
+        &record::Heading {
+            root: &session.root,
+            project: &session.ledger.project.name,
+            key: &parsed,
+            revision: 1,
+            kind,
+            title,
+            state: arguments.get("state").and_then(Value::as_str),
+        },
         arguments,
     )?;
     let template = record::parse(&source, &parsed)?;
@@ -771,12 +774,15 @@ fn revise(root: &Path, arguments: &Value) -> Result<ToolResult, ToolError> {
         .and_then(Value::as_str)
         .unwrap_or(&head.title);
     let source = record::to_source(
-        &session.ledger.project.name,
-        &parsed,
-        head.id.revision + 1,
-        head.kind,
-        title,
-        arguments.get("state").and_then(Value::as_str),
+        &record::Heading {
+            root: &session.root,
+            project: &session.ledger.project.name,
+            key: &parsed,
+            revision: head.id.revision + 1,
+            kind: head.kind,
+            title,
+            state: arguments.get("state").and_then(Value::as_str),
+        },
         &merged(arguments, head),
     )?;
     let replacement = record::parse(&source, &parsed)?;
@@ -1818,7 +1824,67 @@ fn merged(arguments: &Value, head: &akr_core::model::Record) -> Value {
             ),
         ));
     }
+    // `sources` is advertised on knowledge.revise, but the merge used to build a fresh
+    // payload out of slots, relations, scope, acceptance and claims alone — so an omitted
+    // `sources` silently dropped the head's attributions and an explicit one was ignored.
+    // Provenance is the one part of a record the ledger cannot reconstruct from anything
+    // else, so it carries forward by default and is replaced only when asked for.
+    if let Some(sources) = arguments.get("sources") {
+        fields.push(("sources".to_owned(), sources.clone()));
+    } else if !head.sources.is_empty() {
+        fields.push(("sources".to_owned(), sources_payload(&head.sources)));
+    }
     Value::Object(fields)
+}
+
+/// The head's source attributions, in the shape `record::to_source` reads them back from.
+fn sources_payload(sources: &[akr_core::model::Source]) -> Value {
+    Value::array(
+        sources
+            .iter()
+            .map(|source| {
+                let mut fields = vec![(
+                    "kind".to_owned(),
+                    Value::string(match source.kind {
+                        akr_core::model::SourceKind::Legacy => "legacy",
+                        akr_core::model::SourceKind::External => "external",
+                        akr_core::model::SourceKind::Internal => "internal",
+                    }),
+                )];
+                if let Some(role) = source.role {
+                    fields.push(("role".to_owned(), Value::string(role.as_str())));
+                }
+                for (name, value) in [
+                    ("path", source.path.as_ref()),
+                    ("url", source.url.as_ref()),
+                    ("excerpt", source.excerpt.as_ref()),
+                    ("document", source.document.as_ref()),
+                    ("use", source.use_note.as_ref()),
+                ] {
+                    if let Some(value) = value {
+                        fields.push((name.to_owned(), Value::string(value.clone())));
+                    }
+                }
+                if let Some(range) = &source.range {
+                    for (name, value) in [
+                        ("start_byte", range.start_byte),
+                        ("end_byte", range.end_byte),
+                        ("start_line", u64::from(range.start_line)),
+                        ("end_line", u64::from(range.end_line)),
+                    ] {
+                        fields.push((
+                            name.to_owned(),
+                            Value::integer(i64::try_from(value).unwrap_or(i64::MAX)),
+                        ));
+                    }
+                    if let Some(hash) = &range.excerpt_hash {
+                        fields.push(("excerpt_hash".to_owned(), Value::string(hash.clone())));
+                    }
+                }
+                Value::Object(fields)
+            })
+            .collect(),
+    )
 }
 
 fn key_of(text: &str) -> Result<akr_core::model::LogicalKey, ToolError> {

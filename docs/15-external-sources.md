@@ -49,7 +49,8 @@ It proposes nothing. An outside report is source material until the project deci
 something with it, and a workflow that turned every heading into a `proposed` work record
 would fill `ACTIVE-WORK.md` with somebody else's opinions.
 
-`akr source list`, `akr source get <id> [--whole|--lines a:b|--section "heading"]`.
+`akr source list`, `akr source get <id> [--whole|--lines a:b|--section "heading"]`. With
+`--lines`, the output also carries the exact citation locator for that range — see §7.
 
 ## 3. Immutability has teeth
 
@@ -148,8 +149,17 @@ source {
 ```
 
 The byte range is the machine locator; the line range is for people and rendered citations.
-The four range slots are all-or-nothing: a half-written range resolves to a passage nobody
-chose.
+The four range slots are all-or-nothing **in the record**: a half-written range resolves to
+a passage nobody chose.
+
+That is a rule about what is stored, not a demand on the author, who reads a document by
+line. Both write surfaces close the gap rather than making a caller count bytes: `akr
+source get <id> --lines a:b` reports the locator for the lines it just served, and
+`knowledge.propose` / `knowledge.revise` accept `document` with `start_line` and `end_line`
+alone and read the byte offsets off the registered bytes. A located range covers whole
+lines, includes the newline ending the last, and carries the `excerpt_hash` of exactly the
+bytes it selected. Only a `full` document can be located this way — a finalized one no
+longer has the text to scan, so it must be cited by bytes from a retained range.
 
 **A citation names a document and a byte range, never a chunk id.** Chunk boundaries belong
 to a rebuildable index and are allowed to move when the scanner improves; provenance is not.

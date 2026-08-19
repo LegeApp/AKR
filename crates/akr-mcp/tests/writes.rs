@@ -249,6 +249,126 @@ fn propose_can_adopt_an_exact_registered_source_passage() {
 }
 
 #[test]
+fn propose_locates_a_citation_given_by_line_alone() {
+    // The language stores all four coordinates or none, but an author reads a document by
+    // line. Demanding the byte offsets of them meant counting bytes by hand; naming the
+    // document is now enough to have them read off the registered bytes.
+    let example = Example::materialise("mcp-propose-source-by-line");
+    let advice = "Preamble line.\nThe day loop must remain deterministic.\nTrailing line.\n";
+    example.write_file("incoming-plan.md", advice);
+    let added = example.run(&["source", "add", "incoming-plan.md", "--id", "incoming-plan"]);
+    assert_eq!(added.code, 0, "{}", added.output());
+
+    let arguments = r#"{
+        "key": "sys.requirement.deterministic-day-loop",
+        "kind": "requirement",
+        "title": "The day loop stays deterministic",
+        "scope": ["all"],
+        "slots": { "statement": "The day loop must remain deterministic." },
+        "sources": [{
+            "kind": "external",
+            "role": "origin",
+            "document": "incoming-plan",
+            "start_line": 2,
+            "end_line": 2,
+            "use": "Adopted as a project requirement."
+        }]
+    }"#;
+    let (payload, is_error) = call(&example, "knowledge.propose", arguments);
+    assert!(!is_error, "{}", error_text(&payload));
+
+    let written = example.read_file(".akr/records/sys/requirements.akr");
+    assert!(written.contains("document \"incoming-plan\""), "{written}");
+    assert!(written.contains("start_byte 15"), "{written}");
+    assert!(written.contains("end_byte 55"), "{written}");
+    assert!(written.contains("start_line 2"), "{written}");
+    assert!(written.contains("end_line 2"), "{written}");
+    // Located bytes carry their own hash, so the citation verifies itself.
+    assert!(written.contains("excerpt_hash \"sha256:"), "{written}");
+
+    assert_eq!(example.run(&["build"]).code, 0);
+    let checked = example.run(&["check"]);
+    assert_eq!(checked.code, 0, "{}", checked.output());
+}
+
+#[test]
+fn a_line_citation_without_a_document_is_a_schema_error() {
+    let example = Example::materialise("mcp-propose-source-lines-no-document");
+    let before = example.sources();
+    let (payload, is_error) = call(
+        &example,
+        "knowledge.propose",
+        r#"{"key":"sys.requirement.no-document","kind":"requirement",
+            "title":"T","scope":["all"],"slots":{"statement":"S."},
+            "sources":[{"kind":"external","start_line":1,"end_line":2}]}"#,
+    );
+    assert!(is_error, "{payload:?}");
+    assert!(error_text(&payload).contains("document"), "{payload:?}");
+    assert_eq!(before, example.sources(), "a refused write left something");
+}
+
+#[test]
+fn revise_keeps_the_head_source_attributions_it_was_not_asked_to_change() {
+    // `sources` was advertised on knowledge.revise and then dropped by the merge, so a
+    // revision that said nothing about provenance silently erased it, and one that
+    // supplied it was ignored. Both halves are checked here.
+    let example = Example::materialise("mcp-revise-sources");
+    let advice = "First recommendation.\nSecond recommendation.\n";
+    example.write_file("audit.md", advice);
+    assert_eq!(
+        example
+            .run(&["source", "add", "audit.md", "--id", "audit"])
+            .code,
+        0
+    );
+
+    let (payload, is_error) = call(
+        &example,
+        "knowledge.propose",
+        r#"{"key":"sys.requirement.audited","kind":"requirement",
+            "title":"An audited requirement","scope":["all"],
+            "slots":{"statement":"First recommendation."},
+            "sources":[{"kind":"external","role":"origin","document":"audit",
+                        "start_line":1,"end_line":1}]}"#,
+    );
+    assert!(!is_error, "{}", error_text(&payload));
+    let written = example.read_file(".akr/records/sys/requirements.akr");
+    assert!(written.contains("document \"audit\""), "{written}");
+
+    // A revision that says nothing about sources keeps them.
+    let (payload, is_error) = call(
+        &example,
+        "knowledge.revise",
+        r#"{"key":"sys.requirement.audited","base_rev":1,
+            "title":"An audited requirement, restated"}"#,
+    );
+    assert!(!is_error, "{}", error_text(&payload));
+    let written = example.read_file(".akr/records/sys/requirements.akr");
+    assert!(
+        written.contains("document \"audit\""),
+        "revise dropped the attribution: {written}"
+    );
+    assert!(written.contains("role origin"), "{written}");
+
+    // A revision that supplies them replaces them.
+    let (payload, is_error) = call(
+        &example,
+        "knowledge.revise",
+        r#"{"key":"sys.requirement.audited","base_rev":1,
+            "sources":[{"kind":"external","role":"rationale","document":"audit",
+                        "start_line":2,"end_line":2}]}"#,
+    );
+    assert!(!is_error, "{}", error_text(&payload));
+    let written = example.read_file(".akr/records/sys/requirements.akr");
+    assert!(written.contains("role rationale"), "{written}");
+    assert!(written.contains("start_line 2"), "{written}");
+
+    assert_eq!(example.run(&["build"]).code, 0);
+    let checked = example.run(&["check"]);
+    assert_eq!(checked.code, 0, "{}", checked.output());
+}
+
+#[test]
 fn a_malformed_payload_is_a_schema_error_and_writes_nothing() {
     let example = Example::materialise("mcp-schema");
     let before = example.sources();

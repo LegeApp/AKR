@@ -13,25 +13,49 @@
 //! names a slot the kind does not have fails with the same `AKR-T***` diagnostic an
 //! author would get — which is what §5's `schema` class is for.
 
+use std::path::Path;
+
 use akr_core::json::Value;
 use akr_core::model::{ContentSlot, Kind, LogicalKey, Record, Relation};
 
 use crate::errors::ToolError;
+
+/// Everything a payload does not carry: who the record is, and where the workspace is.
+///
+/// `root` is only needed to resolve a citation given by line into the byte range the
+/// language stores; see [`source_range`].
+pub struct Heading<'a> {
+    /// The workspace root, for reading a cited source document.
+    pub root: &'a Path,
+    /// The project name the file declares.
+    pub project: &'a str,
+    /// The record's key.
+    pub key: &'a LogicalKey,
+    /// The revision being written.
+    pub revision: u32,
+    /// The record's kind.
+    pub kind: Kind,
+    /// The one-line title.
+    pub title: &'a str,
+    /// The lifecycle state, when the caller named one.
+    pub state: Option<&'a str>,
+}
 
 /// Renders a tool payload as AKR source for one record.
 ///
 /// # Errors
 /// [`ToolError`] of class `usage` when a field is the wrong JSON shape — an object where
 /// an array was needed, a slot name that is not a slot at all.
-pub fn to_source(
-    project: &str,
-    key: &LogicalKey,
-    revision: u32,
-    kind: Kind,
-    title: &str,
-    state: Option<&str>,
-    payload: &Value,
-) -> Result<String, ToolError> {
+pub fn to_source(heading: &Heading, payload: &Value) -> Result<String, ToolError> {
+    let Heading {
+        root,
+        project,
+        key,
+        revision,
+        kind,
+        title,
+        state,
+    } = *heading;
     let mut out = format!("akr 0.1\nproject {project}\n\n");
     out.push_str(&format!("record {key}/{revision} : {} {{\n", kind.name()));
     out.push_str(&format!("    title {}\n", quote(title)));
@@ -194,13 +218,18 @@ pub fn to_source(
             if let Some(document) = source_str(fields, "document") {
                 out.push_str(&format!("        document {}\n", quote(document)));
             }
-            for name in ["start_byte", "end_byte", "start_line", "end_line"] {
-                if let Some(value) = source_integer(fields, name)? {
-                    out.push_str(&format!("        {name} {value}\n"));
-                }
+            let range = source_range(root, fields)?;
+            if let Some(range) = &range {
+                out.push_str(&format!("        start_byte {}\n", range.start_byte));
+                out.push_str(&format!("        end_byte {}\n", range.end_byte));
+                out.push_str(&format!("        start_line {}\n", range.start_line));
+                out.push_str(&format!("        end_line {}\n", range.end_line));
             }
-            if let Some(hash) = source_str(fields, "excerpt_hash") {
-                out.push_str(&format!("        excerpt_hash {}\n", quote(hash)));
+            if let Some(hash) = source_str(fields, "excerpt_hash")
+                .map(ToOwned::to_owned)
+                .or_else(|| range.and_then(|range| range.excerpt_hash))
+            {
+                out.push_str(&format!("        excerpt_hash {}\n", quote(&hash)));
             }
             if let Some(use_note) = source_str(fields, "use") {
                 out.push_str(&format!("        use {}\n", prose(use_note, 8)));
@@ -217,6 +246,63 @@ pub fn to_source(
     }
     out.push_str("}\n");
     Ok(out)
+}
+
+/// The exact locator for one `source` block, completing a line-only citation.
+///
+/// The language wants all four coordinates or none (`AKR-T012`), because bytes are what
+/// resolves and lines are what a reader opens the file at. Demanding all four of the
+/// caller was a different thing: an author reads a registered document by line, and had
+/// to count bytes by hand to cite it. So lines alone are now enough when the citation
+/// names a `document` — the byte range is read off the registered bytes themselves, and
+/// carries the excerpt hash of exactly what it selected.
+///
+/// Bytes alone, or bytes and lines together, are passed through untouched: an author who
+/// has the offsets already is not second-guessed.
+fn source_range(
+    root: &Path,
+    fields: &[(String, Value)],
+) -> Result<Option<akr_core::model::SourceRange>, ToolError> {
+    let start_byte = source_integer(fields, "start_byte")?;
+    let end_byte = source_integer(fields, "end_byte")?;
+    let start_line = source_integer(fields, "start_line")?;
+    let end_line = source_integer(fields, "end_line")?;
+
+    if let (None, None, Some(start_line), Some(end_line)) =
+        (start_byte, end_byte, start_line, end_line)
+    {
+        let document = source_str(fields, "document").ok_or_else(|| {
+            ToolError::new(
+                "AKR-C004",
+                "a source citing lines needs `document` too: without a registered \
+                 document there is nothing to read the byte offsets from. Give \
+                 start_byte and end_byte instead, or name the document.",
+            )
+        })?;
+        let lines = |value: i64| u32::try_from(value).unwrap_or(u32::MAX);
+        return akr_core::source::locate_lines(root, document, lines(start_line), lines(end_line))
+            .map(Some)
+            .map_err(|error| ToolError::new("AKR-C004", error));
+    }
+
+    match (start_byte, end_byte, start_line, end_line) {
+        (Some(start_byte), Some(end_byte), Some(start_line), Some(end_line)) => {
+            Ok(Some(akr_core::model::SourceRange {
+                start_byte: u64::try_from(start_byte).unwrap_or(0),
+                end_byte: u64::try_from(end_byte).unwrap_or(0),
+                start_line: u32::try_from(start_line).unwrap_or(0),
+                end_line: u32::try_from(end_line).unwrap_or(0),
+                excerpt_hash: source_str(fields, "excerpt_hash").map(ToOwned::to_owned),
+            }))
+        }
+        (None, None, None, None) => Ok(None),
+        _ => Err(ToolError::new(
+            "AKR-C004",
+            "a source range needs start_byte and end_byte together with start_line and \
+             end_line, or start_line and end_line alone with a `document` to read the \
+             offsets from, or none of them",
+        )),
+    }
 }
 
 fn source_str<'a>(fields: &'a [(String, Value)], name: &str) -> Option<&'a str> {

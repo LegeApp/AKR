@@ -201,6 +201,41 @@ fn a_literal_query_matches_exact_bytes_only() {
 }
 
 #[test]
+fn getting_lines_hands_back_the_byte_locator_to_cite_them_by() {
+    // A record cites bytes; a reader asks for lines. Closing that gap by hand was the
+    // friction, so the command that serves the lines also serves the locator for them.
+    let example = Example::materialise("source-get-lines-locator");
+    let id = register(&example);
+    let got = example.run(&["source", "get", &id, "--lines", "1:3"]);
+    assert_eq!(got.code, 0, "{}", got.output());
+    assert!(
+        got.stdout
+            .contains(&format!("cite {id}: start_byte 0 end_byte ")),
+        "{}",
+        got.output()
+    );
+    assert!(
+        got.stdout.contains("start_line 1 end_line 3"),
+        "{}",
+        got.output()
+    );
+    assert!(
+        got.stdout.contains("excerpt_hash sha256:"),
+        "{}",
+        got.output()
+    );
+
+    // The locator is what a citation needs, so it is also in the machine-readable form.
+    let json = example.run(&["source", "get", &id, "--lines", "1:3", "--format", "json"]);
+    assert_eq!(json.code, 0, "{}", json.output());
+    assert!(json.stdout.contains("\"citation\""), "{}", json.output());
+
+    // Asking for lines the document does not have is refused, not silently clamped.
+    let past_end = example.run(&["source", "get", &id, "--lines", "1:100000"]);
+    assert_ne!(past_end.code, 0, "{}", past_end.output());
+}
+
+#[test]
 fn a_chunk_can_be_retrieved_with_its_neighbours() {
     let example = Example::materialise("source-get-chunk");
     register(&example);

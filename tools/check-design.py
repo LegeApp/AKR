@@ -38,6 +38,10 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 SKIP_DIRS = {".git", ".akr-cache", "node_modules", "target", "__pycache__"}
+# Agent worktrees. Each is a whole copy of this repository, and one that has lost its .git
+# entry -- an interrupted session leaves those behind -- is otherwise indistinguishable
+# from part of this tree.
+SKIP_RELDIRS = {os.path.join(".claude", "worktrees")}
 TEXT_EXT = {".md", ".akr", ".sql", ".py", ".txt", ".ebnf", ".json", ".lock", ".yml",
             ".expected", ""}
 
@@ -71,9 +75,34 @@ def skip(check, msg):
     skipped.append((check, msg))
 
 
+def foreign(path):
+    """True for a directory that is not part of this checkout's design set.
+
+    Agent worktrees, submodules and vendored clones are whole copies of a repository, spec
+    set and all. Reading one as part of this tree turns every finding into a duplicate of
+    itself, so a checker meant to report incoherence reports the same twenty errors about
+    somebody else's checkout instead.
+    """
+    if os.path.relpath(path, ROOT) in SKIP_RELDIRS:
+        return True
+    return nested_checkout(path)
+
+
+def nested_checkout(path):
+    """True for a directory that is its own checkout rather than part of this one.
+
+    A checkout announces itself with a .git entry: a directory in a clone, a file in a
+    worktree. That is the whole test.
+    """
+    return path != ROOT and os.path.exists(os.path.join(path, ".git"))
+
+
 def walk(root, exts=None):
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS)
+        dirnames[:] = sorted(
+            d for d in dirnames
+            if d not in SKIP_DIRS and not foreign(os.path.join(dirpath, d))
+        )
         for name in sorted(filenames):
             ext = os.path.splitext(name)[1]
             if exts is None or ext in exts:

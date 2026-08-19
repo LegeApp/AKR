@@ -101,7 +101,7 @@ Context assembly and search. Normative document:
 
 Reserved groups: `X001`–`X009` the bundle anchor; `X011`–`X019` path filters;
 `X021`–`X029` budgeting; `X031`–`X039` search; `X041`–`X049` output form;
-`X051`–`X059` bundle invariants.
+`X051`–`X059` bundle invariants; `X099` a contained internal failure.
 
 | Code | Title | Severity | Rule | Message template | Cause |
 | --- | --- | --- | --- | --- | --- |
@@ -122,6 +122,7 @@ Reserved groups: `X001`–`X009` the bundle anchor; `X011`–`X019` path filters
 | `AKR-X042` | server and workspace disagree on vocabulary | warning | — | `this akr-mcp was built against vocabulary {server} and the workspace was last built with vocabulary {workspace}` | Attached by `akr-mcp` to a failing call when its own vocabulary version differs from the one in `.akr/akr.lock`. An installed server older than the workspace rejects records it has never heard the slots of, which reads as a ledger fault; this names it and says to reinstall *and reconnect*, since a running process keeps the binary it started with (D-034). |
 | `AKR-X051` | contradiction not surfaced | error | V-121 | `bundle omits contradiction between {key_a} and {key_b}` | Internal invariant: a declared contradiction touching a bundled record must always appear in the contradictions section, including when one side is superseded (D-023). |
 | `AKR-X052` | excluded record present in a bundle | error | V-122 | `bundle includes {key}/{revision}, which is {reason}` | Internal invariant: superseded, terminal and archived records never enter an ordinary bundle (`docs/09-context-assembly.md` §5). |
+| `AKR-X099` | contained internal failure | error | — | `the AKR tool implementation failed unexpectedly; the server contained the failure` | A panic inside one `akr-mcp` tool call, caught at the request boundary (`docs/08-mcp.md` §5). The write pipeline is atomic, so a contained panic leaves nothing half-written; the call is retryable once and the stdio server stays up for the next request. It is always a bug in AKR, never in the call.
 
 ---
 

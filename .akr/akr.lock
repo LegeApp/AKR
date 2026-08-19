@@ -5,7 +5,7 @@ build {
     tool "akr 0.3.1"
     grammar "0.1"
     vocabulary "0.2"
-    source_graph "sha256:06c94b891f83bcc5000193caadefd258b4b3273a6fb2f178f1ef058bbcd047ee"
+    source_graph "sha256:f5cffd91894a28f0d9f9c65a12ae1b8e4ce42a4c1e4a772b7f821f725c2f15a8"
 }
 
 source ".akr/project.akr" {
@@ -34,8 +34,8 @@ source ".akr/records/akr/milestones.akr" {
 }
 
 source ".akr/records/akr/papercuts.akr" {
-    hash "sha256:7ff6d87df3d6f589b59381f15b5c05f8aa06653bf40c4b58788a268b8876f55f"
-    records 44
+    hash "sha256:c3303ae064e5bb2f22aebd064e4c3473cc856e9947d52dd998cd70cb9fc3b1de"
+    records 45
 }
 
 source ".akr/records/akr/work.akr" {
@@ -518,6 +518,11 @@ seal @akr.papercut.cargo-fmt-check-fails-on-the-committed-tree/2 {
 seal @akr.papercut.collated-1-papercuts-from-evidence-intake/1 {
     state verified
     hash "sha256:d8f19f696ded8cc779fc4ebb56809292af207ab267cc9731deccddbc8cd87beb"
+}
+
+seal @akr.papercut.collated-1-papercuts-from-evidence-intake-2/1 {
+    state verified
+    hash "sha256:17daab91c36f30c353328095a16ed4e1026e15f775853a8982b0fe31fc6425ee"
 }
 
 seal @akr.papercut.collated-10-papercuts-from-evidence-intake/1 {

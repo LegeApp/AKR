@@ -263,6 +263,19 @@ For registered outside material, `sources` also accepts the exact locator return
 path: retrieval remains non-authoritative, while `knowledge.propose` or
 `knowledge.revise` records the project’s explicit interpretation and stable provenance.
 
+A citation may also name `document`, `start_line` and `end_line` **alone**. The stored
+record still carries all four coordinates — bytes are what resolves, lines are what a
+reader opens the file at, and a half-written range would point somewhere nobody chose —
+but the byte offsets are read off the registered bytes rather than demanded of the author,
+who reads a document by line and would otherwise count bytes by hand. The range covers
+whole lines, including the newline that ends the last, and carries the `excerpt_hash` of
+exactly the bytes it selected, so a located citation verifies itself. Lines without a
+`document` are refused: there is nothing to read the offsets from. A document that retains
+only cited ranges or metadata cannot be located in either, and says so.
+
+The command-line equivalent is `akr source get <id> --lines a:b`, which reports the same
+locator alongside the text.
+
 Creates revision 1 of a **new** key, in its class's initial state. An existing key is an
 error — the tool will not silently turn a proposal into a revision.
 
@@ -311,6 +324,11 @@ since the agent read it, the tool fails with a conflict rather than clobbering
 because the underlying store is a git working tree that a human is also watching.
 An explicit `state` lands on the successor even when the old head is sealed. Without an
 explicit state, a content revision of settled knowledge starts `proposed` for review.
+
+Omitted fields carry forward from the head — slots, relations, scope, claims, acceptance
+and `sources` alike. Provenance is the one part of a record the ledger cannot reconstruct
+from anything else, so a revision that says nothing about it keeps it; supplying `sources`
+replaces the head's attributions outright.
 
 ### `knowledge.supersede`
 

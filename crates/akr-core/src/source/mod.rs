@@ -623,6 +623,87 @@ fn contains_range(outer: &crate::model::SourceRange, inner: &crate::model::Sourc
     outer.start_byte <= inner.start_byte && outer.end_byte >= inner.end_byte
 }
 
+/// Turns a one-based, inclusive line range into the exact byte locator a citation needs.
+///
+/// A `source` block wants all four coordinates or none (`AKR-T012`): bytes are what
+/// resolves, lines are what a reader opens the file at, and a half-written range would
+/// point somewhere nobody chose. That rule is right for the stored record and wrong as a
+/// demand on the author, who reads a document by line and would otherwise have to count
+/// bytes by hand. This closes that gap: give it the lines, it returns the range the
+/// language asks for, hashed over the bytes it selected so the citation verifies itself.
+///
+/// The range covers whole lines, and includes the newline that ends the last one, which
+/// is the convention [`check_citation`] measures lines against.
+///
+/// # Errors
+/// A message naming the document when it is not registered, retains no full text, has
+/// drifted from its content hash, or does not have the lines asked for.
+pub fn locate_lines(
+    workspace_root: &Path,
+    document_id: &str,
+    start_line: u32,
+    end_line: u32,
+) -> Result<crate::model::SourceRange, String> {
+    if start_line == 0 || end_line < start_line {
+        return Err(format!(
+            "line range {start_line}-{end_line} is not a range; lines are one-based and \
+             the end must not precede the start"
+        ));
+    }
+    let catalog = load_catalog(workspace_root).map_err(|e| e.to_string())?;
+    let document = catalog
+        .iter()
+        .find(|document| document.id == document_id)
+        .ok_or_else(|| format!("source {document_id:?} is not registered"))?;
+    if document.availability != SourceAvailability::Full {
+        return Err(format!(
+            "source {document_id:?} retains {} text, so a line range cannot be located in \
+             it; cite it by start_byte and end_byte from an existing retained range",
+            document.availability.as_str()
+        ));
+    }
+    let bytes = std::fs::read(workspace_root.join(&document.path))
+        .map_err(|_| format!("source {document_id:?} file is missing"))?;
+    if hash_bytes(&bytes) != document.content_hash {
+        return Err(format!(
+            "source {document_id:?} bytes do not match their content hash"
+        ));
+    }
+
+    let mut line_starts: Vec<usize> = vec![0];
+    for (offset, byte) in bytes.iter().enumerate() {
+        if *byte == b'\n' {
+            line_starts.push(offset + 1);
+        }
+    }
+    // A file ending in a newline leaves a phantom empty line after it: the offset is a
+    // legal place to start reading and not a line anybody can cite.
+    let mut lines = line_starts.len();
+    if bytes.last() == Some(&b'\n') {
+        lines -= 1;
+    }
+    if lines == 0 || end_line as usize > lines {
+        return Err(format!(
+            "source {document_id:?} has {lines} lines; line range {start_line}-{end_line} \
+             is out of bounds"
+        ));
+    }
+
+    let start = line_starts[start_line as usize - 1];
+    let end = if (end_line as usize) < lines {
+        line_starts[end_line as usize]
+    } else {
+        bytes.len()
+    };
+    Ok(crate::model::SourceRange {
+        start_byte: start as u64,
+        end_byte: end as u64,
+        start_line,
+        end_line,
+        excerpt_hash: Some(hash_bytes(&bytes[start..end])),
+    })
+}
+
 /// Resolves one citation from either the full source or retained fragments.
 pub fn resolve_citation(
     workspace_root: &Path,
